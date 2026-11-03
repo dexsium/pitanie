@@ -105,8 +105,8 @@ def patch_gradle():
         s = re.sub(r"minSdkVersion\s+flutter\.minSdkVersion", "minSdkVersion 26", s)
         flag = "isCoreLibraryDesugaringEnabled = true" if kts else "coreLibraryDesugaringEnabled true"
         s = re.sub(r"(compileOptions\s*\{)", lambda m: m.group(1) + "\n        " + flag, s, count=1)
-        dep = ('coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")' if kts
-               else "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'")
+        dep = ('coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' if kts
+               else "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'")
         s += f"\n\ndependencies {{\n    {dep}\n}}\n"
         write(path, s)
         print(f"{name} обновлён")
