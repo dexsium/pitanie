@@ -53,9 +53,9 @@ class _Series extends StatelessWidget {
   final List<double> values;
   final List<String> labels;
   final double? goal;
-  final int decimals;
+  int get decimals => 0;
   const _Series(this.title, this.unit, this.color, this.values, this.labels,
-      {this.goal, this.decimals = 0});
+      {this.goal});
 
   @override
   Widget build(BuildContext context) {
