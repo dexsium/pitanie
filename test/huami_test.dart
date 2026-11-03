@@ -3,11 +3,13 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pitanie/features/wearables/huami_chunked.dart';
 import 'package:pitanie/features/wearables/huami_crypto.dart';
+import 'package:pitanie/features/wearables/huami_fetch.dart';
 
 Uint8List _hex(String s) => Uint8List.fromList(
     [for (var i = 0; i < s.length; i += 2) int.parse(s.substring(i, i + 2), radix: 16)]);
 
 void main() {
+  historyTests();
   test('CRC32 стандартный тестовый вектор', () {
     expect(crc32(Uint8List.fromList('123456789'.codeUnits)), 0xCBF43926);
   });
@@ -71,6 +73,48 @@ void main() {
         dec.decode(c);
       }
       expect(got, data);
+    });
+  });
+}
+
+// ---- история ----
+void historyTests() {
+  group('История', () {
+    test('минутная активность: 8 байт на запись, время идёт по минутам', () {
+      final start = DateTime.utc(2026, 11, 3, 10, 0);
+      final bytes = Uint8List.fromList([
+        1, 5, 20, 80, 0, 0, 0, 0, // шаги 20, пульс 80
+        1, 0, 0, 255, 0, 0, 0, 0, // нет пульса
+      ]);
+      final s = parseActivity(bytes, start)!;
+      expect(s.length, 2);
+      expect(s[0].steps, 20);
+      expect(s[0].hasHeartRate, isTrue);
+      expect(s[1].time, start.add(const Duration(minutes: 1)));
+      expect(s[1].hasHeartRate, isFalse);
+      expect(parseActivity(Uint8List(7), start), isNull);
+    });
+
+    test('SpO2: версия 2, запись 65 байт, бит 7 — автоматическое измерение', () {
+      final b = Uint8List(1 + 65)..[0] = 2;
+      ByteData.sublistView(b).setUint32(1, 1700000000, Endian.little);
+      b[5] = 128 + 97;
+      final s = parseSpo2(b)!;
+      expect(s.single.value, 97);
+      expect(s.single.automatic, isTrue);
+      expect(s.single.time.millisecondsSinceEpoch, 1700000000 * 1000);
+      expect(parseSpo2(Uint8List.fromList([3, 0])), isNull);
+    });
+
+    test('время запроса и разбор ответа согласованы (с учётом пояса)', () {
+      final local = DateTime(2026, 11, 3, 14, 30);
+      final tzQuarters = local.timeZoneOffset.inMinutes ~/ 15;
+      final b = fetchTimeBytes(local);
+      expect(b.length, 8);
+      expect(b[2], 11);
+      expect(b[7], tzQuarters & 0xff);
+      final parsed = parseFetchTime(b, 0);
+      expect(parsed.millisecondsSinceEpoch, local.millisecondsSinceEpoch);
     });
   });
 }

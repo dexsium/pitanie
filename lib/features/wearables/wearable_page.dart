@@ -11,7 +11,12 @@ import '../../app/theme.dart';
 import '../../core/dates.dart';
 import '../../shared/widgets.dart';
 import '../health_integration/devices_page.dart';
+import 'package:drift/drift.dart' show Value;
+
+import '../../database/database.dart';
+import '../dashboard/day_data.dart' show kBleSource, sourceLabel;
 import 'huami_auth.dart';
+import 'huami_fetch.dart';
 
 /// Этап 1 интеграции Amazfit GTR 4 по BLE: поиск, подключение, чтение списка
 /// GATT-служб. Авторизация и данные здоровья ещё не реализованы, поэтому
@@ -46,6 +51,10 @@ class _WearablePageState extends ConsumerState<WearablePage> {
   int? _bleSteps;
   DateTime? _bleStepsAt;
   final _log = <String>[];
+  String? _syncMsg;
+  bool _syncBusy = false;
+  int? _spo2;
+  DateTime? _spo2At;
   String? _savedId;
   final _subs = <StreamSubscription>[];
 
@@ -58,8 +67,11 @@ class _WearablePageState extends ConsumerState<WearablePage> {
     AuthKeyStore.exists().then((v) {
       if (mounted) setState(() => _hasKey = v);
     });
-    ref.read(dbProvider).allSettings().then((m) {
-      if (mounted) setState(() => _savedId = m['wearable_id']);
+    ref.read(dbProvider).allSettings().then((m) async {
+      if (!mounted) return;
+      setState(() => _savedId = m['wearable_id']);
+      await _loadSpo2();
+      await _auto();
     });
   }
 
@@ -330,6 +342,7 @@ class _WearablePageState extends ConsumerState<WearablePage> {
       await s.send(0x0016, [0x05, 0x01]); // шаги в реальном времени
       await s.send(0x001d, [0x04, 0x01]); // пульс в реальном времени
       if (!_hrOn) await _toggleHr();
+      await _syncHistory();
     } catch (e) {
       _addLog('ошибка запроса данных: $e');
     }
@@ -349,6 +362,7 @@ class _WearablePageState extends ConsumerState<WearablePage> {
     } catch (e) {
       _addLog('ошибка обновления: $e');
     }
+    await _syncHistory();
     if (mounted) setState(() {});
   }
 
@@ -370,6 +384,163 @@ class _WearablePageState extends ConsumerState<WearablePage> {
         }
       }
     });
+  }
+
+  /// При открытии раздела: подключиться к сохранённым часам и авторизоваться,
+  /// если ключ уже введён. Без нажатия кнопок.
+  Future<void> _auto() async {
+    final id = _savedId;
+    if (id == null || id.isEmpty || _device != null || _busy) return;
+    if (!await AuthKeyStore.exists()) return;
+    await Future.delayed(const Duration(milliseconds: 300));
+    if (!mounted || _adapter != BluetoothAdapterState.on && _adapter != BluetoothAdapterState.unknown) return;
+    await _connect(BluetoothDevice.fromId(id));
+    if (_device != null && mounted) await _authorize();
+  }
+
+  Future<void> _loadSpo2() async {
+    final db = ref.read(dbProvider);
+    final now = DateTime.now();
+    final recs = await db.activityBetween(now.subtract(const Duration(days: 7)), now);
+    final list = recs.where((r) => r.type == 'spo2' && r.source == kBleSource).toList();
+    if (list.isEmpty) return;
+    list.sort((a, b) => a.startTime.compareTo(b.startTime));
+    if (mounted) {
+      setState(() {
+        _spo2 = list.last.value.round();
+        _spo2At = list.last.startTime;
+      });
+    }
+  }
+
+  /// Загружает историю: минутную активность (шаги, пульс) и SpO2. Данные на часах не удаляются.
+  Future<void> _syncHistory() async {
+    final s = _session;
+    if (s == null || _syncBusy) return;
+    BluetoothCharacteristic? c4, c5;
+    for (final sv in _services) {
+      for (final ch in sv.characteristics) {
+        final u = ch.uuid.str.toLowerCase();
+        if (u == '00000004-0000-3512-2118-0009af100700') c4 = ch;
+        if (u == '00000005-0000-3512-2118-0009af100700') c5 = ch;
+      }
+    }
+    if (c4 == null || c5 == null) {
+      setState(() => _syncMsg = 'У часов нет каналов 0004/0005 для истории.');
+      return;
+    }
+    setState(() {
+      _syncBusy = true;
+      _syncMsg = 'Загрузка истории…';
+    });
+    final db = ref.read(dbProvider);
+    final settings = await db.allSettings();
+    final fetcher = HuamiFetcher(c4, c5);
+    final now = DateTime.now();
+    final tzMin = now.timeZoneOffset.inMinutes;
+    var steps = 0, hr = 0, spo = 0;
+    String? err;
+    try {
+      // Активность
+      var since = DateTime.fromMillisecondsSinceEpoch(
+          int.tryParse(settings['ble_last_activity'] ?? '') ??
+              now.subtract(const Duration(days: 3)).millisecondsSinceEpoch);
+      for (var round = 0; round < 5; round++) {
+        final res = await fetcher.fetch(fetchTypeActivity, since);
+        if (!res.ok) {
+          err = res.error;
+          break;
+        }
+        if (res.data.isEmpty) break;
+        final samples = parseActivity(res.data, res.start!);
+        if (samples == null) {
+          err = 'Неожиданный формат данных активности (${res.data.length} байт).';
+          break;
+        }
+        final recs = <ActivityRecordsCompanion>[];
+        for (final x in samples) {
+          final end = x.time.add(const Duration(minutes: 1));
+          final minute = x.time.millisecondsSinceEpoch ~/ 60000;
+          if (x.steps > 0) {
+            steps++;
+            recs.add(ActivityRecordsCompanion.insert(
+                type: 'steps',
+                startTime: x.time,
+                endTime: end,
+                value: x.steps.toDouble(),
+                unit: 'count',
+                source: kBleSource,
+                externalRecordId: 'ble-steps-$minute',
+                tzOffsetMin: Value(tzMin),
+                sourceName: const Value('Amazfit GTR 4 (Bluetooth)')));
+          }
+          if (x.hasHeartRate) {
+            hr++;
+            recs.add(ActivityRecordsCompanion.insert(
+                type: 'heartRate',
+                startTime: x.time,
+                endTime: end,
+                value: x.heartRate.toDouble(),
+                unit: 'bpm',
+                source: kBleSource,
+                externalRecordId: 'ble-hr-$minute',
+                tzOffsetMin: Value(tzMin),
+                sourceName: const Value('Amazfit GTR 4 (Bluetooth)')));
+          }
+        }
+        await db.upsertActivity(recs);
+        final last = samples.last.time.add(const Duration(minutes: 1));
+        await db.setSetting('ble_last_activity', '${last.millisecondsSinceEpoch}');
+        if (!last.isBefore(now) || samples.length < 2) break;
+        since = last.toLocal();
+      }
+      // SpO2
+      if (err == null) {
+        final sSince = DateTime.fromMillisecondsSinceEpoch(
+            int.tryParse(settings['ble_last_spo2'] ?? '') ??
+                now.subtract(const Duration(days: 7)).millisecondsSinceEpoch);
+        final res = await fetcher.fetch(fetchTypeSpo2Normal, sSince);
+        if (!res.ok) {
+          err = res.error;
+        } else if (res.data.isNotEmpty) {
+          final list = parseSpo2(res.data);
+          if (list == null) {
+            err = 'Неожиданный формат SpO₂ (${res.data.length} байт).';
+          } else {
+            await db.upsertActivity([
+              for (final x in list)
+                ActivityRecordsCompanion.insert(
+                    type: 'spo2',
+                    startTime: x.time,
+                    endTime: x.time.add(const Duration(minutes: 1)),
+                    value: x.value.toDouble(),
+                    unit: '%',
+                    source: kBleSource,
+                    externalRecordId: 'ble-spo2-${x.time.millisecondsSinceEpoch ~/ 1000}',
+                    tzOffsetMin: Value(tzMin),
+                    sourceName: const Value('Amazfit GTR 4 (Bluetooth)'))
+            ]);
+            spo = list.length;
+            if (list.isNotEmpty) {
+              final last = list.map((e) => e.time).reduce((a, b) => a.isAfter(b) ? a : b);
+              await db.setSetting(
+                  'ble_last_spo2', '${last.add(const Duration(minutes: 1)).millisecondsSinceEpoch}');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      err = 'Ошибка: $e';
+    }
+    await _loadSpo2();
+    if (mounted) {
+      setState(() {
+        _syncBusy = false;
+        _syncMsg = err != null
+            ? 'История загружена частично: $err (минут с шагами: $steps, с пульсом: $hr, SpO₂: $spo)'
+            : 'История загружена: минут с шагами $steps, с пульсом $hr, измерений SpO₂ $spo.';
+      });
+    }
   }
 
   Future<void> _reconnect() async {
@@ -539,6 +710,12 @@ class _WearablePageState extends ConsumerState<WearablePage> {
                   label: const Text('Источники')),
             ),
           ]),
+          if (_syncMsg != null)
+            Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(_syncMsg!,
+                    style: TextStyle(
+                        fontSize: 12.5, color: Theme.of(context).colorScheme.onSurfaceVariant))),
           const SizedBox(height: 10),
           OutlinedButton.icon(
               onPressed: _toggleHr,
@@ -654,7 +831,7 @@ class _WearablePageState extends ConsumerState<WearablePage> {
     final d = ref.watch(dayDataProvider(today)).valueOrNull;
     final act = d?.activity;
     final src = act?.source;
-    final health = src == null ? 'Health' : 'Health · $src';
+    final health = src == null ? 'Health' : sourceLabel(src);
     String hm(double min) => '${min ~/ 60} ч ${(min % 60).round()} мин';
 
     final pulse = _hr != null
@@ -677,8 +854,11 @@ class _WearablePageState extends ConsumerState<WearablePage> {
     final sleep = (act != null && act.sleepMinutes > 0)
         ? _Metric('Сон', Icons.bedtime_outlined, kViolet, hm(act.sleepMinutes), '', 'за ночь · $health')
         : const _Metric('Сон', Icons.bedtime_outlined, kViolet, null, '', 'Недоступно');
-    const spo2 = _Metric('SpO₂', Icons.bloodtype_outlined, kBlue, null, '',
-        'Недоступно (нужна авторизация по Bluetooth)');
+    final spo2 = _spo2 != null
+        ? _Metric('SpO₂', Icons.bloodtype_outlined, kBlue, '$_spo2', '%',
+            'измерение ${_hhmm(_spo2At!.toLocal())} · Bluetooth')
+        : const _Metric('SpO₂', Icons.bloodtype_outlined, kBlue, null, '',
+            'Недоступно (нет измерений с часов)');
     Widget row(_Metric a, _Metric? b) => Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

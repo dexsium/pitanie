@@ -38,7 +38,6 @@ class DevicesPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final svc = ref.watch(healthServiceProvider);
     final src = ref.watch(sourceProvider).valueOrNull;
-    final settings = ref.watch(settingsProvider).valueOrNull ?? {};
     final busy = ref.watch(syncBusyProvider);
     final cs = Theme.of(context).colorScheme;
 
@@ -175,8 +174,6 @@ class DevicesPage extends ConsumerWidget {
           ]),
         ),
         const SizedBox(height: 12),
-        _Priority(settings['preferred_source'] ?? ''),
-        const SizedBox(height: 12),
         if (report != null) _Diagnostics(report),
       ]),
     );
@@ -189,51 +186,6 @@ class DevicesPage extends ConsumerWidget {
           Text(b, style: const TextStyle(fontWeight: FontWeight.w700)),
         ]),
       );
-}
-
-class _Priority extends ConsumerWidget {
-  final String current;
-  const _Priority(this.current);
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final db = ref.read(dbProvider);
-    return AppCard(
-      child: FutureBuilder(
-        future: db.activityBetween(DateTime.now().subtract(const Duration(days: 30)), DateTime.now()),
-        builder: (context, snap) {
-          final names = <String, String>{};
-          for (final r in snap.data ?? []) {
-            names[r.source] = r.sourceName.isEmpty ? r.source : r.sourceName;
-          }
-          return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Приоритетный источник',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 4),
-            const Text(
-                'Чтобы шаги и калории не считались дважды, за каждый день берётся один источник.',
-                style: TextStyle(fontSize: 12.5)),
-            RadioListTile<String>(
-              contentPadding: EdgeInsets.zero,
-              value: '',
-              groupValue: current,
-              title: const Text('Автоматически (с наибольшим объёмом)'),
-              onChanged: (_) => db.removeSetting('preferred_source'),
-            ),
-            for (final e in names.entries)
-              RadioListTile<String>(
-                contentPadding: EdgeInsets.zero,
-                value: e.key,
-                groupValue: current,
-                title: Text(e.value),
-                subtitle: Text(e.key, style: const TextStyle(fontSize: 11)),
-                onChanged: (v) => db.setSetting('preferred_source', v!),
-              ),
-          ]);
-        },
-      ),
-    );
-  }
 }
 
 class _Diagnostics extends StatelessWidget {

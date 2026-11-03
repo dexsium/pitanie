@@ -3,6 +3,12 @@ import '../../core/dates.dart';
 import '../../core/nutrition.dart';
 import '../../database/database.dart';
 
+/// Идентификатор источника данных, загруженных с часов напрямую по Bluetooth.
+/// Если за сутки есть его данные, они используются вместо Health (без суммирования).
+const kBleSource = 'amazfit_ble';
+
+String sourceLabel(String? s) => s == kBleSource ? 'Amazfit GTR 4 (Bluetooth)' : (s ?? '');
+
 class ActivityDay {
   final double steps, distanceKm, activeKcal, totalKcal, workoutMinutes, sleepMinutes;
   final double? avgHr, maxHr;
@@ -112,7 +118,7 @@ Future<DayData> loadDayData(AppDatabase db, String key) async {
   final water = await db.waterForDay(key);
   final goal = await db.goalFor(key);
   final act =
-      await loadActivityDay(db, parseDayKey(key), settings['preferred_source']);
+      await loadActivityDay(db, parseDayKey(key), kBleSource);
   final weights = (await db.allWeights()).where((w) => w.date == key).toList();
   return DayData(
     key,
@@ -144,8 +150,7 @@ class DayStat {
 
 Future<Map<String, DayStat>> computeRangeStats(
     AppDatabase db, String fromKey, String toKey) async {
-  final settings = await db.allSettings();
-  final preferred = settings['preferred_source'];
+  const preferred = kBleSource;
   final food = await db.foodBetween(fromKey, toKey);
   final water = await db.waterBetween(fromKey, toKey);
   final goals = await db.allGoals();

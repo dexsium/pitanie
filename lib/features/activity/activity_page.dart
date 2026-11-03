@@ -7,6 +7,7 @@ import '../../app/theme.dart';
 import '../../core/dates.dart';
 import '../../core/labels.dart';
 import '../../shared/widgets.dart';
+import '../dashboard/day_data.dart';
 import '../calendar/calendar_page.dart';
 import '../health_integration/devices_page.dart';
 
@@ -116,7 +117,7 @@ class ActivityPage extends ConsumerWidget {
         if (a.source != null)
           Padding(
             padding: const EdgeInsets.only(top: 4),
-            child: Text('Источник за день: ${a.source}',
+            child: Text('Источник за день: ${sourceLabel(a.source)}',
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           ),
       ],

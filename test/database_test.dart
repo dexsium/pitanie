@@ -183,11 +183,11 @@ void main() {
       expect(d.activity.steps, 500);
     });
 
-    test('приоритетный источник из настроек', () async {
-      await db.upsertActivity([rec('a', 500, source: 'zepp'), rec('b', 450, source: 'phone')]);
-      await db.setSetting('preferred_source', 'phone');
+    test('данные с часов по Bluetooth приоритетнее Health (без суммирования)', () async {
+      await db.upsertActivity([rec('a', 500, source: 'zepp'), rec('b', 450, source: kBleSource)]);
       final d = await loadDayData(db, day);
       expect(d.activity.steps, 450);
+      expect(d.activity.source, kBleSource);
     });
 
     test('нет данных — нули, без ошибок', () async {
