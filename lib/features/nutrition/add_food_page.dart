@@ -17,8 +17,14 @@ class AddFoodPage extends ConsumerStatefulWidget {
   final String day;
   final Meal meal;
   final bool pickProduct;
+  /// 0 - поиск, 1 - избранное, 2 - недавние, 3 - блюда.
+  final int initialTab;
   const AddFoodPage(
-      {super.key, required this.day, required this.meal, this.pickProduct = false});
+      {super.key,
+      required this.day,
+      required this.meal,
+      this.pickProduct = false,
+      this.initialTab = 0});
   @override
   ConsumerState<AddFoodPage> createState() => _AddFoodPageState();
 }
@@ -59,6 +65,7 @@ class _AddFoodPageState extends ConsumerState<AddFoodPage> {
     ];
     return DefaultTabController(
       length: tabs.length,
+      initialIndex: widget.initialTab.clamp(0, tabs.length - 1),
       child: Scaffold(
         appBar: AppBar(
           title: Text(widget.pickProduct ? 'Выбор продукта' : widget.meal.label),
@@ -248,7 +255,7 @@ Future<bool> showRecipeAddDialog(BuildContext context, AppDatabase db, Recipe r,
                 selected: {byPortions},
                 onSelectionChanged: (s) => set(() {
                   byPortions = s.first;
-                  qty.text = byPortions ? '1' : fmtAuto(res.servingWeight);
+                  qty.text = byPortions ? '1' : fmtInput(res.servingWeight);
                 }),
               ),
               const SizedBox(height: 12),

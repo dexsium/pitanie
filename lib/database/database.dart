@@ -218,13 +218,21 @@ class AppDatabase extends _$AppDatabase {
         onUpgrade: (m, from, to) async {},
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
-          if (details.wasCreated) await seedProducts();
+          await seedProducts();
         },
       );
 
+  /// Добавляет недостающие справочные продукты (по имени). Выполняется один раз
+  /// на версию каталога, существующие и удалённые пользователем записи не трогает.
   Future<void> seedProducts() async {
+    final saved = (await allSettings())['seed_version'];
+    if ((int.tryParse(saved ?? '') ?? 0) >= seedVersion) return;
+    final existing = {
+      for (final p in await (select(products)..where((t) => t.isCustom.equals(false))).get()) p.name
+    };
     await batch((b) {
       for (final s in seedFoods) {
+        if (existing.contains(s.name)) continue;
         b.insert(
             products,
             ProductsCompanion.insert(
@@ -243,6 +251,7 @@ class AppDatabase extends _$AppDatabase {
             ));
       }
     });
+    await setSetting('seed_version', '$seedVersion');
   }
 
   // ---------- настройки ----------

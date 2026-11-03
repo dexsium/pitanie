@@ -54,7 +54,7 @@ class _OnboardingState extends ConsumerState<OnboardingPage> {
       target.text = u.targetWeightKg == null ? '' : fmtAuto(u.targetWeightKg!);
       if (ws.isNotEmpty) {
         _lastWeight = ws.last.weightKg;
-        weight.text = fmtAuto(ws.last.weightKg);
+        weight.text = fmtInput(ws.last.weightKg);
       }
     });
   }
@@ -69,11 +69,11 @@ class _OnboardingState extends ConsumerState<OnboardingPage> {
   void _fillGoals() {
     final g = _suggest();
     if (g == null) return;
-    kcal.text = fmtAuto(g.calories);
-    prot.text = fmtAuto(g.proteins);
-    fat.text = fmtAuto(g.fats);
-    carb.text = fmtAuto(g.carbs);
-    water.text = fmtAuto(g.waterMl);
+    kcal.text = fmtInput(g.calories);
+    prot.text = fmtInput(g.proteins);
+    fat.text = fmtInput(g.fats);
+    carb.text = fmtInput(g.carbs);
+    water.text = fmtInput(g.waterMl);
   }
 
   Future<void> _save() async {

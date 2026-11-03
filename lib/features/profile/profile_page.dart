@@ -134,11 +134,11 @@ class ProfilePage extends ConsumerWidget {
   }
 
   Future<void> _editGoals(BuildContext context, AppDatabase db, GoalValues g) async {
-    final k = TextEditingController(text: fmtAuto(g.calories));
-    final p = TextEditingController(text: fmtAuto(g.proteins));
-    final f = TextEditingController(text: fmtAuto(g.fats));
-    final c = TextEditingController(text: fmtAuto(g.carbs));
-    final w = TextEditingController(text: fmtAuto(g.waterMl));
+    final k = TextEditingController(text: fmtInput(g.calories));
+    final p = TextEditingController(text: fmtInput(g.proteins));
+    final f = TextEditingController(text: fmtInput(g.fats));
+    final c = TextEditingController(text: fmtInput(g.carbs));
+    final w = TextEditingController(text: fmtInput(g.waterMl));
     final form = GlobalKey<FormState>();
     await showDialog(
       context: context,

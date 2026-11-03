@@ -29,6 +29,10 @@ String fmt1(num v) => NumberFormat('#,##0.0', 'ru').format(v);
 String fmtAuto(num v) =>
     (v - v.roundToDouble()).abs() < 0.05 ? fmt0(v) : fmt1(v);
 
+/// Значение для поля ввода: без разделителей тысяч, чтобы его принимал parseNum.
+String fmtInput(num v) =>
+    (v - v.roundToDouble()).abs() < 0.05 ? v.round().toString() : v.toStringAsFixed(1);
+
 String fmtTime(DateTime d) => DateFormat('HH:mm').format(d.toLocal());
 
 String _cap(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
@@ -50,5 +54,5 @@ String shortDate(DateTime d) => DateFormat('dd.MM.yyyy').format(d);
 
 double? parseNum(String? s) {
   if (s == null) return null;
-  return double.tryParse(s.trim().replaceAll(',', '.').replaceAll(' ', ''));
+  return double.tryParse(s.trim().replaceAll(',', '.').replaceAll(RegExp(r'\s'), ''));
 }
