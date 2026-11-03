@@ -11,7 +11,9 @@ String sourceLabel(String? s) => s == kBleSource ? 'Amazfit GTR 4 (Bluetooth)' :
 
 class ActivityDay {
   final double steps, distanceKm, activeKcal, totalKcal, workoutMinutes, sleepMinutes;
-  final double? avgHr, maxHr;
+  final double sleepDeepMin, sleepRemMin, sleepLightMin;
+  final DateTime? sleepStart, sleepEnd;
+  final double? avgHr, maxHr, spo2;
   final List<Workout> workouts;
   final String? source;
   const ActivityDay({
@@ -21,14 +23,20 @@ class ActivityDay {
     this.totalKcal = 0,
     this.workoutMinutes = 0,
     this.sleepMinutes = 0,
+    this.sleepDeepMin = 0,
+    this.sleepRemMin = 0,
+    this.sleepLightMin = 0,
+    this.sleepStart,
+    this.sleepEnd,
     this.avgHr,
     this.maxHr,
+    this.spo2,
     this.workouts = const [],
     this.source,
   });
 
   bool get hasData =>
-      steps > 0 || distanceKm > 0 || activeKcal > 0 || workouts.isNotEmpty || avgHr != null;
+      steps > 0 || distanceKm > 0 || activeKcal > 0 || workouts.isNotEmpty || avgHr != null || spo2 != null;
 }
 
 ActivityDay buildActivityDay(List<ActivityRecord> recs, List<Workout> wk,
@@ -50,7 +58,25 @@ ActivityDay buildActivityDay(List<ActivityRecord> recs, List<Workout> wk,
     avg = hr.map((e) => e.value).reduce((a, b) => a + b) / hr.length;
     mx = hr.map((e) => e.value).reduce((a, b) => a > b ? a : b);
   }
+  // Фазы сна из данных часов по Bluetooth (приблизительные); окно 18:00 → 18:00.
+  final wFrom = from.subtract(six), wTo = to.subtract(six);
+  final sleepRecs = recs
+      .where((r) => r.source == kBleSource && !r.startTime.isBefore(wFrom) && r.startTime.isBefore(wTo))
+      .toList();
+  double stageMin(String t) => sleepRecs.where((r) => r.type == t).length.toDouble();
+  final sleepOnly = sleepRecs.where((r) => r.type == 'sleep').toList()
+    ..sort((a, b) => a.startTime.compareTo(b.startTime));
+  final spo = recs
+      .where((r) => r.type == 'spo2' && r.endTime.isAfter(from) && r.startTime.isBefore(to))
+      .toList()
+    ..sort((a, b) => a.startTime.compareTo(b.startTime));
   return ActivityDay(
+    spo2: spo.isEmpty ? null : spo.last.value,
+    sleepDeepMin: stageMin('sleepDeep'),
+    sleepRemMin: stageMin('sleepRem'),
+    sleepLightMin: stageMin('sleepLight'),
+    sleepStart: sleepOnly.isEmpty ? null : sleepOnly.first.startTime,
+    sleepEnd: sleepOnly.isEmpty ? null : sleepOnly.last.endTime,
     steps: dayTotal(steps, from, to, preferred: preferred),
     distanceKm: dayTotal(of('distance'), from, to, preferred: preferred) / 1000,
     activeKcal: dayTotal(of('activeEnergy'), from, to, preferred: preferred),

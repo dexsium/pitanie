@@ -43,6 +43,14 @@ class Products extends Table {
   IntColumn get useCount => integer().withDefault(const Constant(0))();
   DateTimeColumn get lastUsedAt => dateTime().nullable()();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  // Каталог USDA (схема 2). verified = значение получено из официального справочника,
+  // а не оценено; это не лабораторное подтверждение.
+  TextColumn get nameEn => text().nullable()();
+  TextColumn get sourceId => text().nullable()();
+  TextColumn get state => text().withDefault(const Constant('unknown'))();
+  TextColumn get kind => text().withDefault(const Constant('food'))();
+  BoolColumn get verified => boolean().withDefault(const Constant(false))();
+  TextColumn get portionLabel => text().nullable()();
 }
 
 class Recipes extends Table {
@@ -196,7 +204,7 @@ class AppDatabase extends _$AppDatabase {
       }));
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -215,7 +223,19 @@ class AppDatabase extends _$AppDatabase {
         // При повышении schemaVersion добавляйте шаги вида
         //   if (from < 2) { await m.addColumn(table, table.newColumn); }
         // Данные пользователя никогда не удаляются при миграции.
-        onUpgrade: (m, from, to) async {},
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            // Только добавление столбцов: данные пользователя не затрагиваются.
+            await m.addColumn(products, products.nameEn);
+            await m.addColumn(products, products.sourceId);
+            await m.addColumn(products, products.state);
+            await m.addColumn(products, products.kind);
+            await m.addColumn(products, products.verified);
+            await m.addColumn(products, products.portionLabel);
+            await customStatement(
+                'CREATE INDEX IF NOT EXISTS idx_product_source ON products(source, source_id)');
+          }
+        },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
           await seedProducts();
@@ -315,14 +335,20 @@ class AppDatabase extends _$AppDatabase {
     String? category,
     bool favoritesOnly = false,
     bool recentOnly = false,
+    String? state,
+    String? kind,
     int limit = 120,
   }) {
     final q = select(products);
     q.where((t) {
       Expression<bool> e = const Constant(true);
-      final s = query.trim().toLowerCase();
-      if (s.isNotEmpty) e = e & t.searchKey.like('%$s%');
+      // Несколько слов запроса: каждое должно встречаться в названии (русском или английском).
+      for (final w in query.trim().toLowerCase().split(RegExp(r'\s+'))) {
+        if (w.isNotEmpty) e = e & t.searchKey.like('%$w%');
+      }
       if (category != null) e = e & t.category.equals(category);
+      if (state != null) e = e & t.state.equals(state);
+      if (kind != null) e = e & t.kind.equals(kind);
       if (favoritesOnly) e = e & t.isFavorite.equals(true);
       if (recentOnly) e = e & t.lastUsedAt.isNotNull();
       return e;
@@ -331,10 +357,21 @@ class AppDatabase extends _$AppDatabase {
         ? [(t) => OrderingTerm.desc(t.lastUsedAt)]
         : [
             (t) => OrderingTerm.desc(t.useCount),
+            (t) => OrderingTerm.desc(t.isCustom),
+            (t) => OrderingTerm.asc(t.name.length),
             (t) => OrderingTerm.asc(t.name),
           ]);
     q.limit(limit);
     return q.watch();
+  }
+
+  /// Категории продуктов (не блюд), которые есть в базе: для фильтра.
+  Future<List<String>> usedCategories() async {
+    final rows = await customSelect(
+            "SELECT category, COUNT(*) c FROM products WHERE kind = 'food' GROUP BY category ORDER BY c DESC",
+            readsFrom: {products})
+        .get();
+    return [for (final r in rows) r.read<String>('category')];
   }
 
   Future<Product?> productById(int id) =>

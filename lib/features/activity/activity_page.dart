@@ -1,5 +1,6 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../wearables/heart_rate_page.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
@@ -107,6 +108,29 @@ class ActivityPage extends ConsumerWidget {
           const SizedBox(width: 10),
           tile(Icons.bedtime, kViolet,
               a.sleepMinutes <= 0 ? '—' : '${(a.sleepMinutes ~/ 60)} ч ${(a.sleepMinutes % 60).round()} м', 'сон'),
+        ]),
+        if (a.sleepStart != null && a.sleepMinutes > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+                'Сон: ${fmtTime(a.sleepStart!)} — ${fmtTime(a.sleepEnd!)}. Фазы (приблизительно): '
+                'глубокий ${fmt0(a.sleepDeepMin)} мин, REM ${fmt0(a.sleepRemMin)} мин, '
+                'лёгкий ${fmt0(a.sleepLightMin)} мин. Разбивка по фазам — оценка по данным часов, '
+                'а не точное измерение.',
+                style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+          ),
+        const SizedBox(height: 10),
+        Row(children: [
+          tile(Icons.bloodtype_outlined, kBlue, a.spo2 == null ? '—' : '${fmt0(a.spo2!)} %', 'SpO₂ (последнее)'),
+          const SizedBox(width: 10),
+          Expanded(
+            child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(64)),
+                onPressed: () => Navigator.push(
+                    context, MaterialPageRoute(builder: (_) => const HeartRatePage())),
+                icon: const Icon(Icons.show_chart),
+                label: const Text('График пульса')),
+          ),
         ]),
         if (a.totalKcal > 0)
           Padding(

@@ -109,7 +109,10 @@ Future<Product?> scanProduct(BuildContext context, AppDatabase db) async {
   }
   if (!context.mounted) return null;
 
-  if (off != null && off.complete) {
+  if (off != null && !off.usable && off.complete && context.mounted) {
+    toast(context, 'Данные Open Food Facts для этого штрихкода неправдоподобны и не используются');
+  }
+  if (off != null && off.usable) {
     final ok = await confirmDialog(
         context,
         off.name!,
@@ -125,7 +128,8 @@ Future<Product?> scanProduct(BuildContext context, AppDatabase db) async {
         fats: off.fats!,
         carbohydrates: off.carbs!,
         barcode: Value(code),
-        source: const Value('Open Food Facts'),
+        source: const Value('Open Food Facts (ODbL)'),
+        sourceId: Value(code),
       ));
       return db.productById(id);
     }

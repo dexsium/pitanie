@@ -95,6 +95,21 @@ void historyTests() {
       expect(parseActivity(Uint8List(7), start), isNull);
     });
 
+    test('сон: вид 120, фаза по порогам Gadgetbridge (оценка)', () {
+      final start = DateTime.utc(2026, 11, 3, 23, 0);
+      final bytes = Uint8List.fromList([
+        120, 0, 0, 60, 0, 30, 10, 5, // лёгкий
+        120, 0, 0, 55, 0, 30, 50, 5, // глубокий (deep > 42)
+        120, 0, 0, 52, 0, 30, 10, 70, // REM (rem > 55)
+        115, 0, 0, 0, 0, 0, 0, 0, // часы сняты
+      ]);
+      final s = parseActivity(bytes, start)!;
+      expect(s.map((e) => e.isSleep), [true, true, true, false]);
+      expect(s[0].stage, SleepStage.light);
+      expect(s[1].stage, SleepStage.deep);
+      expect(s[2].stage, SleepStage.rem);
+    });
+
     test('SpO2: версия 2, запись 65 байт, бит 7 — автоматическое измерение', () {
       final b = Uint8List(1 + 65)..[0] = 2;
       ByteData.sublistView(b).setUint32(1, 1700000000, Endian.little);

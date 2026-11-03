@@ -19,6 +19,13 @@ def read(path):
         return f.read()
 
 
+BG_PLIST = (
+    chr(9) + "<key>UIBackgroundModes</key>" + chr(10)
+    + chr(9) + "<array>" + chr(10)
+    + chr(9) + chr(9) + "<string>bluetooth-central</string>" + chr(10)
+    + chr(9) + "</array>" + chr(10)
+)
+
 BLE_PLIST = (
     chr(9) + "<key>NSBluetoothAlwaysUsageDescription</key>" + chr(10)
     + chr(9) + "<string>Bluetooth нужен для поиска и подключения умных часов.</string>" + chr(10)
@@ -143,6 +150,11 @@ def patch_plist():
         s = s[:idx] + BLE_PLIST + s[idx:]
         write(path, s)
         print("Info.plist: добавлено описание Bluetooth")
+    if "UIBackgroundModes" not in s:
+        idx = s.rfind("</dict>")
+        s = s[:idx] + BG_PLIST + s[idx:]
+        write(path, s)
+        print("Info.plist: добавлен фоновый режим bluetooth-central")
     if "NSHealthShareUsageDescription" in s:
         print("Info.plist уже настроен")
         return

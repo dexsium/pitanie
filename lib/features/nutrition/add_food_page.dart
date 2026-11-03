@@ -31,7 +31,7 @@ class AddFoodPage extends ConsumerStatefulWidget {
 
 class _AddFoodPageState extends ConsumerState<AddFoodPage> {
   String _query = '';
-  String? _category;
+  String? _category, _state, _kind;
 
   AppDatabase get db => ref.read(dbProvider);
 
@@ -54,6 +54,18 @@ class _AddFoodPageState extends ConsumerState<AddFoodPage> {
         MaterialPageRoute(builder: (_) => ProductFormPage(initialName: name)));
     if (p != null && mounted) await _selected(p);
   }
+
+  Widget _chipRow(List<Widget> chips) => SizedBox(
+        height: 46,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          children: [
+            for (final c in chips)
+              Padding(padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6), child: c)
+          ],
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -91,27 +103,65 @@ class _AddFoodPageState extends ConsumerState<AddFoodPage> {
                 onChanged: (v) => setState(() => _query = v),
               ),
             ),
-            SizedBox(
-              height: 46,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                children: [
-                  for (final c in [null, ...productCategories])
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                      child: ChoiceChip(
-                        label: Text(c ?? 'Все'),
-                        selected: _category == c,
-                        onSelected: (_) => setState(() => _category = c),
-                      ),
+            _chipRow([
+              for (final k in const [(null, 'Всё'), ('food', 'Продукты'), ('dish', 'Готовые блюда')])
+                ChoiceChip(
+                  label: Text(k.$2),
+                  selected: _kind == k.$1,
+                  onSelected: (_) => setState(() {
+                    _kind = k.$1;
+                    if (_kind == 'dish') _category = null;
+                  }),
+                ),
+            ]),
+            _chipRow([
+              for (final st in const [
+                (null, 'Любое состояние'),
+                ('raw', 'Сырой'),
+                ('cooked', 'Приготовленный'),
+                ('boiled', 'Варёный'),
+                ('roasted', 'Запечённый'),
+                ('fried', 'Жареный'),
+                ('grilled', 'На гриле'),
+                ('canned', 'Консервы'),
+                ('dried', 'Сушёный'),
+                ('frozen', 'Замороженный'),
+              ])
+                ChoiceChip(
+                  label: Text(st.$2),
+                  selected: _state == st.$1,
+                  onSelected: (_) => setState(() => _state = st.$1),
+                ),
+            ]),
+            if (_kind != 'dish')
+              FutureBuilder<List<String>>(
+                future: db.usedCategories(),
+                builder: (context, snap) => _chipRow([
+                  for (final c in [null, ...(snap.data ?? productCategories)])
+                    ChoiceChip(
+                      label: Text(c ?? 'Все категории'),
+                      selected: _category == c,
+                      onSelected: (_) => setState(() => _category = c),
                     ),
-                ],
+                ]),
               ),
-            ),
+            Consumer(builder: (context, ref, _) {
+              final prog = ref.watch(catalogProgressProvider);
+              if (prog == null) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  LinearProgressIndicator(value: prog),
+                  const SizedBox(height: 4),
+                  Text('Загружается справочник продуктов… ${(prog * 100).round()}%',
+                      style: const TextStyle(fontSize: 12)),
+                ]),
+              );
+            }),
             Expanded(
               child: _ProductList(
-                stream: db.watchProducts(query: _query, category: _category),
+                stream: db.watchProducts(
+                    query: _query, category: _category, state: _state, kind: _kind),
                 onTap: _selected,
                 emptyAction: _query.trim().isEmpty ? null : () => _create(_query.trim()),
                 emptyLabel: 'Создать продукт «${_query.trim()}»',
@@ -136,7 +186,17 @@ class _AddFoodPageState extends ConsumerState<AddFoodPage> {
 String productSubtitle(Product p) {
   final u = p.measurementUnit == 'ml' ? '100 мл' : '100 г';
   final b = (p.brand == null || p.brand!.isEmpty) ? '' : '${p.brand} · ';
-  return '$b${fmt0(p.calories)} ккал · Б ${fmtAuto(p.proteins)} Ж ${fmtAuto(p.fats)} У ${fmtAuto(p.carbohydrates)} на $u';
+  final macros =
+      '$b${fmt0(p.calories)} ккал · Б ${fmtAuto(p.proteins)} Ж ${fmtAuto(p.fats)} У ${fmtAuto(p.carbohydrates)} на $u';
+  if (p.isCustom) return macros;
+  // Значения из справочников: USDA — официальные данные, прочее — ориентировочные.
+  final note = p.verified
+      ? 'USDA, значения из справочника'
+      : p.source.startsWith('Open Food Facts')
+          ? 'Open Food Facts (ODbL): данные участников, сверьте с упаковкой'
+          : 'Ориентировочные значения';
+  final en = (p.nameEn != null && p.nameEn != p.name) ? '\n${p.nameEn}' : '';
+  return '$macros\n$note$en';
 }
 
 class _ProductList extends ConsumerWidget {
@@ -175,7 +235,7 @@ class _ProductList extends ConsumerWidget {
             final p = list[i];
             return ListTile(
               title: Text(p.name),
-              subtitle: Text(productSubtitle(p), maxLines: 2, overflow: TextOverflow.ellipsis),
+              subtitle: Text(productSubtitle(p), maxLines: 4, overflow: TextOverflow.ellipsis),
               onTap: () => onTap(p),
               onLongPress: () => Navigator.push(
                   context, MaterialPageRoute(builder: (_) => ProductFormPage(product: p))),

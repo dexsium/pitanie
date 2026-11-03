@@ -42,3 +42,6 @@ final sourceProvider = StreamProvider<ConnectedSource?>((ref) {
   final svc = ref.watch(healthServiceProvider);
   return ref.watch(dbProvider).watchSource(svc.sourceType);
 });
+
+/// Прогресс первичной загрузки справочника продуктов (null — не выполняется).
+final catalogProgressProvider = StateProvider<double?>((ref) => null);

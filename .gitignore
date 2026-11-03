@@ -7,3 +7,4 @@ android/
 ios/
 .idea/
 *.iml
+__pycache__/

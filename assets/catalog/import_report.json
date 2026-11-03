@@ -1,0 +1,19 @@
+{
+  "sr_legacy": {
+    "total": 7793,
+    "imported": 7793
+  },
+  "fndds_2021_2023": {
+    "total": 5432,
+    "skipped_missing": 1,
+    "imported": 5431
+  },
+  "total_in_catalog": 13224,
+  "foods": 7793,
+  "dishes": 5431,
+  "translation": {
+    "not_translated": 12725,
+    "translated": 499
+  },
+  "sqlite_bytes": 4255744
+}

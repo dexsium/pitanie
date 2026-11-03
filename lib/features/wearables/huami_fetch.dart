@@ -138,11 +138,25 @@ class HuamiFetcher {
       b.map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ');
 }
 
+enum SleepStage { light, deep, rem }
+
 class ActivitySample {
   final DateTime time;
   final int kind, intensity, steps, heartRate, sleep, deepSleep, remSleep;
   const ActivitySample(this.time, this.kind, this.intensity, this.steps, this.heartRate,
       this.sleep, this.deepSleep, this.remSleep);
+
+  /// Вид 120 в записях Zepp OS — сон (без разбивки на фазы), 115 — часы сняты, 118 — зарядка.
+  bool get isSleep => kind == 120;
+
+  /// Фаза сна по эвристике Gadgetbridge (HuamiExtendedSampleProvider): пороги подобраны
+  /// опытным путём и дают приблизительную разбивку, а не точное значение с часов.
+  SleepStage get stage {
+    final rem = remSleep & 127, deep = deepSleep & 127;
+    if (rem > 55) return SleepStage.rem;
+    if (deep > 42) return SleepStage.deep;
+    return SleepStage.light;
+  }
 
   /// 0 и 255 — «нет измерения» (допущение по формату Huami; требует проверки).
   bool get hasHeartRate => heartRate >= 30 && heartRate <= 230;

@@ -1,5 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import '../wearables/wearable_page.dart';
+import '../wearables/wearable_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
@@ -32,7 +34,9 @@ class DashboardPage extends ConsumerWidget {
                   context, MaterialPageRoute(builder: (_) => const SettingsPage())),
               icon: const Icon(Icons.settings_outlined)),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 10),
+        const WatchStatusChip(),
+        const SizedBox(height: 10),
         data.when(
           loading: () => const Padding(
               padding: EdgeInsets.all(48),
@@ -41,6 +45,39 @@ class DashboardPage extends ConsumerWidget {
           data: (d) => _Body(d),
         ),
       ],
+    );
+  }
+}
+
+/// Индикатор связи с часами: подключены / подключаются / не подключены.
+class WatchStatusChip extends ConsumerWidget {
+  const WatchStatusChip({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final c = ref.watch(wearableProvider);
+    if (c.savedId == null && !c.isConnected && c.status != WearStatus.connecting) {
+      return const SizedBox.shrink();
+    }
+    final (text, color) = switch (c.status) {
+      WearStatus.ready => (
+        'Часы подключены${c.hr == null ? '' : ' · ♥ ${c.hr}'}${c.battery == null ? '' : ' · ${c.battery}%'}',
+        kGreen
+      ),
+      WearStatus.connected || WearStatus.authorizing => ('Часы подключены, авторизация…', kOrange),
+      WearStatus.connecting => ('Подключаем часы…', kOrange),
+      WearStatus.off => ('Часы не подключены', Colors.grey),
+    };
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ActionChip(
+        avatar: c.status == WearStatus.connecting
+            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+            : Icon(Icons.watch_outlined, size: 18, color: color),
+        label: Text(text, style: const TextStyle(fontWeight: FontWeight.w600)),
+        onPressed: () => Navigator.push(
+            context, MaterialPageRoute(builder: (_) => const WearablePage())),
+      ),
     );
   }
 }

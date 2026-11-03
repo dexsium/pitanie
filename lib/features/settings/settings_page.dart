@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../app/app.dart';
@@ -165,6 +166,38 @@ class SettingsPage extends ConsumerWidget {
               },
             ),
           ]),
+        ),
+        const SizedBox(height: 14),
+        AppCard(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Источники данных о продуктах',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+            const SizedBox(height: 8),
+            Text(
+                'Справочник встроен в приложение и работает без интернета: USDA FoodData Central '
+                '(SR Legacy и FNDDS 2021–2023), общедоступные данные (CC0), значения на 100 г '
+                'съедобной части без изменений. Отметка «USDA» означает, что число взято из '
+                'официального справочника, а не измерено в лаборатории для вашего продукта.\n\n'
+                'Названия USDA английские; русские переводы добавлены только для части записей '
+                'по проверяемому глоссарию, остальные остаются на английском.\n\n'
+                'Штрихкоды: Open Food Facts (участники проекта), лицензия ODbL 1.0, '
+                'https://world.openfoodfacts.org. Запрос отправляется только с вашего согласия '
+                'и содержит только штрихкод; сохранённая запись — ваша личная копия.\n\n'
+                'Записи с пометкой «Ориентировочные значения» — типовые оценки, сверяйте с упаковкой.',
+                style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+          ]),
+        ),
+        const SizedBox(height: 14),
+        FutureBuilder<PackageInfo>(
+          future: PackageInfo.fromPlatform(),
+          builder: (context, snap) => AppCard(
+            child: Text(
+              snap.hasData
+                  ? 'Версия ${snap.data!.version} (сборка ${snap.data!.buildNumber})'
+                  : 'Версия…',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
         ),
         const SizedBox(height: 14),
         AppCard(

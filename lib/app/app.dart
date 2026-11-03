@@ -9,6 +9,8 @@ import '../features/profile/onboarding_page.dart';
 import '../features/profile/profile_page.dart';
 import '../features/settings/notification_service.dart';
 import '../features/statistics/statistics_page.dart';
+import '../features/wearables/wearable_controller.dart';
+import '../database/catalog_importer.dart';
 import 'providers.dart';
 import 'theme.dart';
 
@@ -70,6 +72,8 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _sync();
+      ref.read(wearableProvider).start();
+      _loadCatalog();
       final n = ref.read(notificationsProvider);
       await n.init();
       await n.reschedule(await ref.read(dbProvider).allSettings());
@@ -84,7 +88,23 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _sync();
+    if (state == AppLifecycleState.resumed) {
+      _sync();
+      ref.read(wearableProvider).start();
+    }
+  }
+
+  Future<void> _loadCatalog() async {
+    try {
+      final res = await ensureCatalog(ref.read(dbProvider), onProgress: (d, t) {
+        if (mounted) ref.read(catalogProgressProvider.notifier).state = d / t;
+      });
+      if (res != null) debugPrint('Каталог: добавлено ${res.added} из ${res.total}');
+    } catch (e) {
+      debugPrint('Не удалось загрузить каталог: $e');
+    } finally {
+      if (mounted) ref.read(catalogProgressProvider.notifier).state = null;
+    }
   }
 
   Future<void> _sync() async {

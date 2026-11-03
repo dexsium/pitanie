@@ -1,0 +1,593 @@
+{
+ "bases": {
+  "Beef": [
+   "Говядина",
+   "f"
+  ],
+  "Pork": [
+   "Свинина",
+   "f"
+  ],
+  "Fish": [
+   "Рыба",
+   "f"
+  ],
+  "Lamb": [
+   "Баранина",
+   "f"
+  ],
+  "Chicken": [
+   "Курица",
+   "f"
+  ],
+  "Soup": [
+   "Суп",
+   "m"
+  ],
+  "Bread": [
+   "Хлеб",
+   "m"
+  ],
+  "Rice": [
+   "Рис",
+   "m"
+  ],
+  "Cheese": [
+   "Сыр",
+   "m"
+  ],
+  "Turkey": [
+   "Индейка",
+   "f"
+  ],
+  "Beans": [
+   "Фасоль",
+   "f"
+  ],
+  "Veal": [
+   "Телятина",
+   "f"
+  ],
+  "Potato": [
+   "Картофель",
+   "m"
+  ],
+  "Potatoes": [
+   "Картофель",
+   "m"
+  ],
+  "Cookie": [
+   "Печенье",
+   "n"
+  ],
+  "Cookies": [
+   "Печенье",
+   "n"
+  ],
+  "Nuts": [
+   "Орехи",
+   "p"
+  ],
+  "Coffee": [
+   "Кофе",
+   "m"
+  ],
+  "Yogurt": [
+   "Йогурт",
+   "m"
+  ],
+  "Pasta": [
+   "Макароны",
+   "p"
+  ],
+  "Oil": [
+   "Масло",
+   "n"
+  ],
+  "Milk": [
+   "Молоко",
+   "n"
+  ],
+  "Corn": [
+   "Кукуруза",
+   "f"
+  ],
+  "Egg": [
+   "Яйцо",
+   "n"
+  ],
+  "Pie": [
+   "Пирог",
+   "m"
+  ],
+  "Tea": [
+   "Чай",
+   "m"
+  ],
+  "Pizza": [
+   "Пицца",
+   "f"
+  ],
+  "Sausage": [
+   "Колбаса",
+   "f"
+  ],
+  "Cabbage": [
+   "Капуста",
+   "f"
+  ],
+  "Mushrooms": [
+   "Грибы",
+   "p"
+  ],
+  "Carrots": [
+   "Морковь",
+   "f"
+  ],
+  "Pancakes": [
+   "Панкейки",
+   "p"
+  ],
+  "Broccoli": [
+   "Брокколи",
+   "f"
+  ],
+  "Popcorn": [
+   "Попкорн",
+   "m"
+  ],
+  "Spinach": [
+   "Шпинат",
+   "m"
+  ],
+  "Onions": [
+   "Лук",
+   "m"
+  ],
+  "Peas": [
+   "Горох",
+   "m"
+  ],
+  "Asparagus": [
+   "Спаржа",
+   "f"
+  ],
+  "Tomatoes": [
+   "Помидоры",
+   "p"
+  ],
+  "Peanuts": [
+   "Арахис",
+   "m"
+  ],
+  "Cauliflower": [
+   "Цветная капуста",
+   "f"
+  ],
+  "Apples": [
+   "Яблоки",
+   "p"
+  ],
+  "Pears": [
+   "Груши",
+   "p"
+  ],
+  "Peaches": [
+   "Персики",
+   "p"
+  ],
+  "Apricots": [
+   "Абрикосы",
+   "p"
+  ],
+  "Pineapple": [
+   "Ананас",
+   "m"
+  ],
+  "Beets": [
+   "Свёкла",
+   "f"
+  ],
+  "Orange juice": [
+   "Апельсиновый сок",
+   "m"
+  ],
+  "Ham": [
+   "Ветчина",
+   "f"
+  ],
+  "Lettuce": [
+   "Салат-латук",
+   "m"
+  ],
+  "Water": [
+   "Вода",
+   "f"
+  ],
+  "Peanut butter": [
+   "Арахисовая паста",
+   "f"
+  ],
+  "Bagel": [
+   "Бейгл",
+   "m"
+  ],
+  "Frankfurter": [
+   "Сосиска",
+   "f"
+  ],
+  "Oatmeal": [
+   "Овсяная каша",
+   "f"
+  ],
+  "Cream": [
+   "Сливки",
+   "p"
+  ],
+  "Duck": [
+   "Утка",
+   "f"
+  ],
+  "Noodles": [
+   "Лапша",
+   "f"
+  ],
+  "Margarine": [
+   "Маргарин",
+   "m"
+  ],
+  "Waffle": [
+   "Вафли",
+   "p"
+  ],
+  "Soybeans": [
+   "Соевые бобы",
+   "p"
+  ],
+  "Green beans": [
+   "Стручковая фасоль",
+   "f"
+  ],
+  "Green peas": [
+   "Зелёный горошек",
+   "m"
+  ],
+  "Wheat flour": [
+   "Пшеничная мука",
+   "f"
+  ],
+  "Cornmeal": [
+   "Кукурузная мука",
+   "f"
+  ],
+  "Ice creams": [
+   "Мороженое",
+   "n"
+  ],
+  "Seaweed": [
+   "Морские водоросли",
+   "p"
+  ],
+  "Chicken breast": [
+   "Куриная грудка",
+   "f"
+  ],
+  "Chicken thigh": [
+   "Куриное бедро",
+   "n"
+  ],
+  "Chicken drumstick": [
+   "Куриная голень",
+   "f"
+  ],
+  "Chicken leg": [
+   "Куриная ножка",
+   "f"
+  ],
+  "Chicken wing": [
+   "Куриное крыло",
+   "n"
+  ],
+  "Fruit salad": [
+   "Фруктовый салат",
+   "m"
+  ],
+  "Egg omelet or scrambled egg": [
+   "Омлет или яичница-болтунья",
+   "m"
+  ],
+  "Pudding": [
+   "Пудинг",
+   "m"
+  ],
+  "Puddings": [
+   "Пудинги",
+   "p"
+  ],
+  "Syrups": [
+   "Сиропы",
+   "p"
+  ],
+  "Spices": [
+   "Специи",
+   "p"
+  ],
+  "Seeds": [
+   "Семена",
+   "p"
+  ],
+  "Candies": [
+   "Конфеты",
+   "p"
+  ],
+  "Candy": [
+   "Конфеты",
+   "p"
+  ],
+  "Crackers": [
+   "Крекеры",
+   "p"
+  ],
+  "Muffin": [
+   "Маффин",
+   "m"
+  ],
+  "Muffins": [
+   "Маффины",
+   "p"
+  ],
+  "Roll": [
+   "Булочка",
+   "f"
+  ],
+  "Rolls": [
+   "Булочки",
+   "p"
+  ],
+  "Salad dressing": [
+   "Салатная заправка",
+   "f"
+  ],
+  "Sauce": [
+   "Соус",
+   "m"
+  ],
+  "Gravy": [
+   "Подлива",
+   "f"
+  ],
+  "Stew": [
+   "Рагу",
+   "n"
+  ],
+  "Burrito": [
+   "Буррито",
+   "n"
+  ],
+  "Taco": [
+   "Тако",
+   "n"
+  ],
+  "Ravioli": [
+   "Равиоли",
+   "p"
+  ],
+  "Hot chocolate / cocoa": [
+   "Горячий шоколад / какао",
+   "m"
+  ],
+  "Peppers": [
+   "Перец",
+   "m"
+  ],
+  "Sweet potato": [
+   "Батат",
+   "m"
+  ],
+  "Cereals ready-to-eat": [
+   "Готовые завтраки (хлопья)",
+   "p"
+  ],
+  "Infant formula": [
+   "Детская молочная смесь",
+   "f"
+  ],
+  "Babyfood": [
+   "Детское питание",
+   "n"
+  ],
+  "Beverages": [
+   "Напитки",
+   "p"
+  ],
+  "Snacks": [
+   "Снеки",
+   "p"
+  ],
+  "Fast foods": [
+   "Фастфуд",
+   "m"
+  ],
+  "Alcoholic beverage": [
+   "Алкогольный напиток",
+   "m"
+  ],
+  "Alcoholic Beverage": [
+   "Алкогольный напиток",
+   "m"
+  ],
+  "Soft drink": [
+   "Безалкогольный напиток",
+   "m"
+  ],
+  "Potato chips": [
+   "Картофельные чипсы",
+   "p"
+  ],
+  "Nutritional drink or shake": [
+   "Питательный напиток или коктейль",
+   "m"
+  ],
+  "Pasta with tomato-based sauce": [
+   "Макароны с томатным соусом",
+   "p"
+  ],
+  "Chocolate candy": [
+   "Шоколадные конфеты",
+   "p"
+  ],
+  "Pretzels": [
+   "Брецели",
+   "p"
+  ],
+  "McDONALD'S": [
+   "McDonald's",
+   "n"
+  ],
+  "KFC": [
+   "KFC",
+   "n"
+  ],
+  "BURGER KING": [
+   "Burger King",
+   "n"
+  ]
+ },
+ "modifiers": {
+  "cooked": "~приготовленный",
+  "raw": "~сырой",
+  "canned": "~консервированный",
+  "frozen": "~замороженный",
+  "roasted": "~запечённый",
+  "boiled": "~варёный",
+  "fresh": "~свежий",
+  "drained": "без жидкости",
+  "baked": "~запечённый",
+  "fried": "~жареный",
+  "grilled": "~на гриле",
+  "broiled": "~на гриле",
+  "braised": "~тушёный",
+  "stewed": "~тушёный",
+  "dry": "~сухой",
+  "dried": "~сушёный",
+  "powder": "порошок",
+  "whole": "~цельный",
+  "ground": "~измельчённый",
+  "boneless": "~без костей",
+  "bone-in": "с костью",
+  "meat only": "только мясо",
+  "meat and skin": "мясо с кожей",
+  "skin eaten": "с кожей",
+  "skin not eaten": "без кожи",
+  "separable lean and fat": "постное с жиром",
+  "separable lean only": "только постное",
+  "trimmed to 0\" fat": "жир обрезан до 0\"",
+  "trimmed to 1/8\" fat": "жир обрезан до 1/8\"",
+  "trimmed to 1/4\" fat": "жир обрезан до 1/4\"",
+  "all grades": "все сорта",
+  "imported": "~импортный",
+  "New Zealand": "Новая Зеландия",
+  "Australian": "Австралия",
+  "unprepared": "~неприготовленный",
+  "without salt": "без соли",
+  "with salt": "с солью",
+  "no added fat": "без добавленного жира",
+  "fat added": "с добавленным жиром",
+  "plain": "~обычный",
+  "NFS": "не уточнено",
+  "NS as to fat": "жир не указан",
+  "white": "~белый",
+  "green": "~зелёный",
+  "red": "~красный",
+  "yellow": "~жёлтый",
+  "brown": "~коричневый",
+  "black": "~чёрный",
+  "sweet": "~сладкий",
+  "regular": "~обычный",
+  "instant": "~быстрорастворимый",
+  "reduced fat": "пониженной жирности",
+  "reduced sodium": "пониженное содержание натрия",
+  "low sodium": "низкое содержание натрия",
+  "nonfat": "~обезжиренный",
+  "fat free": "~обезжиренный",
+  "lowfat": "~маложирный",
+  "unsweetened": "~без сахара",
+  "sweetened": "~подслащённый",
+  "enriched": "~обогащённый",
+  "unenriched": "~необогащённый",
+  "whole grain": "~цельнозерновой",
+  "toasted": "~поджаренный",
+  "strained": "~протёртый",
+  "commercially prepared": "готовый промышленного производства",
+  "ready-to-eat": "~готов к употреблению",
+  "ready-to-serve": "~готов к подаче",
+  "ready-to-heat": "~готов к разогреву",
+  "ready-to-feed": "~готов к кормлению",
+  "heated": "~подогретый",
+  "unheated": "~не подогретый",
+  "mashed": "пюре",
+  "smoked": "~копчёный",
+  "salted": "~солёный",
+  "unsalted": "~несолёный",
+  "decaffeinated": "~без кофеина",
+  "brewed": "~заваренный",
+  "iced": "~со льдом",
+  "diet": "~диетический",
+  "fluid": "~жидкий",
+  "flavored": "~ароматизированный",
+  "vanilla": "~ванильный",
+  "chocolate": "~шоколадный",
+  "solids and liquids": "твёрдая часть и жидкость",
+  "drained solids": "твёрдая часть без жидкости",
+  "rotisserie": "гриль-вертел",
+  "home recipe": "домашний рецепт",
+  "prepared from recipe": "по рецепту",
+  "prepared with water": "на воде",
+  "prepared with whole milk": "на цельном молоке",
+  "dry heat": "сухой жар",
+  "baked or broiled": "запечённый или на гриле",
+  "coated": "~в панировке",
+  "cooked with oil": "на масле",
+  "cooked with butter or margarine": "на сливочном масле или маргарине",
+  "no sauce": "без соуса",
+  "with cheese": "с сыром",
+  "meatless": "без мяса",
+  "with meat": "с мясом",
+  "with vegetables": "с овощами",
+  "Greek": "~греческий",
+  "mature seeds": "зрелые семена",
+  "immature seeds": "незрелые семена",
+  "breast": "грудка",
+  "tenderloin": "вырезка",
+  "shoulder": "лопатка",
+  "leg": "нога",
+  "rib": "рёбра",
+  "steak": "стейк",
+  "brisket": "грудинка",
+  "drumstick": "голень",
+  "QUAKER": "Quaker",
+  "MEAD JOHNSON": "Mead Johnson",
+  "ENFAMIL": "Enfamil",
+  "MARS SNACKFOOD US": "Mars Snackfood US",
+  "mixed species": "смешанные виды",
+  "with added solution": "с добавленным раствором",
+  "with iron": "с железом",
+  "from fresh": "из свежего",
+  "100%": "100%",
+  "prepared": "~приготовленный"
+ },
+ "combos": {
+  "egg, white": [
+   "Яичный белок",
+   "m"
+  ],
+  "egg, yolk": [
+   "Яичный желток",
+   "m"
+  ],
+  "egg, whole": [
+   "Яйцо целое",
+   "n"
+  ]
+ }
+}
