@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -40,6 +41,11 @@ class _WearablePageState extends ConsumerState<WearablePage> {
   bool _hasKey = false, _authBusy = false;
   String? _authMsg;
   bool? _authOk;
+  HuamiAuthenticator? _session;
+  bool _charging = false;
+  int? _bleSteps;
+  DateTime? _bleStepsAt;
+  final _log = <String>[];
   String? _savedId;
   final _subs = <StreamSubscription>[];
 
@@ -64,6 +70,7 @@ class _WearablePageState extends ConsumerState<WearablePage> {
     }
     _hrSub?.cancel();
     _hrTimer?.cancel();
+    _session?.close();
     FlutterBluePlus.stopScan();
     _device?.disconnect();
     super.dispose();
@@ -247,14 +254,19 @@ class _WearablePageState extends ConsumerState<WearablePage> {
       try {
         await _device!.requestMtu(247);
       } catch (_) {}
-      final res = await HuamiAuthenticator(
-              write: w, read: r, secret: secret, mtu: _device!.mtuNow)
-          .authenticate();
+      final auth = HuamiAuthenticator(
+          write: w, read: r, secret: secret, mtu: _device!.mtuNow);
+      final res = await auth.authenticate();
       if (mounted) {
         setState(() {
           _authOk = res.ok;
           _authMsg = res.message;
         });
+      }
+      if (res.ok) {
+        _session = auth;
+        auth.onPayload = _onZepp;
+        await _afterAuth();
       }
     } finally {
       if (mounted) setState(() => _authBusy = false);
@@ -297,6 +309,69 @@ class _WearablePageState extends ConsumerState<WearablePage> {
     );
   }
 
+  String _hex(List<int> b) => b.map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ');
+
+  void _addLog(String line) {
+    _log.insert(0, '${_hhmm(DateTime.now())} $line');
+    if (_log.length > 60) _log.removeLast();
+  }
+
+  /// Запрашивает список сервисов, заряд, шаги и включает пульс/шаги в реальном времени.
+  Future<void> _afterAuth() async {
+    final s = _session;
+    if (s == null) return;
+    try {
+      final listed = await s.requestServices();
+      _addLog(listed
+          ? 'сервисы получены, шифруются: ${s.encryptedEndpoints.map((e) => e.toRadixString(16)).join(', ')}'
+          : 'список сервисов не получен');
+      await s.send(0x0029, [0x03]); // заряд
+      await s.send(0x0016, [0x03]); // шаги (запрос)
+      await s.send(0x0016, [0x05, 0x01]); // шаги в реальном времени
+      await s.send(0x001d, [0x04, 0x01]); // пульс в реальном времени
+      if (!_hrOn) await _toggleHr();
+    } catch (e) {
+      _addLog('ошибка запроса данных: $e');
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _refresh() async {
+    final s = _session;
+    if (s == null) {
+      toast(context, 'Сначала пройдите авторизацию.');
+      return;
+    }
+    try {
+      await s.send(0x0029, [0x03]);
+      await s.send(0x0016, [0x03]);
+      await s.send(0x001d, [0x04, 0x02]);
+    } catch (e) {
+      _addLog('ошибка обновления: $e');
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _onZepp(int type, Uint8List p) {
+    if (!mounted || p.isEmpty) return;
+    setState(() {
+      _addLog('0x${type.toRadixString(16).padLeft(4, '0')}: ${_hex(p)}');
+      if (type == 0x0029 && p[0] == 0x04 && p.length >= 4) {
+        _stdBattery = p[2];
+        _charging = p[3] == 1;
+        _lastRead = DateTime.now();
+      } else if (type == 0x0016) {
+        if (p[0] == 0x04 && p.length == 15) {
+          _bleSteps = p[3] | (p[4] << 8);
+          _bleStepsAt = DateTime.now();
+        } else if (p[0] == 0x07 && p.length == 14) {
+          _bleSteps = p[2] | (p[3] << 8);
+          _bleStepsAt = DateTime.now();
+        }
+      }
+    });
+  }
+
   Future<void> _reconnect() async {
     final id = _savedId;
     if (id == null) return;
@@ -309,6 +384,9 @@ class _WearablePageState extends ConsumerState<WearablePage> {
   }
 
   Future<void> _disconnect() async {
+    await _session?.close();
+    _session = null;
+    _bleSteps = null;
     _hrSub?.cancel();
     _hrTimer?.cancel();
     await _device?.disconnect();
@@ -448,9 +526,7 @@ class _WearablePageState extends ConsumerState<WearablePage> {
           Row(children: [
             Expanded(
               child: FilledButton.icon(
-                  onPressed: () => toast(context,
-                      'Синхронизация истории по Bluetooth пока недоступна: нужна авторизация с ключом Zepp. '
-                      'Данные из Health обновляются сами.'),
+                  onPressed: _refresh,
                   icon: const Icon(Icons.sync),
                   label: const Text('Синхронизировать')),
             ),
@@ -486,6 +562,17 @@ class _WearablePageState extends ConsumerState<WearablePage> {
               title: const Text('GATT-службы устройства (диагностика)',
                   style: TextStyle(fontWeight: FontWeight.w700)),
               children: [
+                if (_log.isNotEmpty)
+                  AppCard(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Text('Журнал обмена', style: TextStyle(fontWeight: FontWeight.w700)),
+                      for (final l in _log)
+                        Text(l,
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                    ]),
+                  ),
                 for (final sv in _services)
                   AppCard(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -534,6 +621,7 @@ class _WearablePageState extends ConsumerState<WearablePage> {
               const SizedBox(width: 6),
               const Text('Подключено (Bluetooth)'),
             ]),
+            if (_charging) const Text('Заряжается', style: TextStyle(fontSize: 12.5)),
             if (_lastRead != null)
               Text('Последнее получение данных: ${_hhmm(_lastRead!)}',
                   style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
@@ -576,7 +664,10 @@ class _WearablePageState extends ConsumerState<WearablePage> {
             ? _Metric('Пульс', Icons.favorite, kRed, fmt0(act!.avgHr!), 'уд/мин',
                 'среднее за день · $health')
             : const _Metric('Пульс', Icons.favorite, kRed, null, '', 'Недоступно'));
-    final steps = (act != null && act.steps > 0)
+    final steps = _bleSteps != null
+        ? _Metric('Шаги', Icons.directions_walk, kBlue, fmt0(_bleSteps!), '',
+            'Bluetooth · ${_hhmm(_bleStepsAt!)}')
+        : (act != null && act.steps > 0)
         ? _Metric('Шаги', Icons.directions_walk, kBlue, fmt0(act.steps), '', 'сегодня · $health')
         : const _Metric('Шаги', Icons.directions_walk, kBlue, null, '', 'Недоступно');
     final kcal = (act != null && act.activeKcal > 0)

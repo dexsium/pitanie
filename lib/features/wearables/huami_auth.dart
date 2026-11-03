@@ -70,6 +70,38 @@ class HuamiAuthenticator {
   /// Ключ сессии после успешной авторизации (нужен для дальнейшего шифрованного обмена).
   Uint8List? sessionKey;
   int? sequence;
+
+  /// Сообщения сервисов после авторизации (кроме самой авторизации и списка сервисов).
+  void Function(int type, Uint8List payload)? onPayload;
+
+  /// Эндпоинты, которые часы просят шифровать (из списка сервисов, эндпоинт 0x0000).
+  final Set<int> encryptedEndpoints = {};
+  Completer<void>? _services;
+
+  /// Отправляет команду сервису; шифрование включается по списку сервисов часов.
+  Future<void> send(int endpoint, List<int> data) async {
+    final enc = encryptedEndpoints.contains(endpoint);
+    for (final chunk in _encoder.encode(endpoint, Uint8List.fromList(data), encrypt: enc)) {
+      await _send(write, chunk);
+    }
+  }
+
+  /// Запрашивает у часов список сервисов (какие шифруются). Ждёт ответ до [timeout].
+  Future<bool> requestServices({Duration timeout = const Duration(seconds: 6)}) async {
+    _services = Completer<void>();
+    await send(0x0000, [0x03]);
+    try {
+      await _services!.future.timeout(timeout);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> close() async {
+    await _sub?.cancel();
+    _sub = null;
+  }
   ChunkedEncoder get encoder => _encoder;
   ChunkedDecoder get decoder => _decoder;
 
@@ -96,13 +128,14 @@ class HuamiAuthenticator {
       for (final chunk in _encoder.encode(endpointAuth, cmd)) {
         await _send(write, chunk);
       }
-      return await _done.future.timeout(timeout,
+      final r = await _done.future.timeout(timeout,
           onTimeout: () => const AuthResult(AuthStatus.timeout,
               'Часы не ответили на авторизацию. Закройте Zepp и повторите.'));
+      if (!r.ok) await close();
+      return r;
     } catch (e) {
+      await close();
       return AuthResult(AuthStatus.failed, 'Ошибка авторизации: $e');
-    } finally {
-      await _sub?.cancel();
     }
   }
 
@@ -117,7 +150,15 @@ class HuamiAuthenticator {
   }
 
   Future<void> _onPayload(int type, Uint8List p) async {
-    if (type != endpointAuth || p.length < 3) return;
+    if (type == 0x0000) {
+      _parseServices(p);
+      return;
+    }
+    if (type != endpointAuth) {
+      onPayload?.call(type, p);
+      return;
+    }
+    if (p.length < 3) return;
     if (p[0] == 0x10 && p[1] == 0x04 && p[2] == 0x01 && p.length >= 67) {
       final remoteRandom = Uint8List.sublistView(p, 3, 19);
       final remotePub = Uint8List.fromList(p.sublist(19, 67));
@@ -152,6 +193,20 @@ class HuamiAuthenticator {
     } else {
       _finish(AuthResult(AuthStatus.failed, 'Неожиданный ответ часов: ${p.take(3).toList()}'));
     }
+  }
+
+  /// Ответ списка сервисов: 04, число (u16 LE), затем по 3 байта: эндпоинт (u16 LE) и флаг шифрования.
+  void _parseServices(Uint8List p) {
+    if (p.isEmpty || p[0] != 0x04 || p.length < 3) return;
+    final bd = ByteData.sublistView(p);
+    final n = bd.getUint16(1, Endian.little);
+    var o = 3;
+    encryptedEndpoints.clear();
+    for (var i = 0; i < n && o + 3 <= p.length; i++, o += 3) {
+      final endpoint = bd.getUint16(o, Endian.little);
+      if (p[o + 2] == 1) encryptedEndpoints.add(endpoint);
+    }
+    if (_services != null && !_services!.isCompleted) _services!.complete();
   }
 
   void _finish(AuthResult r) {
