@@ -1,0 +1,39 @@
+name: pitanie
+description: Дневник питания, воды и физической активности
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_riverpod: ^2.5.1
+  drift: ^2.20.0
+  sqlite3_flutter_libs: ^0.5.24
+  path_provider: ^2.1.4
+  path: ^1.9.0
+  intl: any
+  fl_chart: ^0.69.0
+  health: ^13.3.1
+  mobile_scanner: ^5.2.3
+  flutter_local_notifications: ^17.2.3
+  timezone: ^0.9.4
+  flutter_timezone: ^2.1.0
+  share_plus: ^10.0.0
+  file_picker: ^8.1.2
+  crypto: ^3.0.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  drift_dev: ^2.20.0
+  build_runner: ^2.4.12
+  sqlite3: ^2.4.6
+
+flutter:
+  uses-material-design: true

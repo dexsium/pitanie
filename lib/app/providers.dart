@@ -1,0 +1,44 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../core/dates.dart';
+import '../database/database.dart';
+import '../features/dashboard/day_data.dart';
+import '../features/health_integration/health_service.dart';
+
+final dbProvider = Provider<AppDatabase>((ref) => throw UnimplementedError());
+
+final settingsProvider = StreamProvider<Map<String, String>>(
+    (ref) => ref.watch(dbProvider).watchSettings());
+
+final userProvider =
+    StreamProvider<User?>((ref) => ref.watch(dbProvider).watchUser());
+
+final weightsProvider = StreamProvider<List<WeightEntry>>(
+    (ref) => ref.watch(dbProvider).watchWeights());
+
+final selectedDayProvider =
+    StateProvider<DateTime>((ref) => dayStart(DateTime.now()));
+
+final tabProvider = StateProvider<int>((ref) => 0);
+
+final dayDataProvider = StreamProvider.family<DayData, String>((ref, key) {
+  final db = ref.watch(dbProvider);
+  return reactive(db, () => loadDayData(db, key));
+});
+
+final rangeStatsProvider =
+    StreamProvider.family<Map<String, DayStat>, ({String from, String to})>(
+        (ref, r) {
+  final db = ref.watch(dbProvider);
+  return reactive(db, () => computeRangeStats(db, r.from, r.to));
+});
+
+final healthServiceProvider =
+    Provider<HealthService>((ref) => HealthService(ref.watch(dbProvider)));
+
+final syncBusyProvider = StateProvider<bool>((ref) => false);
+
+final sourceProvider = StreamProvider<ConnectedSource?>((ref) {
+  final svc = ref.watch(healthServiceProvider);
+  return ref.watch(dbProvider).watchSource(svc.sourceType);
+});
