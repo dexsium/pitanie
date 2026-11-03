@@ -60,7 +60,7 @@ class _BarcodeScanPageState extends State<BarcodeScanPage> {
         body: Stack(children: [
           MobileScanner(
             controller: _controller,
-            errorBuilder: (c, e, _) => EmptyHint(
+            errorBuilder: (c, e) => EmptyHint(
                 'Камера недоступна (${e.errorCode.name}). Проверьте разрешение или введите код вручную.'),
             onDetect: (capture) {
               if (_done) return;

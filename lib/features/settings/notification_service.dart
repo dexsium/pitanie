@@ -35,7 +35,7 @@ class NotificationService {
     try {
       tz.setLocalLocation(tz.getLocation((await FlutterTimezone.getLocalTimezone()).identifier));
     } catch (_) {}
-    await _plugin.initialize(const InitializationSettings(
+    await _plugin.initialize(settings: const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       iOS: DarwinInitializationSettings(
           requestAlertPermission: false,
@@ -93,9 +93,12 @@ class NotificationService {
   }
 
   Future<void> _schedule(int id, String title, String body, int h, int m) =>
-      _plugin.zonedSchedule(id, title, body, _next(h, m), _details,
+      _plugin.zonedSchedule(
+          id: id,
+          title: title,
+          body: body,
+          scheduledDate: _next(h, m),
+          notificationDetails: _details,
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-          uiLocalNotificationDateInterpretation:
-              UILocalNotificationDateInterpretation.absoluteTime,
           matchDateTimeComponents: DateTimeComponents.time);
 }

@@ -142,8 +142,8 @@ class SettingsPage extends ConsumerWidget {
               title: const Text('Восстановить из копии'),
               subtitle: const Text('Текущие данные будут заменены'),
               onTap: () async {
-                final res = await FilePicker.platform.pickFiles();
-                final path = res?.files.single.path;
+                final res = await FilePicker.pickFiles();
+                final path = res.isEmpty ? null : res.first.path;
                 if (path == null) return;
                 final text = await File(path).readAsString();
                 final check = BackupService.verify(text);
