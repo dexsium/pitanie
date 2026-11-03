@@ -26,6 +26,7 @@ dependencies:
   share_plus: ^13.3.1
   file_picker: ^13.3.2
   crypto: ^3.0.5
+  flutter_blue_plus: ^1.34.5
 
 dev_dependencies:
   flutter_test:
@@ -34,6 +35,13 @@ dev_dependencies:
   drift_dev: ^2.20.0
   build_runner: ^2.4.12
   sqlite3: ^2.4.6
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icon/app_icon.png
+  remove_alpha_ios: true

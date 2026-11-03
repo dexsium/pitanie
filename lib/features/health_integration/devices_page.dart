@@ -8,6 +8,7 @@ import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../core/dates.dart';
 import '../../shared/widgets.dart';
+import '../wearables/wearable_page.dart';
 import 'health_service.dart';
 
 String statusLabel(String s) => switch (s) {
@@ -159,6 +160,19 @@ class DevicesPage extends ConsumerWidget {
             'которые Zepp реально экспортирует.',
             style: TextStyle(color: cs.onSurfaceVariant),
           ),
+        ),
+        const SizedBox(height: 12),
+        AppCard(
+          onTap: () => Navigator.push(
+              context, MaterialPageRoute(builder: (_) => const WearablePage())),
+          child: const Row(children: [
+            Icon(Icons.bluetooth),
+            SizedBox(width: 12),
+            Expanded(
+                child: Text('Прямое подключение по Bluetooth (в разработке)',
+                    style: TextStyle(fontWeight: FontWeight.w700))),
+            Icon(Icons.chevron_right),
+          ]),
         ),
         const SizedBox(height: 12),
         _Priority(settings['preferred_source'] ?? ''),

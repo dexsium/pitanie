@@ -19,6 +19,12 @@ def read(path):
         return f.read()
 
 
+BLE_PLIST = (
+    chr(9) + "<key>NSBluetoothAlwaysUsageDescription</key>" + chr(10)
+    + chr(9) + "<string>Bluetooth нужен для поиска и подключения умных часов.</string>" + chr(10)
+)
+
+
 def write(path, text):
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
@@ -30,6 +36,18 @@ def patch_manifest():
         print("skip: нет AndroidManifest.xml")
         return
     s = read(path)
+    ble = """
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="false"/>
+"""
+    if "BLUETOOTH_SCAN" not in s:
+        s = re.sub(r"(<manifest[^>]*>)", lambda m: m.group(1) + ble, s, count=1)
+        write(path, s)
+        print("AndroidManifest: добавлены разрешения Bluetooth")
     if "READ_STEPS" in s:
         print("AndroidManifest уже настроен")
         return
@@ -120,6 +138,11 @@ def patch_plist():
         print("skip: нет Info.plist")
         return
     s = read(path)
+    if "NSBluetoothAlwaysUsageDescription" not in s:
+        idx = s.rfind("</dict>")
+        s = s[:idx] + BLE_PLIST + s[idx:]
+        write(path, s)
+        print("Info.plist: добавлено описание Bluetooth")
     if "NSHealthShareUsageDescription" in s:
         print("Info.plist уже настроен")
         return
