@@ -73,7 +73,7 @@ class _WearablePageState extends State<WearablePage> {
     });
     try {
       await FlutterBluePlus.stopScan();
-      await d.connect(timeout: const Duration(seconds: 20));
+      await d.connect(license: License.free, timeout: const Duration(seconds: 20));
       final services = await d.discoverServices();
       int? battery;
       for (final s in services) {
