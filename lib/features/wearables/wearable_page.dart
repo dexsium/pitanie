@@ -46,11 +46,30 @@ class _WearablePageState extends State<WearablePage> {
     super.dispose();
   }
 
-  bool _isGtr4(ScanResult r) {
-    final n = r.advertisementData.advName.isNotEmpty
-        ? r.advertisementData.advName
-        : r.device.platformName;
-    return n.toLowerCase().contains('amazfit gtr 4');
+  String _name(ScanResult r) => r.advertisementData.advName.isNotEmpty
+      ? r.advertisementData.advName
+      : r.device.platformName;
+
+  /// Кандидат в часы Amazfit: по имени или по рекламируемой службе Huami.
+  /// Имя в рекламе может отсутствовать, поэтому одного имени недостаточно.
+  bool _isCandidate(ScanResult r) {
+    final n = _name(r).toLowerCase();
+    if (n.contains('amazfit') || n.contains('gtr') || n.contains('zepp')) return true;
+    return r.advertisementData.serviceUuids.any((u) {
+      final x = u.str.toLowerCase();
+      return x.startsWith('0000fee0') || x.startsWith('0000fee1') || x == 'fee0' || x == 'fee1';
+    });
+  }
+
+  String _details(ScanResult r) {
+    final ad = r.advertisementData;
+    final parts = <String>[
+      if (ad.serviceUuids.isNotEmpty) 'службы: ${ad.serviceUuids.map((u) => u.str).join(', ')}',
+      if (ad.manufacturerData.isNotEmpty)
+        'производитель: ${ad.manufacturerData.keys.map((k) => '0x${k.toRadixString(16)}').join(', ')}',
+      ad.connectable ? 'подключаемое' : 'не подключаемое',
+    ];
+    return parts.join(' • ');
   }
 
   Future<void> _scan() async {
@@ -114,7 +133,7 @@ class _WearablePageState extends State<WearablePage> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final shown = _results.where((r) => _showAll || _isGtr4(r)).toList()
+    final shown = _results.where((r) => _showAll || _isCandidate(r)).toList()
       ..sort((a, b) => b.rssi.compareTo(a.rssi));
     return Scaffold(
       appBar: AppBar(title: const Text('Умные часы')),
@@ -144,7 +163,11 @@ class _WearablePageState extends State<WearablePage> {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(_error!, style: TextStyle(color: cs.error))),
           if (shown.isEmpty && !_scanning)
-            const EmptyHint('Часы не найдены. Поднесите их ближе и закройте Zepp.'),
+            const EmptyHint(
+                'Часы не найдены. Проверьте: на часах включён Bluetooth; часы удалены из списка '
+                'Bluetooth в настройках телефона (иначе они не рекламируются); Zepp закрыт и '
+                'не подключён к часам. Если не помогло, включите «Показывать все устройства» '
+                'и пришлите скриншот списка.'),
           for (final r in shown)
             AppCard(
               onTap: _busy ? null : () => _connect(r.device),
@@ -153,15 +176,12 @@ class _WearablePageState extends State<WearablePage> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(
-                        r.advertisementData.advName.isNotEmpty
-                            ? r.advertisementData.advName
-                            : (r.device.platformName.isEmpty
-                                ? 'Без имени'
-                                : r.device.platformName),
+                    Text(_name(r).isEmpty ? 'Без названия' : _name(r),
                         style: const TextStyle(fontWeight: FontWeight.w700)),
                     Text(r.device.remoteId.str,
                         style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                    Text(_details(r),
+                        style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant)),
                   ]),
                 ),
                 Text('${r.rssi} dBm'),
