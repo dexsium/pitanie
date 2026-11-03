@@ -40,7 +40,7 @@ jobs:
           channel: stable
           cache: true
       - run: bash tool/prepare.sh
-      - name: Сборка APK (до 3 попыток: загрузка NDK на раннере иногда обрывается)
+      - name: "Сборка APK, до 3 попыток (загрузка NDK иногда обрывается)"
         run: |
           for i in 1 2 3; do
             flutter build apk --release && exit 0
