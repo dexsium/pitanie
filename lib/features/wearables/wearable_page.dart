@@ -10,6 +10,7 @@ import '../../app/theme.dart';
 import '../../core/dates.dart';
 import '../../shared/widgets.dart';
 import '../health_integration/devices_page.dart';
+import 'huami_auth.dart';
 
 /// Этап 1 интеграции Amazfit GTR 4 по BLE: поиск, подключение, чтение списка
 /// GATT-служб. Авторизация и данные здоровья ещё не реализованы, поэтому
@@ -36,6 +37,9 @@ class _WearablePageState extends ConsumerState<WearablePage> {
   StreamSubscription<List<int>>? _hrSub;
   Timer? _hrTimer;
   DateTime? _lastRead;
+  bool _hasKey = false, _authBusy = false;
+  String? _authMsg;
+  bool? _authOk;
   String? _savedId;
   final _subs = <StreamSubscription>[];
 
@@ -45,6 +49,9 @@ class _WearablePageState extends ConsumerState<WearablePage> {
     _subs.add(FlutterBluePlus.adapterState.listen((s) => setState(() => _adapter = s)));
     _subs.add(FlutterBluePlus.scanResults.listen((r) => setState(() => _results = r)));
     _subs.add(FlutterBluePlus.isScanning.listen((s) => setState(() => _scanning = s)));
+    AuthKeyStore.exists().then((v) {
+      if (mounted) setState(() => _hasKey = v);
+    });
     ref.read(dbProvider).allSettings().then((m) {
       if (mounted) setState(() => _savedId = m['wearable_id']);
     });
@@ -156,6 +163,138 @@ class _WearablePageState extends ConsumerState<WearablePage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _enterKey() async {
+    final c = TextEditingController();
+    String? err;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('Ключ авторизации Zepp'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('32 символа (0-9, a-f), можно с префиксом 0x. '
+                'Ключ хранится в защищённом хранилище телефона и не отправляется никуда.',
+                style: TextStyle(fontSize: 13)),
+            const SizedBox(height: 10),
+            TextField(
+                controller: c,
+                obscureText: true,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: InputDecoration(labelText: 'Ключ', errorText: err)),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+            FilledButton(
+                style: FilledButton.styleFrom(minimumSize: const Size(90, 40)),
+                onPressed: () async {
+                  if (await AuthKeyStore.save(c.text)) {
+                    if (ctx.mounted) Navigator.pop(ctx, true);
+                  } else {
+                    setD(() => err = 'Нужно 32 hex-символа');
+                  }
+                },
+                child: const Text('Сохранить')),
+          ],
+        ),
+      ),
+    );
+    c.clear();
+    if (ok == true && mounted) {
+      setState(() {
+        _hasKey = true;
+        _authOk = null;
+        _authMsg = null;
+      });
+    }
+  }
+
+  Future<void> _deleteKey() async {
+    await AuthKeyStore.delete();
+    setState(() {
+      _hasKey = false;
+      _authOk = null;
+      _authMsg = null;
+    });
+  }
+
+  Future<void> _authorize() async {
+    final secret = await AuthKeyStore.load();
+    if (secret == null) {
+      setState(() => _authMsg = 'Сначала введите ключ.');
+      return;
+    }
+    BluetoothCharacteristic? w, r;
+    for (final sv in _services) {
+      for (final ch in sv.characteristics) {
+        final u = ch.uuid.str.toLowerCase();
+        if (u == '00000016-0000-3512-2118-0009af100700') w = ch;
+        if (u == '00000017-0000-3512-2118-0009af100700') r = ch;
+      }
+    }
+    if (w == null || r == null) {
+      setState(() => _authMsg = 'У часов нет chunked-каналов 0016/0017.');
+      return;
+    }
+    setState(() {
+      _authBusy = true;
+      _authMsg = 'Авторизация… (до 30 секунд)';
+      _authOk = null;
+    });
+    try {
+      try {
+        await _device!.requestMtu(247);
+      } catch (_) {}
+      final res = await HuamiAuthenticator(
+              write: w, read: r, secret: secret, mtu: _device!.mtuNow)
+          .authenticate();
+      if (mounted) {
+        setState(() {
+          _authOk = res.ok;
+          _authMsg = res.message;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _authBusy = false);
+    }
+  }
+
+  Widget _authCard(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AppCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Авторизация', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 6),
+        Text(_hasKey ? 'Ключ сохранён в защищённом хранилище.' : 'Ключ не введён.',
+            style: TextStyle(color: cs.onSurfaceVariant)),
+        if (_authMsg != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(_authMsg!,
+                style: TextStyle(
+                    color: _authOk == true ? kGreen : (_authOk == false ? cs.error : null),
+                    fontWeight: FontWeight.w600)),
+          ),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(
+            child: OutlinedButton(
+                onPressed: _authBusy ? null : _enterKey,
+                child: Text(_hasKey ? 'Заменить ключ' : 'Ввести ключ')),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: FilledButton(
+                onPressed: _authBusy || !_hasKey ? null : _authorize,
+                child: Text(_authBusy ? 'Подождите…' : 'Авторизоваться')),
+          ),
+        ]),
+        if (_hasKey)
+          TextButton(onPressed: _authBusy ? null : _deleteKey, child: const Text('Удалить ключ')),
+      ]),
+    );
   }
 
   Future<void> _reconnect() async {
@@ -301,6 +440,8 @@ class _WearablePageState extends ConsumerState<WearablePage> {
             ),
         ] else ...[
           _header(context),
+          const SizedBox(height: 12),
+          _authCard(context),
           const SizedBox(height: 12),
           ..._metrics(context),
           const SizedBox(height: 12),

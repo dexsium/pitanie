@@ -27,6 +27,8 @@ dependencies:
   file_picker: ^13.3.2
   crypto: ^3.0.5
   flutter_blue_plus: 2.3.14
+  flutter_secure_storage: ^11.2.0
+  pointycastle: ^4.0.0
 
 dev_dependencies:
   flutter_test:
