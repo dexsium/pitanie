@@ -59,10 +59,10 @@ class HuamiFetcher {
     var lastCounter = -1;
     var valid = true;
     StreamSubscription<List<int>>? ctlSub, dataSub;
+    final it = StreamIterator(response.stream);
     try {
       await control.setNotifyValue(true);
       ctlSub = control.onValueReceived.listen((v) => response.add(Uint8List.fromList(v)));
-      final it = StreamIterator(response.stream);
       Future<Uint8List> next() async {
         if (!await it.moveNext().timeout(timeout)) throw StateError('соединение закрыто');
         return it.current;
@@ -129,12 +129,15 @@ class HuamiFetcher {
     } catch (e) {
       return FetchResult(Uint8List(0), null, 'Ошибка загрузки: $e');
     } finally {
+      // StreamIterator держит подписку приостановленной, поэтому close() не ждём:
+      // иначе он не завершается и загрузка истории зависает навсегда.
+      unawaited(it.cancel());
+      unawaited(response.close());
       await ctlSub?.cancel();
       await dataSub?.cancel();
-      await response.close();
       try {
-        await dataChar.setNotifyValue(false);
-        await control.setNotifyValue(false);
+        await dataChar.setNotifyValue(false).timeout(const Duration(seconds: 5));
+        await control.setNotifyValue(false).timeout(const Duration(seconds: 5));
       } catch (_) {}
     }
   }

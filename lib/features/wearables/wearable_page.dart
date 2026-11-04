@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -271,14 +272,34 @@ class _WearablePageState extends ConsumerState<WearablePage> {
           tilePadding: EdgeInsets.zero,
           title: const Text('Диагностика', style: TextStyle(fontWeight: FontWeight.w700)),
           children: [
-            if (c.log.isNotEmpty)
-              AppCard(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Журнал обмена', style: TextStyle(fontWeight: FontWeight.w700)),
-                  for (final l in c.log)
-                    Text(l, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                ]),
-              ),
+            AppCard(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Журнал обмена', style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.copy),
+                  label: const Text('Скопировать журнал'),
+                  onPressed: () async {
+                    final text = [
+                      'Статус: ${c.status.name}; ${c.message ?? ''}',
+                      'История: ${c.syncMsg ?? '—'}',
+                      'Прошивка: ${c.fw ?? '—'}; аппаратная: ${c.hw ?? '—'}',
+                      ...c.log.reversed,
+                    ].join('\n');
+                    await Clipboard.setData(ClipboardData(text: text));
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Журнал скопирован')));
+                    }
+                  },
+                ),
+                const SizedBox(height: 8),
+                if (c.log.isEmpty)
+                  Text('Журнал пуст.', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+                for (final l in c.log)
+                  Text(l, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+              ]),
+            ),
             for (final sv in c.services)
               AppCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

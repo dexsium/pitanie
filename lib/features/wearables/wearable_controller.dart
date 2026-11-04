@@ -64,7 +64,7 @@ class WearableController extends ChangeNotifier {
   void addLog(String line) {
     final t = DateTime.now();
     log.insert(0, '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')} $line');
-    if (log.length > 60) log.removeLast();
+    if (log.length > 150) log.removeLast();
   }
 
   /// Вызывается при запуске приложения и при возврате в него.
@@ -80,6 +80,8 @@ class WearableController extends ChangeNotifier {
       await loadSpo2();
       notifyListeners();
     }
+    addLog('запуск: часы ${savedId ?? 'не сохранены'}, ключ ${hasKey ? 'есть' : 'нет'}, '
+        'состояние ${isConnected ? 'подключено' : 'нет связи'}');
     if (!isConnected && !_busy && savedId != null && hasKey) {
       _userOff = false;
       _retries = 0;
@@ -106,11 +108,18 @@ class WearableController extends ChangeNotifier {
   Future<void> autoConnect() async {
     final id = savedId;
     if (id == null || !hasKey || _busy || isConnected || _userOff) return;
-    if (FlutterBluePlus.adapterStateNow != BluetoothAdapterState.on) {
+    // Сразу после запуска состояние адаптера ещё «неизвестно»: ждём, пока оно определится.
+    try {
+      await FlutterBluePlus.adapterState
+          .firstWhere((s) => s == BluetoothAdapterState.on)
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {
       _set(() => message = 'Bluetooth выключен');
       return;
     }
+    addLog('автоподключение к $id (попытка ${_retries + 1})');
     final ok = await connect(BluetoothDevice.fromId(id));
+    if (!ok) addLog('автоподключение не удалось: ${message ?? ''}');
     if (ok) {
       await authorize();
     } else if (_retries < 3 && !_userOff) {
