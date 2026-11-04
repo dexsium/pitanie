@@ -9,6 +9,7 @@ import '../../core/labels.dart';
 import '../../database/database.dart';
 import '../../shared/widgets.dart';
 import '../calendar/calendar_page.dart';
+import '../health_analysis/presentation/pages/health_analysis_page.dart';
 import '../sleep/sleep_page.dart';
 import '../wearables/heart_rate_page.dart';
 
@@ -377,6 +378,24 @@ class ActivityPage extends ConsumerWidget {
               ),
             ]),
           ),
+        ),
+        SizedBox(height: s(20)),
+        cardBox(
+          radius: 40,
+          padding: EdgeInsets.symmetric(horizontal: s(34), vertical: s(24)),
+          onTap: () => Navigator.push(
+              context, MaterialPageRoute(builder: (_) => const HealthAnalysisPage())),
+          child: Row(children: [
+            Icon(Icons.insights_outlined, size: s(52), color: _p),
+            SizedBox(width: s(24)),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Анализ здоровья', style: t(31, w: FontWeight.w800)),
+                Text('Пульс покоя, сон, SpO₂, восстановление', style: t(22, c: muted)),
+              ]),
+            ),
+            Icon(Icons.chevron_right, size: s(44), color: muted),
+          ]),
         ),
         SizedBox(height: s(26)),
 

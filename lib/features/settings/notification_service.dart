@@ -63,6 +63,21 @@ class NotificationService {
         iOS: DarwinNotificationDetails(),
       );
 
+  /// Немедленное уведомление анализа здоровья (канал «Анализ здоровья»).
+  Future<void> showNow(int id, String title, String body, {bool urgent = false}) async {
+    if (!supported) return;
+    await init();
+    await _plugin.show(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails('health', 'Анализ здоровья',
+              importance: urgent ? Importance.high : Importance.defaultImportance),
+          iOS: const DarwinNotificationDetails(),
+        ));
+  }
+
   tz.TZDateTime _next(int h, int m) {
     final now = tz.TZDateTime.now(tz.local);
     var t = tz.TZDateTime(tz.local, now.year, now.month, now.day, h, m);

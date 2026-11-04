@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../features/health_analysis/services/health_monitor.dart';
 import '../services/health/plan_service.dart';
 import '../features/activity/activity_page.dart';
 import '../features/dashboard/dashboard_page.dart';
@@ -70,6 +71,7 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserver {
   bool _measureOpen = false;
+  bool _syncWasBusy = false;
 
   @override
   void initState() {
@@ -81,6 +83,7 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
       ref.read(scaleProvider).start();
       _loadCatalog();
       _autoPlan();
+      _healthCheck();
       final n = ref.read(notificationsProvider);
       await n.init();
       await n.reschedule(await ref.read(dbProvider).allSettings());
@@ -100,7 +103,17 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
       ref.read(wearableProvider).start();
       ref.read(scaleProvider).start();
       _autoPlan();
+      _healthCheck();
     }
+  }
+
+  /// Анализ здоровья: после синхронизации часов, при запуске и возврате в приложение.
+  Future<void> _healthCheck() async {
+    try {
+      final n = ref.read(notificationsProvider);
+      await runHealthMonitor(ref.read(dbProvider),
+          (id, title, body, urgent) => n.showNow(id, title, body, urgent: urgent));
+    } catch (_) {}
   }
 
   /// Автоприменение корректировки нормы (только если пользователь включил его в настройках).
@@ -137,6 +150,10 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
   Widget build(BuildContext context) {
     final tab = ref.watch(tabProvider);
     // Человек встал на весы, пока приложение открыто: само открываем окно измерения.
+    ref.listen<WearableController>(wearableProvider, (prev, next) {
+      if (_syncWasBusy && !next.syncBusy) _healthCheck();
+      _syncWasBusy = next.syncBusy;
+    });
     ref.listen<ScaleController>(scaleProvider, (prev, next) {
       if (next.phase == ScalePhase.measuring &&
           !next.dismissed &&
