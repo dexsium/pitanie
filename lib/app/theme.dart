@@ -6,6 +6,10 @@ const kBlue = Color(0xFF1E8EF7);
 const kOrange = Color(0xFFFFA41B);
 const kViolet = Color(0xFF8B5CF6);
 const kRed = Color(0xFFEF4444);
+// Зелёная гамма раздела «Активность».
+const kActGreen = Color(0xFF2E9E34);
+const kActLime = Color(0xFF8ED14B);
+const kActDeep = Color(0xFF1E7A2E);
 
 ThemeData buildTheme(Brightness b) {
   final dark = b == Brightness.dark;

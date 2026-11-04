@@ -11,6 +11,7 @@ import '../../core/dates.dart';
 import '../../shared/widgets.dart';
 import '../dashboard/day_data.dart' show sourceLabel;
 import '../health_integration/devices_page.dart';
+import '../sleep/sleep_page.dart';
 import 'heart_rate_page.dart';
 import 'huami_auth.dart';
 import 'wearable_controller.dart';
@@ -449,8 +450,10 @@ class _WearablePageState extends ConsumerState<WearablePage> {
         ? _Metric('Сон', Icons.bedtime_outlined, kViolet, hm(act.sleepMinutes), '',
             act.sleepStart == null
                 ? 'за ночь · $health'
-                : '${_hhmm(act.sleepStart!.toLocal())}–${_hhmm(act.sleepEnd!.toLocal())} · глубокий ${hm(act.sleepDeepMin)}, REM ${hm(act.sleepRemMin)} (оценка)')
-        : _Metric('Сон', Icons.bedtime_outlined, kViolet, null, '', 'Недоступно');
+                : '${_hhmm(act.sleepStart!.toLocal())}–${_hhmm(act.sleepEnd!.toLocal())} · глубокий ${hm(act.sleepDeepMin)}, REM ${hm(act.sleepRemMin)} (оценка)',
+            onTap: _openSleep)
+        : _Metric('Сон', Icons.bedtime_outlined, kViolet, null, '', 'Недоступно',
+            onTap: _openSleep);
     final spo2 = c.spo2 != null
         ? _Metric('SpO₂', Icons.bloodtype_outlined, kBlue, '${c.spo2}', '%',
             'измерение ${_hhmm(c.spo2At!.toLocal())} · Bluetooth')
@@ -470,6 +473,9 @@ class _WearablePageState extends ConsumerState<WearablePage> {
 
   void _openHr() =>
       Navigator.push(context, MaterialPageRoute(builder: (_) => const HeartRatePage()));
+
+  void _openSleep() => Navigator.push(context,
+      MaterialPageRoute(builder: (_) => SleepPage(day: dayStart(DateTime.now()))));
 }
 
 class _Metric extends StatelessWidget {

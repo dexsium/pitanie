@@ -133,7 +133,9 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
           ProfilePage(),
         ]),
       ),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: Theme(
+        data: tab == 2 ? _greenNav(Theme.of(context)) : Theme.of(context),
+        child: NavigationBar(
         selectedIndex: tab,
         onDestinationSelected: (i) => ref.read(tabProvider.notifier).state = i,
         destinations: const [
@@ -144,6 +146,19 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Профиль'),
         ],
       ),
+      ),
     );
   }
 }
+
+/// На вкладке «Активность» выбранный пункт нижней панели зелёный, как в макете раздела.
+ThemeData _greenNav(ThemeData base) => base.copyWith(
+      navigationBarTheme: base.navigationBarTheme.copyWith(
+        labelTextStyle: WidgetStateProperty.resolveWith((st) => TextStyle(
+            fontSize: 12,
+            fontWeight: st.contains(WidgetState.selected) ? FontWeight.w700 : FontWeight.w500,
+            color: st.contains(WidgetState.selected) ? kActGreen : null)),
+        iconTheme: WidgetStateProperty.resolveWith((st) =>
+            IconThemeData(color: st.contains(WidgetState.selected) ? kActGreen : null)),
+      ),
+    );
