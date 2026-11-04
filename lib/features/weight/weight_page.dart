@@ -5,6 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/nutrition/weight_trend_analyzer.dart';
 import '../../app/providers.dart';
 import '../../core/dates.dart';
 import '../../database/database.dart';
@@ -575,6 +576,25 @@ class _WeightPageState extends ConsumerState<WeightPage> {
               onPressed: () async {
                 if (!form.currentState!.validate()) return;
                 final kg = parseNum(ctrl.text)!;
+                if (!isPlausibleWeight(kg)) {
+                  toast(ctx, 'Недостоверное значение массы');
+                  return;
+                }
+                final all = await db.allWeights();
+                final prev = all.where((w) => e == null || w.id != e.id).toList();
+                if (prev.isNotEmpty) {
+                  final last = prev.last;
+                  final since = (at.difference(last.measuredAt)).abs();
+                  if (isSuddenChange(previousKg: last.weightKg, since: since, newKg: kg)) {
+                    final ok = await confirmDialog(
+                        ctx,
+                        'Резкое изменение веса',
+                        'Прошлое значение ${fmt1(last.weightKg)} кг, новое ${fmt1(kg)} кг. '
+                            'Проверьте, нет ли опечатки. Сохранить?',
+                        ok: 'Сохранить');
+                    if (!ok) return;
+                  }
+                }
                 if (e == null) {
                   await db.addWeight(at, kg);
                 } else {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../services/health/plan_service.dart';
 import '../features/activity/activity_page.dart';
 import '../features/dashboard/dashboard_page.dart';
 import '../features/nutrition/nutrition_page.dart';
@@ -79,6 +80,7 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
       ref.read(wearableProvider).start();
       ref.read(scaleProvider).start();
       _loadCatalog();
+      _autoPlan();
       final n = ref.read(notificationsProvider);
       await n.init();
       await n.reschedule(await ref.read(dbProvider).allSettings());
@@ -97,7 +99,15 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
       _sync();
       ref.read(wearableProvider).start();
       ref.read(scaleProvider).start();
+      _autoPlan();
     }
+  }
+
+  /// Автоприменение корректировки нормы (только если пользователь включил его в настройках).
+  Future<void> _autoPlan() async {
+    try {
+      await maybeAutoApply(ref.read(dbProvider));
+    } catch (_) {}
   }
 
   Future<void> _loadCatalog() async {

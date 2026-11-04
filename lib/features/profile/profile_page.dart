@@ -16,7 +16,10 @@ import '../settings/settings_page.dart';
 import '../water/water_page.dart';
 import '../wearables/wearable_controller.dart';
 import '../weight/weight_page.dart';
+import '../../core/nutrition/nutrition_calculation_models.dart';
+import '../../services/health/plan_service.dart';
 import 'onboarding_page.dart';
+import 'plan_explain.dart';
 
 /// Размеры экрана заданы в пикселях макета (ширина 851) и масштабируются по ширине устройства.
 const _mockWidth = 851.0;
@@ -37,6 +40,7 @@ class ProfilePage extends ConsumerWidget {
     final busy = ref.watch(syncBusyProvider);
     final watch = ref.watch(wearableProvider);
     final scale = ref.watch(scaleProvider);
+    final plan = ref.watch(planProvider).valueOrNull;
 
     final k = MediaQuery.sizeOf(context).width / _mockWidth;
     double s(double v) => v * k;
@@ -98,24 +102,8 @@ class ProfilePage extends ConsumerWidget {
           ),
         );
 
-    void info(String text) => showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(content: Text(text), actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Понятно'))
-            ]));
-
-    double? bmr;
-    double? tdee;
-    if (u != null && u.birthDate != null && u.heightCm != null && ws.isNotEmpty) {
-      bmr = bmrMifflin(
-          sex: u.sex == 'female' ? Sex.female : Sex.male,
-          weightKg: ws.last.weightKg,
-          heightCm: u.heightCm!,
-          age: ageOn(u.birthDate!, DateTime.now()));
-      final lvl = ActivityLevel.values
-          .firstWhere((l) => l.name == u.activityLevel, orElse: () => ActivityLevel.light);
-      tdee = bmr * activityFactor[lvl]!;
-    }
+    final bmr = plan?.result?.bmr;
+    final tdee = plan?.result?.tdee;
 
     Widget stat(IconData i, String label, String value) => Row(children: [
           Container(
@@ -242,7 +230,8 @@ class ProfilePage extends ConsumerWidget {
                   Text(
                       '${u.heightCm == null ? '' : '${fmtAuto(u.heightCm!)} см'}'
                       '${u.heightCm != null && ws.isNotEmpty ? '  •  ' : ''}'
-                      '${ws.isEmpty ? '' : '${fmt1(ws.last.weightKg)} кг'}',
+                      '${ws.isEmpty ? '' : '${fmt1(ws.last.weightKg)} кг'}'
+                      '${u.targetWeightKg == null ? '' : ' → ${fmtAuto(u.targetWeightKg!)} кг'}',
                       style: t(27)),
                   SizedBox(height: s(14)),
                   Container(
@@ -285,13 +274,22 @@ class ProfilePage extends ConsumerWidget {
               ]),
             ),
             SizedBox(height: s(18)),
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(Icons.info_outline, size: s(26), color: kPrimary),
-              SizedBox(width: s(10)),
-              Flexible(
-                  child: Text('По формуле Миффлина — Сан Жеора, не медицинская рекомендация.',
-                      style: t(21))),
-            ]),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => showPlanExplanation(context, plan),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.info_outline, size: s(26), color: kPrimary),
+                SizedBox(width: s(10)),
+                Flexible(
+                    child: Text(
+                        plan?.minor == true
+                            ? 'Для возраста до 18 лет расчёт по взрослой формуле не выполняется.'
+                            : plan?.energy.tdee != null
+                                ? 'Расчёт по формуле; по динамике веса расход ≈ ${fmt0(plan!.energy.tdee!)} ккал. Подробнее'
+                                : 'Расчётная оценка по формуле, не измерение. Подробнее',
+                        style: t(21))),
+              ]),
+            ),
           ]),
         ),
 
@@ -311,8 +309,7 @@ class ProfilePage extends ConsumerWidget {
                 ]),
               ),
               GestureDetector(
-                onTap: () =>
-                    info('Изменение действует с сегодняшнего дня, история не пересчитывается.'),
+                onTap: () => showPlanExplanation(context, plan),
                 child: Icon(Icons.info_outline, size: s(36), color: kPrimary),
               ),
             ]),
@@ -373,30 +370,103 @@ class ProfilePage extends ConsumerWidget {
             Expanded(
               child: OutlinedButton(
                   style: outlined(),
-                  onPressed: u == null || bmr == null
+                  onPressed: plan == null || !plan.hasProfile
                       ? null
                       : () async {
-                          final lvl =
-                              ActivityLevel.values.firstWhere((l) => l.name == u.activityLevel);
-                          final g = suggestGoals(
-                              bmr: bmr!,
-                              level: lvl,
-                              goal: GoalType.values.firstWhere((x) => x.name == u.goalType),
-                              weightKg: ws.last.weightKg);
+                          final r = plan.result!;
+                          final g = goalFromResult(r);
+                          final manualNote = plan.mode == CalcMode.manual
+                              ? '\nСейчас включена ручная настройка: нормы будут заменены расчётными '
+                                  '(режим останется ручным).'
+                              : '';
                           final ok = await confirmDialog(
                               context,
                               'Пересчитать нормы?',
-                              'Ориентировочно: ${fmt0(g.calories)} ккал, Б ${fmt0(g.proteins)}, '
+                              'По формулам: ${fmt0(g.calories)} ккал, Б ${fmt0(g.proteins)}, '
                                   'Ж ${fmt0(g.fats)}, У ${fmt0(g.carbs)} г, вода ${fmt0(g.waterMl)} мл.\n'
-                                  'Текущие значения будут заменены.',
+                                  'Текущие значения будут заменены с сегодняшнего дня, история не меняется.'
+                                  '${r.warnings.isEmpty ? '' : '\n\n${r.warnings.join('\n')}'}$manualNote',
                               ok: 'Применить');
-                          if (ok) await db.setGoal(dayKey(DateTime.now()), g);
+                          if (ok) await applyRecalc(db, plan);
                         },
                   child: const Text('Пересчитать')),
             ),
           ]),
         ]),
       ),
+
+      // Предложения и подсказки расчёта
+      if (plan != null && plan.hasProfile) ...[
+        if (plan.proposal != null)
+          cardBox(
+            padding: EdgeInsets.all(s(26)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(Icons.tips_and_updates_outlined, size: s(40), color: kPrimary),
+                SizedBox(width: s(16)),
+                Expanded(child: Text('Предложение по норме', style: t(30, w: FontWeight.w800))),
+              ]),
+              SizedBox(height: s(10)),
+              Text(plan.proposal!.reason, style: t(24)),
+              SizedBox(height: s(18)),
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton(
+                      style: outlined(),
+                      onPressed: () => dismissProposal(db),
+                      child: const Text('Позже')),
+                ),
+                SizedBox(width: s(24)),
+                Expanded(
+                  child: FilledButton(
+                      style: FilledButton.styleFrom(
+                          minimumSize: Size.fromHeight(s(66)),
+                          backgroundColor: kPrimary,
+                          shape: const StadiumBorder()),
+                      onPressed: () => acceptProposal(db, plan),
+                      child: const Text('Принять')),
+                ),
+              ]),
+            ]),
+          ),
+        if (plan.history.isNotEmpty &&
+            plan.history.last.kind == 'auto' &&
+            DateTime.now().difference(plan.history.last.at).inDays < 3)
+          cardBox(
+            padding: EdgeInsets.all(s(26)),
+            child: Row(children: [
+              Expanded(
+                  child: Text('Норма изменена автоматически. ${plan.history.last.text}',
+                      style: t(22))),
+              TextButton(onPressed: () => undoLast(db), child: const Text('Отменить')),
+            ]),
+          ),
+        if (plan.mode != CalcMode.manual && plan.weightDriftKg != null)
+          cardBox(
+            padding: EdgeInsets.all(s(26)),
+            child: Row(children: [
+              Icon(Icons.monitor_weight_outlined, size: s(40), color: kPrimary),
+              SizedBox(width: s(16)),
+              Expanded(
+                  child: Text(
+                      'Вес изменился на ${plan.weightDriftKg! > 0 ? '+' : ''}${fmt1(plan.weightDriftKg!)} кг '
+                      'с последнего расчёта. Нормы сами не менялись: нажмите «Пересчитать», если нужно.',
+                      style: t(22))),
+            ]),
+          ),
+        if ((plan.weightAgeDays ?? 0) > 30)
+          cardBox(
+            padding: EdgeInsets.all(s(26)),
+            child: Row(children: [
+              Icon(Icons.update, size: s(40), color: kPrimary),
+              SizedBox(width: s(16)),
+              Expanded(
+                  child: Text(
+                      'Вес не обновлялся ${plan.weightAgeDays} дн. Расчёт использует последнее значение — добавьте новое взвешивание.',
+                      style: t(22))),
+            ]),
+          ),
+      ],
 
       // Умные часы
       cardBox(
@@ -553,10 +623,10 @@ class ProfilePage extends ConsumerWidget {
             style: FilledButton.styleFrom(minimumSize: const Size(100, 40)),
             onPressed: () async {
               if (!form.currentState!.validate()) return;
-              await db.setGoal(
-                  dayKey(DateTime.now()),
-                  GoalValues(parseNum(k.text)!, parseNum(p.text)!, parseNum(f.text)!,
-                      parseNum(c.text)!, parseNum(w.text)!));
+              final ng = GoalValues(parseNum(k.text)!, parseNum(p.text)!, parseNum(f.text)!,
+                  parseNum(c.text)!, parseNum(w.text)!);
+              await db.setGoal(dayKey(DateTime.now()), ng);
+              await recordManualGoals(db, g, ng);
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: const Text('Сохранить'),

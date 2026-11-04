@@ -11,6 +11,8 @@ import 'package:share_plus/share_plus.dart';
 import '../../app/app.dart';
 import '../../app/providers.dart';
 import '../../core/dates.dart';
+import '../../core/nutrition/nutrition_calculation_models.dart';
+import '../../services/health/plan_service.dart';
 import '../../shared/widgets.dart';
 import 'backup_service.dart';
 import 'notification_service.dart';
@@ -52,6 +54,55 @@ class SettingsPage extends ConsumerWidget {
               selected: {s['theme'] ?? 'system'},
               onSelectionChanged: (v) => db.setSetting('theme', v.first),
             ),
+          ]),
+        ),
+        const SizedBox(height: 14),
+        AppCard(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Режим расчёта норм',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+            const SizedBox(height: 8),
+            SegmentedButton<CalcMode>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: CalcMode.adaptive, label: Text('Адаптивный')),
+                ButtonSegment(value: CalcMode.standard, label: Text('Формулы')),
+                ButtonSegment(value: CalcMode.manual, label: Text('Вручную')),
+              ],
+              selected: {calcModeOf(s[kCalcModeKey])},
+              onSelectionChanged: (v) => setCalcMode(db, v.first),
+            ),
+            const SizedBox(height: 8),
+            Text(
+                switch (calcModeOf(s[kCalcModeKey])) {
+                  CalcMode.adaptive =>
+                    'Нормы считаются по формуле Миффлина — Сан Жеора. При достаточных данных о весе и '
+                        'питании (не менее 2–3 недель) приложение раз в две недели предлагает изменить '
+                        'калорийность на 100–150 ккал; без вашего согласия нормы не меняются.',
+                  CalcMode.standard =>
+                    'Только стандартные формулы, без поправок по динамике веса. Нормы меняются кнопкой «Пересчитать» в профиле.',
+                  CalcMode.manual =>
+                    'Нормы заданы вами и автоматически не перезаписываются. Кнопка «Пересчитать» работает только по вашей команде.',
+                },
+                style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+            if (calcModeOf(s[kCalcModeKey]) == CalcMode.adaptive)
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Применять предложения автоматически'),
+                subtitle: const Text('В профиле появится кнопка «Отменить» на 3 дня'),
+                value: s[kCalcAutoApplyKey] == '1',
+                onChanged: (v) => db.setSetting(kCalcAutoApplyKey, v ? '1' : '0'),
+              ),
+            if (parseHistory(s[kCalcHistoryKey]).isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const Text('История расчётов', style: TextStyle(fontWeight: FontWeight.w700)),
+              for (final h in parseHistory(s[kCalcHistoryKey]).reversed.take(5))
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text('${shortDate(h.at)}: ${h.text}',
+                      style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+                ),
+            ],
           ]),
         ),
         const SizedBox(height: 14),

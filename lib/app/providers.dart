@@ -4,6 +4,7 @@ import '../core/dates.dart';
 import '../database/database.dart';
 import '../features/dashboard/day_data.dart';
 import '../features/health_integration/health_service.dart';
+import '../services/health/plan_service.dart';
 
 final dbProvider = Provider<AppDatabase>((ref) => throw UnimplementedError());
 
@@ -45,3 +46,9 @@ final sourceProvider = StreamProvider<ConnectedSource?>((ref) {
 
 /// Прогресс первичной загрузки справочника продуктов (null — не выполняется).
 final catalogProgressProvider = StateProvider<double?>((ref) => null);
+
+/// Расчёт норм (BMR, TDEE, КБЖУ, тренд веса, предложение адаптации).
+final planProvider = StreamProvider<PlanSnapshot>((ref) {
+  final db = ref.watch(dbProvider);
+  return reactive(db, () => loadPlan(db, DateTime.now()));
+});

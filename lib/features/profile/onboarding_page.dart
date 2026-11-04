@@ -6,6 +6,10 @@ import '../../app/providers.dart';
 import '../../core/dates.dart';
 import '../../core/labels.dart';
 import '../../core/nutrition.dart';
+import '../../core/nutrition/bmr_calculator.dart';
+import '../../core/nutrition/calc_engine.dart';
+import '../../core/nutrition/nutrition_calculation_models.dart';
+import '../../services/health/plan_service.dart';
 import '../../database/database.dart';
 import '../../shared/widgets.dart';
 
@@ -62,9 +66,17 @@ class _OnboardingState extends ConsumerState<OnboardingPage> {
   GoalValues? _suggest() {
     final h = parseNum(height.text), w = parseNum(weight.text);
     if (h == null || w == null || _birth == null) return null;
-    final bmr = bmrMifflin(sex: _sex, weightKg: w, heightCm: h, age: ageOn(_birth!, DateTime.now()));
-    return suggestGoals(bmr: bmr, level: _level, goal: _goal, weightKg: w);
+    final r = calculatePlan(CalcInput(
+        sex: _sex,
+        age: ageOn(_birth!, DateTime.now()),
+        heightCm: h,
+        weightKg: w,
+        level: _level,
+        goal: _goal));
+    return r == null ? null : goalFromResult(r);
   }
+
+  bool get _minor => _birth != null && !isAdultAge(ageOn(_birth!, DateTime.now()));
 
   void _fillGoals() {
     final g = _suggest();
@@ -169,13 +181,23 @@ class _OnboardingState extends ConsumerState<OnboardingPage> {
             const SizedBox(height: 4),
             Text('Расчёт по формуле Миффлина — Сан Жеора ориентировочный. Вы можете изменить любое значение.',
                 style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+            if (_minor)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                    'Для возраста до 18 лет взрослая формула не применяется: задайте нормы вручную '
+                    '(лучше вместе с врачом).',
+                    style: TextStyle(fontSize: 12.5, color: cs.error)),
+              ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               icon: const Icon(Icons.calculate_outlined),
               label: const Text('Рассчитать нормы'),
               onPressed: () {
                 if (_suggest() == null) {
-                  toast(context, 'Заполните дату рождения, рост и вес');
+                  toast(context, _minor
+                      ? 'Для возраста до 18 лет расчёт не выполняется'
+                      : 'Заполните дату рождения, рост и вес');
                   return;
                 }
                 setState(() {
