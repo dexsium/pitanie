@@ -151,18 +151,17 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
       ),
       bottomNavigationBar: Theme(
         data: tab == 2 ? _greenNav(Theme.of(context)) : Theme.of(context),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? const Color(0x24FFFFFF)
-                    : const Color(0xFFDCDCE4),
-                width: 1,
-              ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Линия 1 px между экраном и нижним меню (слегка серая, заметная в обеих темах).
+            Container(
+              height: 1,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0x59FFFFFF)
+                  : const Color(0xFFBDBDCB),
             ),
-          ),
-          child: NavigationBar(
+            NavigationBar(
         selectedIndex: tab,
         onDestinationSelected: (i) => ref.read(tabProvider.notifier).state = i,
         destinations: const [
@@ -173,6 +172,7 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Профиль'),
         ],
       ),
+          ],
         ),
       ),
     );
