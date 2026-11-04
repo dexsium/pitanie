@@ -53,7 +53,7 @@ class HuamiFetcher {
   /// Запрашивает данные [type] начиная с [since]. Подтверждает приём так, чтобы
   /// данные оставались на часах (0x09), ничего с часов не удаляется.
   Future<FetchResult> fetch(int type, DateTime since,
-      {Duration timeout = const Duration(seconds: 60)}) async {
+      {Duration timeout = const Duration(seconds: 20), void Function(String)? onStage}) async {
     final buffer = BytesBuilder();
     final response = StreamController<Uint8List>();
     var lastCounter = -1;
@@ -68,8 +68,10 @@ class HuamiFetcher {
         return it.current;
       }
 
+      onStage?.call('тип 0x${type.toRadixString(16)}: запрос отправлен');
       await _write([0x01, type, ...fetchTimeBytes(since)]);
       final r1 = await next();
+      onStage?.call('тип 0x${type.toRadixString(16)}: ответ ${_hex(r1)}');
       if (r1.length < 3 || r1[0] != 0x10 || r1[1] != 0x01 || r1[2] != 0x01) {
         return FetchResult(Uint8List(0), null, 'Часы отклонили запрос (${_hex(r1)})');
       }
@@ -93,8 +95,10 @@ class HuamiFetcher {
           valid = false;
         }
       });
+      onStage?.call('ожидается $expected байт, передача начата');
       await _write([0x02]);
       final r2 = await next();
+      onStage?.call('передача завершена: ${buffer.length} байт');
       if (r2.length < 3 || r2[0] != 0x10 || r2[1] != 0x02 || r2[2] != 0x01) {
         return FetchResult(Uint8List(0), start, 'Часы прервали передачу (${_hex(r2)})');
       }
@@ -120,6 +124,7 @@ class HuamiFetcher {
       await _write([0x03, 0x09]);
       return FetchResult(data, start, warn);
     } on TimeoutException {
+      onStage?.call('таймаут: получено ${buffer.length} байт');
       return FetchResult(Uint8List(0), null, 'Часы не ответили вовремя');
     } catch (e) {
       return FetchResult(Uint8List(0), null, 'Ошибка загрузки: $e');

@@ -423,7 +423,7 @@ class _WearablePageState extends ConsumerState<WearablePage> {
         ? _Metric('Активные калории', Icons.local_fire_department, kOrange,
             fmt0(act.activeKcal), 'ккал', 'без базового обмена · $health')
         : _Metric('Активные калории', Icons.local_fire_department, kOrange, null, '',
-            'Недоступно');
+            'Недоступно (нет данных с часов)');
     final sleep = (act != null && act.sleepMinutes > 0)
         ? _Metric('Сон', Icons.bedtime_outlined, kViolet, hm(act.sleepMinutes), '',
             act.sleepStart == null

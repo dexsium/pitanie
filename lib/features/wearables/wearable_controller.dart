@@ -414,6 +414,7 @@ class WearableController extends ChangeNotifier {
     });
     final settings = await db.allSettings();
     final fetcher = HuamiFetcher(c4, c5);
+    addLog('история: старт');
     final now = DateTime.now();
     final tzMin = now.timeZoneOffset.inMinutes;
     var stepMin = 0, hrN = 0, spoN = 0, sleepMin = 0;
@@ -425,7 +426,7 @@ class WearableController extends ChangeNotifier {
           ? int.tryParse(settings['ble_last_activity'] ?? '') ?? threeDays
           : threeDays);
       for (var round = 0; round < 5; round++) {
-        final res = await fetcher.fetch(fetchTypeActivity, since);
+        final res = await fetcher.fetch(fetchTypeActivity, since, onStage: addLog);
         if (!res.ok) {
           err = res.error;
           break;
@@ -497,7 +498,7 @@ class WearableController extends ChangeNotifier {
         final sSince = DateTime.fromMillisecondsSinceEpoch(
             int.tryParse(settings['ble_last_spo2'] ?? '') ??
                 now.subtract(const Duration(days: 7)).millisecondsSinceEpoch);
-        final res = await fetcher.fetch(fetchTypeSpo2Normal, sSince);
+        final res = await fetcher.fetch(fetchTypeSpo2Normal, sSince, onStage: addLog);
         if (!res.ok) {
           err = res.error;
         } else if (res.data.isNotEmpty) {
