@@ -80,6 +80,7 @@ class _Series extends StatelessWidget {
               borderData: FlBorderData(show: false),
               barTouchData: BarTouchData(
                 touchTooltipData: BarTouchTooltipData(
+                  getTooltipColor: (_) => const Color(0xFF263238),
                   getTooltipItem: (g, gi, r, ri) =>
                       BarTooltipItem('${f(r.toY)} $unit', const TextStyle(color: Colors.white, fontSize: 12)),
                 ),

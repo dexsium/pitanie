@@ -84,23 +84,21 @@ class NutritionPage extends ConsumerWidget {
               ]),
             ),
           ),
-          IconButton.filledTonal(
-              tooltip: 'Статистика',
-              onPressed: () => ref.read(tabProvider.notifier).state = 3,
-              icon: const Icon(Icons.bar_chart_rounded)),
+          IconButton(
+              tooltip: 'Следующий день',
+              onPressed: () => shift(1),
+              icon: const Icon(Icons.chevron_right)),
           const SizedBox(width: 6),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_horiz),
             style: IconButton.styleFrom(backgroundColor: cs.secondaryContainer),
             onSelected: (v) {
-              if (v == 'next') shift(1);
               if (v == 'recipes') {
                 Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const RecipesPage()));
               }
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'next', child: Text('Следующий день')),
               PopupMenuItem(value: 'recipes', child: Text('Мои блюда')),
             ],
           ),

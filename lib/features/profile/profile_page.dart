@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../app/theme.dart';
 import '../../core/dates.dart';
 import '../../core/labels.dart';
 import '../../core/nutrition.dart';
@@ -12,6 +13,8 @@ import '../health_integration/devices_page.dart';
 import '../recipes/recipes_page.dart';
 import '../settings/settings_page.dart';
 import '../water/water_page.dart';
+import '../scale/scale_controller.dart';
+import '../wearables/wearable_controller.dart';
 import '../weight/weight_page.dart';
 import 'onboarding_page.dart';
 
@@ -26,6 +29,10 @@ class ProfilePage extends ConsumerWidget {
     final goal = ref.watch(dayDataProvider(key)).valueOrNull?.goal ?? GoalValues.fallback;
     final cs = Theme.of(context).colorScheme;
     final db = ref.read(dbProvider);
+    final src = ref.watch(sourceProvider).valueOrNull;
+    final busy = ref.watch(syncBusyProvider);
+    final watch = ref.watch(wearableProvider);
+    final scale = ref.watch(scaleProvider);
 
     double? bmr;
     double? tdee;
@@ -120,13 +127,88 @@ class ProfilePage extends ConsumerWidget {
       ),
       const SizedBox(height: 14),
       AppCard(
+        child: Row(children: [
+          Icon(watch.isConnected || src != null ? Icons.watch : Icons.watch_off_outlined,
+              color: kPrimary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Умные часы', style: TextStyle(fontWeight: FontWeight.w700)),
+              Text(
+                switch (watch.status) {
+                  WearStatus.ready => 'Bluetooth: подключено, данные идут',
+                  WearStatus.connected || WearStatus.authorizing => 'Bluetooth: авторизация…',
+                  WearStatus.connecting => 'Bluetooth: подключаем…',
+                  WearStatus.off => watch.savedId == null
+                      ? 'Часы не подключены'
+                      : 'Bluetooth: нет связи',
+                },
+                style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
+              ),
+              if (src != null)
+                Text(
+                  '${src.deviceName.isEmpty ? 'Система здоровья' : src.deviceName} · ${statusLabel(src.syncStatus)}'
+                  '${src.lastSync == null ? '' : ', синхронизация ${fmtTime(src.lastSync!)}'
+                      '${isSameDay(src.lastSync!, DateTime.now()) ? '' : ', ${shortDate(src.lastSync!)}'}'}',
+                  style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
+                ),
+            ]),
+          ),
+          if (src != null)
+            IconButton(
+              tooltip: 'Синхронизировать',
+              onPressed: busy
+                  ? null
+                  : () async {
+                      ref.read(syncBusyProvider.notifier).state = true;
+                      final r = await ref.read(healthServiceProvider).sync();
+                      ref.read(syncBusyProvider.notifier).state = false;
+                      if (context.mounted) toast(context, syncMessage(r));
+                    },
+              icon: busy
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.sync),
+            ),
+        ]),
+      ),
+      const SizedBox(height: 14),
+      AppCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            secondary: const Icon(Icons.monitor_weight_outlined, color: kPrimary),
+            title: const Text('Умные весы Mi', style: TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: Text(
+              scale.lastKg == null
+                  ? 'Mi Body Composition Scale 2. Откройте приложение и встаньте на весы: вес сохранится сам.'
+                  : 'Последнее: ${fmt1(scale.lastKg!)} кг, ${fmtTime(scale.lastAt!)}'
+                      '${isSameDay(scale.lastAt!, DateTime.now()) ? '' : ', ${shortDate(scale.lastAt!)}'}',
+              style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
+            ),
+            value: scale.enabled,
+            onChanged: (v) => ref.read(scaleProvider).setEnabled(v),
+          ),
+          Text(
+              'Приём по Bluetooth работает, пока приложение открыто. Сохраняется только вес; '
+              'состав тела не рассчитывается.',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+          if (scale.log.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(scale.log.first,
+                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+            ),
+        ]),
+      ),
+      const SizedBox(height: 14),
+      AppCard(
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Column(children: [
           nav(Icons.monitor_weight_outlined, 'Вес', const WeightPage()),
           nav(Icons.water_drop_outlined, 'Вода', const WaterPage()),
           nav(Icons.calendar_month_outlined, 'Календарь питания', const CalendarPage()),
           nav(Icons.menu_book_outlined, 'Мои блюда', const RecipesPage()),
-          nav(Icons.watch_outlined, 'Устройства', const DevicesPage()),
+          nav(Icons.watch_outlined, 'Умные часы и устройства', const DevicesPage()),
           nav(Icons.settings_outlined, 'Настройки', const SettingsPage()),
         ]),
       ),

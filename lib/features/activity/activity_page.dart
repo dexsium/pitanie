@@ -10,7 +10,6 @@ import '../../core/labels.dart';
 import '../../shared/widgets.dart';
 import '../dashboard/day_data.dart';
 import '../calendar/calendar_page.dart';
-import '../health_integration/devices_page.dart';
 
 class ActivityPage extends ConsumerWidget {
   const ActivityPage({super.key});
@@ -20,8 +19,6 @@ class ActivityPage extends ConsumerWidget {
     final day = ref.watch(selectedDayProvider);
     final key = dayKey(day);
     final a = ref.watch(dayDataProvider(key)).valueOrNull?.activity;
-    final src = ref.watch(sourceProvider).valueOrNull;
-    final busy = ref.watch(syncBusyProvider);
     final week = ref
         .watch(rangeStatsProvider((from: dayKey(day.subtract(const Duration(days: 6))), to: key)))
         .valueOrNull;
@@ -45,50 +42,11 @@ class ActivityPage extends ConsumerWidget {
       DayBar(
         onCalendar: () => Navigator.push(
             context, MaterialPageRoute(builder: (_) => const CalendarPage())),
-        trailing: IconButton.filledTonal(
-          tooltip: 'Устройства',
-          onPressed: () =>
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const DevicesPage())),
-          icon: const Icon(Icons.watch_outlined),
-        ),
-      ),
-      const SizedBox(height: 16),
-      AppCard(
-        child: Row(children: [
-          Icon(src == null ? Icons.watch_off_outlined : Icons.watch, color: kPrimary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(src == null ? 'Источник не подключён' : 'Amazfit GTR 4 · ${statusLabel(src.syncStatus)}',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              Text(
-                src?.lastSync == null
-                    ? 'Подключите Health Connect / Apple Health в разделе «Устройства»'
-                    : 'Последняя синхронизация: ${fmtTime(src!.lastSync!)}'
-                        '${isSameDay(src.lastSync!, DateTime.now()) ? '' : ', ${shortDate(src.lastSync!)}'}',
-                style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
-              ),
-            ]),
-          ),
-          IconButton(
-            onPressed: busy || src == null
-                ? null
-                : () async {
-                    ref.read(syncBusyProvider.notifier).state = true;
-                    final r = await ref.read(healthServiceProvider).sync();
-                    ref.read(syncBusyProvider.notifier).state = false;
-                    if (context.mounted) toast(context, syncMessage(r));
-                  },
-            icon: busy
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.sync),
-          ),
-        ]),
       ),
       const SizedBox(height: 12),
       if (a == null || !a.hasData && a.sleepMinutes == 0)
         const EmptyHint(
-            'За этот день нет данных об активности.\nДанные появляются после синхронизации часов с Zepp и экспорта в систему здоровья.')
+            'За этот день нет данных об активности.\nПодключение часов и синхронизация — в «Профиль → Умные часы».')
       else ...[
         Row(children: [
           tile(Icons.directions_walk, Colors.grey, fmt0(a.steps), 'шагов'),
@@ -138,12 +96,6 @@ class ActivityPage extends ConsumerWidget {
             child: Text('Общий расход энергии: ${fmt0(a.totalKcal)} ккал (отдельно от активных калорий)',
                 style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
           ),
-        if (a.source != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text('Источник за день: ${sourceLabel(a.source)}',
-                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-          ),
       ],
       const SizedBox(height: 16),
       const SectionTitle('Тренировки', icon: Icons.fitness_center),
@@ -181,6 +133,15 @@ class ActivityPage extends ConsumerWidget {
                 : BarChart(BarChartData(
                     gridData: const FlGridData(show: false),
                     borderData: FlBorderData(show: false),
+                    barTouchData: BarTouchData(
+                      touchTooltipData: BarTouchTooltipData(
+                        getTooltipColor: (_) => const Color(0xFF263238),
+                        getTooltipItem: (g, gi, r, ri) => BarTooltipItem(
+                            '${fmt0(r.toY)} шагов',
+                            const TextStyle(
+                                color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                      ),
+                    ),
                     titlesData: FlTitlesData(
                       topTitles: const AxisTitles(),
                       rightTitles: const AxisTitles(),

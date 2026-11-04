@@ -11,6 +11,7 @@ import '../features/settings/notification_service.dart';
 import '../features/statistics/statistics_page.dart';
 import '../features/wearables/wearable_controller.dart';
 import '../database/catalog_importer.dart';
+import '../features/scale/scale_controller.dart';
 import 'providers.dart';
 import 'theme.dart';
 
@@ -73,6 +74,7 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _sync();
       ref.read(wearableProvider).start();
+      ref.read(scaleProvider).start();
       _loadCatalog();
       final n = ref.read(notificationsProvider);
       await n.init();
@@ -91,6 +93,7 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
     if (state == AppLifecycleState.resumed) {
       _sync();
       ref.read(wearableProvider).start();
+      ref.read(scaleProvider).start();
     }
   }
 
