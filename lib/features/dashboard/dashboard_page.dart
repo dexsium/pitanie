@@ -45,12 +45,18 @@ class DashboardPage extends ConsumerWidget {
     Widget topBtn(IconData i, VoidCallback onTap) => GestureDetector(
           onTap: onTap,
           child: Container(
-            width: s(78),
-            height: s(78),
+            width: s(76),
+            height: s(76),
             decoration: BoxDecoration(
                 color: _p.withOpacity(dark ? 0.25 : 0.10),
-                borderRadius: BorderRadius.circular(s(26))),
-            child: Icon(i, size: s(44), color: accent),
+                borderRadius: BorderRadius.circular(s(24)),
+                boxShadow: [
+                  BoxShadow(
+                      color: _p.withOpacity(dark ? 0 : 0.12),
+                      blurRadius: s(14),
+                      offset: Offset(0, s(5)))
+                ]),
+            child: Icon(i, size: s(42), color: accent),
           ),
         );
 
@@ -61,7 +67,7 @@ class DashboardPage extends ConsumerWidget {
             end: Alignment.bottomCenter,
             colors: dark
                 ? const [Color(0xFF17131F), Color(0xFF101017)]
-                : const [Color(0xFFEEE7FC), Color(0xFFF7F4FD)]),
+                : const [Color(0xFFF5F5F8), Color(0xFFF5F5F8)]),
       ),
       child: ListView(
         padding: EdgeInsets.fromLTRB(s(20), s(16), s(20), s(28)),
@@ -77,16 +83,16 @@ class DashboardPage extends ConsumerWidget {
                 child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   GestureDetector(
                       onTap: () => shift(-1),
-                      child: Icon(Icons.chevron_left, size: s(52), color: cs.onSurface)),
-                  SizedBox(width: s(40)),
+                      child: Icon(Icons.chevron_left, size: s(48), color: cs.onSurface)),
+                  SizedBox(width: s(44)),
                   Column(mainAxisSize: MainAxisSize.min, children: [
-                    Text(dayTitle(day), style: t(44, w: FontWeight.w800)),
-                    Text(dayDateLine(day), style: t(24, c: cs.onSurface.withOpacity(0.8))),
+                    Text(dayTitle(day), style: t(38, w: FontWeight.w800)),
+                    Text(dayDateLine(day), style: t(21, c: cs.onSurface.withOpacity(0.8))),
                   ]),
-                  SizedBox(width: s(40)),
+                  SizedBox(width: s(44)),
                   GestureDetector(
                       onTap: () => shift(1),
-                      child: Icon(Icons.chevron_right, size: s(52), color: cs.onSurface)),
+                      child: Icon(Icons.chevron_right, size: s(48), color: cs.onSurface)),
                 ]),
               ),
               topBtn(Icons.settings_outlined, () => Navigator.push(
@@ -109,99 +115,147 @@ class DashboardPage extends ConsumerWidget {
   }
 }
 
-/// Баннер связи с часами: фиолетовая плашка с часами и состоянием подключения.
+/// Карточка часов: фото, название, заряд, состояние связи, пульс и время обновления.
 class WatchStatusChip extends ConsumerWidget {
   const WatchStatusChip({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(wearableProvider);
+    final cs = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final k = MediaQuery.sizeOf(context).width / _mockWidth;
     double s(double v) => v * k;
+    final ink = cs.onSurface;
+    final muted = cs.onSurfaceVariant;
+    TextStyle t(double px, {FontWeight w = FontWeight.w400, Color? c}) =>
+        TextStyle(fontSize: s(px), fontWeight: w, color: c ?? ink, height: 1.2);
 
-    final (text, badge, icon) = switch (c.status) {
-      WearStatus.ready => (
-        'Часы подключены${c.battery == null ? '' : ' · ${c.battery}%'}',
-        const Color(0xFF3CC24F),
-        Icons.link
-      ),
-      WearStatus.connected || WearStatus.authorizing => (
-        'Часы подключены, авторизация…',
-        kOrange,
-        Icons.link
-      ),
-      WearStatus.connecting => ('Подключаем часы…', kOrange, Icons.sync),
+    final (status, color) = switch (c.status) {
+      WearStatus.ready => ('Подключены', const Color(0xFF3CC24F)),
+      WearStatus.connected || WearStatus.authorizing => ('Авторизация…', kOrange),
+      WearStatus.connecting => ('Подключаем…', kOrange),
       WearStatus.off => (
-        c.savedId == null ? 'Подключить часы' : 'Часы не подключены',
-        const Color(0xFF9CA3AF),
-        Icons.link_off
+        c.savedId == null ? 'Не подключены' : 'Нет связи',
+        const Color(0xFF9CA3AF)
       ),
     };
-    final hr = c.status == WearStatus.ready && c.hr != null ? '  ·  ♥ ${c.hr}' : '';
+    final updated = c.lastRead ?? c.hrAt;
+    final hasData = c.status == WearStatus.ready;
+    String hhmm(DateTime d) =>
+        '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
-    return GestureDetector(
-      onTap: () =>
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const WearablePage())),
-      child: Container(
-        height: s(203),
-        margin: EdgeInsets.symmetric(horizontal: s(10)),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(s(100)),
-          gradient: const LinearGradient(colors: [Color(0xFF8A4BE8), Color(0xFF6A2BD6)]),
-          boxShadow: [
-            BoxShadow(color: _p.withOpacity(0.30), blurRadius: s(26), offset: Offset(0, s(10)))
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(s(100)),
-          child: Stack(children: [
-            Positioned(
-              left: s(32),
-              top: 0,
-              width: s(250),
-              height: s(203),
-              child: ShaderMask(
-                blendMode: BlendMode.dstIn,
-                shaderCallback: (r) => const LinearGradient(
-                  colors: [Colors.transparent, Colors.black, Colors.black, Colors.transparent],
-                  stops: [0.0, 0.10, 0.88, 1.0],
-                ).createShader(r),
-                child: Image.asset('assets/dashboard/watch.png', fit: BoxFit.cover),
-              ),
-            ),
-            Positioned(
-              left: s(305),
-              right: s(26),
-              top: s(53),
-              height: s(67) + s(0),
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: s(14)),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(s(34)),
-                  border: Border.all(color: Colors.white.withOpacity(0.85), width: s(2.5)),
-                  color: Colors.white.withOpacity(0.06),
-                ),
-                child: Row(children: [
-                  Container(
-                    width: s(50),
-                    height: s(50),
-                    decoration: BoxDecoration(color: badge, shape: BoxShape.circle),
-                    child: Icon(icon, size: s(32), color: Colors.white),
-                  ),
-                  SizedBox(width: s(18)),
-                  Expanded(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text('$text$hr',
-                          style: TextStyle(
-                              fontSize: s(29),
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white)),
-                    ),
-                  ),
-                  Icon(Icons.chevron_right, size: s(40), color: Colors.white),
-                ]),
+    return Container(
+      height: s(248),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF1C1C26) : Colors.white,
+        borderRadius: BorderRadius.circular(s(40)),
+        boxShadow: [
+          BoxShadow(
+              color: _p.withOpacity(dark ? 0 : 0.09), blurRadius: s(28), offset: Offset(0, s(8)))
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(s(40)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(s(40)),
+          onTap: () =>
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const WearablePage())),
+          child: Row(children: [
+            SizedBox(width: s(68)),
+            Image.asset('assets/dashboard/watch_card.png',
+                width: s(188), height: s(228), fit: BoxFit.contain),
+            SizedBox(width: s(42)),
+            Container(width: 1, height: s(154), color: muted.withOpacity(0.25)),
+            SizedBox(width: s(34)),
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(right: s(40)),
+                child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text('Amazfit GTR 4', style: t(30, w: FontWeight.w800)),
+                          ),
+                        ),
+                        if (c.battery != null && c.status != WearStatus.off)
+                          Container(
+                            height: s(58),
+                            padding: EdgeInsets.symmetric(horizontal: s(18)),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(s(29)),
+                              border: Border.all(color: muted.withOpacity(0.35), width: s(2)),
+                            ),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(c.charging ? Icons.battery_charging_full : Icons.battery_full,
+                                  size: s(34), color: ink),
+                              SizedBox(width: s(8)),
+                              Text('${c.battery}%', style: t(26, w: FontWeight.w800)),
+                            ]),
+                          ),
+                      ]),
+                      SizedBox(height: s(8)),
+                      Row(children: [
+                        Container(
+                          width: s(36),
+                          height: s(36),
+                          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                          child: Icon(
+                              c.status == WearStatus.off ? Icons.link_off : Icons.link,
+                              size: s(24),
+                              color: Colors.white),
+                        ),
+                        SizedBox(width: s(14)),
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(status, style: t(26, w: FontWeight.w500, c: color)),
+                          ),
+                        ),
+                      ]),
+                      SizedBox(height: s(14)),
+                      Divider(height: 1, color: muted.withOpacity(0.25)),
+                      SizedBox(height: s(14)),
+                      IntrinsicHeight(
+                        child: Row(children: [
+                          Icon(Icons.favorite, size: s(34), color: _pl),
+                          SizedBox(width: s(10)),
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text.rich(TextSpan(children: [
+                                TextSpan(
+                                    text: hasData && c.hr != null ? '${c.hr}' : '—',
+                                    style: t(28, w: FontWeight.w800)),
+                                TextSpan(text: ' уд/мин', style: t(24)),
+                              ])),
+                            ),
+                          ),
+                          SizedBox(width: s(14)),
+                          VerticalDivider(width: 1, color: muted.withOpacity(0.25)),
+                          SizedBox(width: s(14)),
+                          Icon(Icons.sync, size: s(32), color: ink),
+                          SizedBox(width: s(8)),
+                          Expanded(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                  'Обновлено: ${updated == null ? '—' : hhmm(updated)}',
+                                  style: t(24)),
+                            ),
+                          ),
+                        ]),
+                      ),
+                    ]),
               ),
             ),
           ]),
@@ -392,8 +446,8 @@ class _Body extends ConsumerWidget {
                         fit: BoxFit.scaleDown,
                         alignment: Alignment.centerLeft,
                         child: Text.rich(TextSpan(children: [
-                          TextSpan(text: fmt0(eaten.calories), style: t(70, w: FontWeight.w800)),
-                          TextSpan(text: '  / ${fmt0(target)} ккал', style: t(32, c: muted)),
+                          TextSpan(text: fmt0(eaten.calories), style: t(66, w: FontWeight.w800)),
+                          TextSpan(text: '  / ${fmt0(target)} ккал', style: t(28, c: muted)),
                         ])),
                       ),
                       SizedBox(height: s(14)),
@@ -491,7 +545,7 @@ class _RingPainter extends CustomPainter {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = stroke
-          ..color = dark ? const Color(0xFF2E2E3A) : const Color(0xFFE9E6F4));
+          ..color = dark ? const Color(0xFF2E2E3A) : const Color(0xFFE8E8EC));
     final p = progress.clamp(0.0, 1.0);
     if (p <= 0) return;
     canvas.drawArc(
@@ -506,7 +560,7 @@ class _RingPainter extends CustomPainter {
           ..shader = const SweepGradient(
             startAngle: -math.pi / 2,
             endAngle: 3 * math.pi / 2,
-            colors: [_pl, _p, Color(0xFF5B1DB5)],
+            colors: [Color(0xFF4F2BE0), Color(0xFF7A2CF0), Color(0xFFA32AF0)],
           ).createShader(Offset.zero & size));
   }
 

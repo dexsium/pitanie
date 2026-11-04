@@ -13,6 +13,7 @@ import '../products/barcode_scan_page.dart';
 import '../recipes/recipes_page.dart';
 import 'add_food_page.dart';
 import 'diary_actions.dart';
+import 'edit_entry_sheet.dart';
 
 class NutritionPage extends ConsumerWidget {
   const NutritionPage({super.key});
@@ -420,17 +421,10 @@ class _EntryTile extends ConsumerWidget {
     final cs = Theme.of(context).colorScheme;
     return InkWell(
       borderRadius: BorderRadius.circular(10),
-      onTap: entry.amount > 0
-          ? () async {
-              if (!await guardPast(context, dayKeyStr)) return;
-              final v = await promptNumber(context, 'Количество: ${entry.name}',
-                  initial: entry.amount,
-                  suffix: entry.amountUnit == 'ml' ? 'мл' : 'г',
-                  allowZero: false,
-                  max: 20000);
-              if (v != null) await db.updateFoodAmount(entry, v);
-            }
-          : null,
+      onTap: () async {
+        if (!await guardPast(context, dayKeyStr)) return;
+        if (context.mounted) await showEditEntrySheet(context, db, entry);
+      },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(children: [
@@ -456,6 +450,16 @@ class _EntryTile extends ConsumerWidget {
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           IconButton(
             visualDensity: VisualDensity.compact,
+            tooltip: 'Изменить',
+            icon: Icon(Icons.edit_outlined, size: 20, color: cs.onSurfaceVariant),
+            onPressed: () async {
+              if (!await guardPast(context, dayKeyStr)) return;
+              if (context.mounted) await showEditEntrySheet(context, db, entry);
+            },
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            tooltip: 'Удалить',
             icon: Icon(Icons.close, size: 20, color: cs.onSurfaceVariant),
             onPressed: () async {
               if (!await guardPast(context, dayKeyStr)) return;

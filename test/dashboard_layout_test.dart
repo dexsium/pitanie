@@ -52,15 +52,16 @@ void main() {
     }
   }
 
-  testWidgets('Текст баннера часов: батарея и пульс', (tester) async {
+  testWidgets('Карточка часов: название, заряд, статус, пульс и время обновления', (tester) async {
     tester.view.physicalSize = const Size(393, 852) * 3;
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
     final db = AppDatabase(NativeDatabase.memory());
     final watch = WearableController(db)
       ..status = WearStatus.ready
-      ..battery = 77
-      ..hr = 69;
+      ..battery = 76
+      ..hr = 78
+      ..lastRead = DateTime(2026, 11, 4, 14, 36);
     await tester.pumpWidget(ProviderScope(
       overrides: [
         dbProvider.overrideWithValue(db),
@@ -70,8 +71,11 @@ void main() {
           theme: buildTheme(Brightness.light), home: const Scaffold(body: WatchStatusChip())),
     ));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.textContaining('Часы подключены · 77%'), findsOneWidget);
-    expect(find.textContaining('♥ 69'), findsOneWidget);
+    expect(find.text('Amazfit GTR 4'), findsOneWidget);
+    expect(find.text('76%'), findsOneWidget);
+    expect(find.text('Подключены'), findsOneWidget);
+    expect(find.textContaining('78'), findsOneWidget);
+    expect(find.text('Обновлено: 14:36'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 1));
     await tester.runAsync(() => db.close().timeout(const Duration(seconds: 5), onTimeout: () {}));

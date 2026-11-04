@@ -567,6 +567,54 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
+  /// Правка записи дневника. Если задана масса, пищевая ценность масштабируется пропорционально
+  /// (снимок сохраняется); у ручных записей значения можно задать напрямую.
+  Future<void> updateFoodEntry(
+    FoodEntry e, {
+    String? mealType,
+    double? amount,
+    double? displayQty,
+    String? displayUnit,
+    String? name,
+    double? kcal,
+    double? p,
+    double? f,
+    double? c,
+  }) async {
+    var comp = FoodEntriesCompanion(
+      mealType: mealType == null ? const Value.absent() : Value(mealType),
+      name: name == null ? const Value.absent() : Value(name),
+      displayUnit: displayUnit == null ? const Value.absent() : Value(displayUnit),
+    );
+    var rescaled = false;
+    if (amount != null && amount > 0 && e.amount > 0) {
+      final k = amount / e.amount;
+      comp = comp.copyWith(
+        amount: Value(amount),
+        displayQty: Value(displayQty ?? e.displayQty * k),
+        caloriesSnapshot: Value(e.caloriesSnapshot * k),
+        proteinsSnapshot: Value(e.proteinsSnapshot * k),
+        fatsSnapshot: Value(e.fatsSnapshot * k),
+        carbohydratesSnapshot: Value(e.carbohydratesSnapshot * k),
+      );
+      rescaled = true;
+    } else if (e.isManual && kcal != null) {
+      comp = comp.copyWith(
+        caloriesSnapshot: Value(kcal),
+        proteinsSnapshot: Value(p ?? 0),
+        fatsSnapshot: Value(f ?? 0),
+        carbohydratesSnapshot: Value(c ?? 0),
+      );
+    }
+    await transaction(() async {
+      await (update(foodEntries)..where((t) => t.id.equals(e.id))).write(comp);
+      if (rescaled) {
+        await (update(waterEntries)..where((t) => t.foodEntryId.equals(e.id)))
+            .write(WaterEntriesCompanion(volumeMl: Value(amount!)));
+      }
+    });
+  }
+
   /// Копирует приём пищи с одного дня на другой.
   Future<int> copyMeal(String fromDay, String toDay, String meal) async {
     final src = (await foodForDay(fromDay)).where((e) => e.mealType == meal);
