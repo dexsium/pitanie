@@ -16,6 +16,9 @@ import '../wearables/heart_rate_page.dart';
 const _mockWidth = 852.0;
 const defaultStepsGoal = 10000.0;
 const _stepsGoalKey = 'steps_goal';
+const _p = Color(0xFF6F2BD8);
+const _pl = Color(0xFF9145EC);
+const _pd = Color(0xFF4F1CB0);
 
 class ActivityPage extends ConsumerWidget {
   const ActivityPage({super.key});
@@ -87,16 +90,16 @@ class ActivityPage extends ConsumerWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: dark
-                      ? [const Color(0xFF22302A), const Color(0xFF1C2A22)]
-                      : [Colors.white, const Color(0xFFE6F1E6)]),
+                      ? [const Color(0xFF2A2440), const Color(0xFF221D36)]
+                      : [Colors.white, const Color(0xFFE9E1FA)]),
               boxShadow: [
                 BoxShadow(
-                    color: kActGreen.withOpacity(dark ? 0 : 0.25),
+                    color: _p.withOpacity(dark ? 0 : 0.25),
                     blurRadius: s(18),
                     offset: Offset(0, s(6)))
               ],
             ),
-            child: Icon(i, size: s(40), color: kActGreen),
+            child: Icon(i, size: s(40), color: _p),
           ),
         );
 
@@ -154,13 +157,12 @@ class ActivityPage extends ConsumerWidget {
     const wd = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 
     return ColoredBox(
-      color: dark ? Colors.transparent : const Color(0xFFF6F8F5),
+      color: dark ? Colors.transparent : const Color(0xFFF1F1F6),
       child: ListView(padding: EdgeInsets.fromLTRB(s(22), s(20), s(22), s(24)), children: [
         // Шапка
         SizedBox(
           height: s(96),
           child: Stack(children: [
-            Positioned.fill(child: CustomPaint(painter: _TopSwoosh(kActGreen))),
             Row(children: [
               topButton(Icons.calendar_month_outlined, () => Navigator.push(
                   context, MaterialPageRoute(builder: (_) => const CalendarPage()))),
@@ -180,7 +182,7 @@ class ActivityPage extends ConsumerWidget {
                       child: Icon(Icons.chevron_right, size: s(46), color: ink)),
                 ]),
               ),
-              topButton(Icons.tune, editGoal),
+              SizedBox(width: s(66)),
             ]),
           ]),
         ),
@@ -202,7 +204,7 @@ class ActivityPage extends ConsumerWidget {
                       height: s(226),
                       child: CustomPaint(painter: _RingPainter(pct, s(18), dark))),
                   Column(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.directions_walk, size: s(44), color: kActGreen),
+                    Icon(Icons.directions_walk, size: s(44), color: _p),
                     SizedBox(
                       width: s(150),
                       child: FittedBox(
@@ -222,15 +224,32 @@ class ActivityPage extends ConsumerWidget {
                   onTap: editGoal,
                   child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                     Row(children: [
-                      Icon(Icons.bar_chart_rounded, size: s(54), color: kActGreen),
+                      Icon(Icons.bar_chart_rounded, size: s(54), color: _p),
                       SizedBox(width: s(22)),
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text('Цель по шагам', style: t(22)),
                           FittedBox(
                               fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text('Цель по шагам', style: t(22))),
+                          FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
                               child: Text(fmt0(goal), style: t(38, w: FontWeight.w800))),
                         ]),
+                      ),
+                      SizedBox(width: s(10)),
+                      Container(
+                        width: s(78),
+                        height: s(78),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(s(22)),
+                          gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [_p.withOpacity(0.10), _p.withOpacity(0.24)]),
+                        ),
+                        child: Icon(Icons.gps_fixed, size: s(44), color: _p),
                       ),
                     ]),
                     SizedBox(height: s(24)),
@@ -249,7 +268,7 @@ class ActivityPage extends ConsumerWidget {
                               width: fill,
                               height: s(14),
                               decoration: BoxDecoration(
-                                  gradient: const LinearGradient(colors: [kActGreen, kActLime]),
+                                  gradient: const LinearGradient(colors: [_p, _pl]),
                                   borderRadius: BorderRadius.circular(s(7)))),
                           Positioned(
                               left: 0,
@@ -257,7 +276,7 @@ class ActivityPage extends ConsumerWidget {
                                   width: s(20),
                                   height: s(20),
                                   decoration: const BoxDecoration(
-                                      color: kActGreen, shape: BoxShape.circle))),
+                                      color: _p, shape: BoxShape.circle))),
                         ]),
                       );
                     }),
@@ -273,7 +292,7 @@ class ActivityPage extends ConsumerWidget {
 
         // Показатели
         Row(children: [
-          metric(Icons.location_on, kActGreen, hasData ? '${fmt1(a.distanceKm)} км' : '—',
+          metric(Icons.location_on, _p, hasData ? '${fmt1(a.distanceKm)} км' : '—',
               'Расстояние', Icons.route),
           SizedBox(width: s(20)),
           metric(Icons.local_fire_department, kOrange,
@@ -310,7 +329,7 @@ class ActivityPage extends ConsumerWidget {
             child: cardBox(
               padding: EdgeInsets.symmetric(horizontal: s(26), vertical: s(18)),
               child: Row(children: [
-                Icon(Icons.info_outline, size: s(46), color: kActGreen),
+                Icon(Icons.info_outline, size: s(46), color: _p),
                 SizedBox(width: s(20)),
                 Expanded(
                   child: Text(
@@ -332,10 +351,10 @@ class ActivityPage extends ConsumerWidget {
             height: s(84),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(s(42)),
-              gradient: const LinearGradient(colors: [Color(0xFF256B2E), Color(0xFF2F7F36)]),
+              gradient: const LinearGradient(colors: [Color(0xFF5B21C8), Color(0xFF7B3AE6)]),
               boxShadow: [
                 BoxShadow(
-                    color: kActGreen.withOpacity(0.30),
+                    color: _p.withOpacity(0.30),
                     blurRadius: s(18),
                     offset: Offset(0, s(8)))
               ],
@@ -378,7 +397,7 @@ class ActivityPage extends ConsumerWidget {
           padding: EdgeInsets.fromLTRB(s(30), s(24), s(30), s(18)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Icon(Icons.bar_chart_rounded, size: s(54), color: kActGreen),
+              Icon(Icons.bar_chart_rounded, size: s(54), color: _p),
               SizedBox(width: s(18)),
               Text('Шаги за 7 дней', style: t(34, w: FontWeight.w800)),
             ]),
@@ -438,11 +457,11 @@ class ActivityPage extends ConsumerWidget {
                             ? const LinearGradient(
                                 begin: Alignment.bottomCenter,
                                 end: Alignment.topCenter,
-                                colors: [kActGreen, kActLime])
+                                colors: [_p, _pl])
                             : null,
                         color: (i == best && stepsByDay[i] > 0) || i == 6
                             ? null
-                            : muted.withOpacity(0.22),
+                            : _p.withOpacity(dark ? 0.30 : 0.16),
                       ),
                     ]),
                 ],
@@ -486,7 +505,7 @@ class _WorkoutsState extends State<_Workouts> {
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: s(12), vertical: s(8)),
           child: Row(children: [
-            Icon(Icons.fitness_center, size: s(46), color: kActGreen),
+            Icon(Icons.fitness_center, size: s(46), color: _p),
             SizedBox(width: s(22)),
             Expanded(child: Text('Тренировки', style: t(34, w: FontWeight.w800))),
             Icon(_open ? Icons.expand_more : Icons.chevron_right, size: s(44)),
@@ -518,7 +537,7 @@ class _WorkoutsState extends State<_Workouts> {
                   borderRadius: BorderRadius.circular(s(30)),
                   boxShadow: widget.shadow),
               child: Row(children: [
-                Icon(Icons.directions_run, size: s(48), color: kActGreen),
+                Icon(Icons.directions_run, size: s(48), color: _p),
                 SizedBox(width: s(20)),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -540,7 +559,7 @@ class _WorkoutsState extends State<_Workouts> {
   }
 }
 
-/// Кольцо прогресса шагов: серая дорожка и зелёная дуга по фактическому проценту цели.
+/// Кольцо прогресса шагов: бледная дорожка и фиолетовая дуга по фактическому проценту цели.
 class _RingPainter extends CustomPainter {
   final double progress, stroke;
   final bool dark;
@@ -557,7 +576,7 @@ class _RingPainter extends CustomPainter {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = stroke
-          ..color = dark ? const Color(0xFF2E2E3A) : const Color(0xFFE6E7E6));
+          ..color = dark ? const Color(0xFF2E2E3A) : const Color(0xFFE8E0FA));
     // Даже при очень малом проценте рисуется точка-скругление, чтобы начало было видно.
     final sweep = (2 * 3.141592653589793 * progress).clamp(0.02, 2 * 3.141592653589793);
     canvas.drawArc(
@@ -572,41 +591,13 @@ class _RingPainter extends CustomPainter {
           ..shader = SweepGradient(
             startAngle: -3.141592653589793 / 2,
             endAngle: 3 * 3.141592653589793 / 2,
-            colors: const [kActLime, kActGreen, kActDeep],
+            colors: const [_pl, _p, _pd],
           ).createShader(rect));
   }
 
   @override
   bool shouldRepaint(_RingPainter o) =>
       o.progress != progress || o.stroke != stroke || o.dark != dark;
-}
-
-/// Светло-зелёная дуга в верхней части экрана.
-class _TopSwoosh extends CustomPainter {
-  final Color color;
-  _TopSwoosh(this.color);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = Path()
-      ..moveTo(size.width * 0.28, size.height * 1.05)
-      ..quadraticBezierTo(
-          size.width * 0.42, size.height * 0.55, size.width * 0.54, -size.height * 0.25);
-    canvas.drawPath(
-        path,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round
-          ..strokeWidth = size.height * 0.16
-          ..shader = LinearGradient(
-            begin: Alignment.bottomLeft,
-            end: Alignment.topRight,
-            colors: [color.withOpacity(0.0), color.withOpacity(0.55)],
-          ).createShader(Offset.zero & size));
-  }
-
-  @override
-  bool shouldRepaint(_TopSwoosh o) => o.color != color;
 }
 
 /// Бледная линия ЭКГ на кнопке «График пульса».

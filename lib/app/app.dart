@@ -179,14 +179,14 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
   }
 }
 
-/// На вкладке «Активность» выбранный пункт нижней панели зелёный, как в макете раздела.
+/// На вкладке «Активность» выбранный пункт нижней панели фиолетовый, как в макете раздела.
 ThemeData _greenNav(ThemeData base) => base.copyWith(
       navigationBarTheme: base.navigationBarTheme.copyWith(
         labelTextStyle: WidgetStateProperty.resolveWith((st) => TextStyle(
             fontSize: 12,
             fontWeight: st.contains(WidgetState.selected) ? FontWeight.w700 : FontWeight.w500,
-            color: st.contains(WidgetState.selected) ? kActGreen : null)),
+            color: st.contains(WidgetState.selected) ? kPrimary : null)),
         iconTheme: WidgetStateProperty.resolveWith((st) =>
-            IconThemeData(color: st.contains(WidgetState.selected) ? kActGreen : null)),
+            IconThemeData(color: st.contains(WidgetState.selected) ? kPrimary : null)),
       ),
     );
