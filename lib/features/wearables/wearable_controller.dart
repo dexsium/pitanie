@@ -324,6 +324,12 @@ class WearableController extends ChangeNotifier {
 
   void _onZepp(int type, Uint8List p) {
     if (p.isEmpty) return;
+    if (type == 0x0001) {
+      // Часы просят телефон сходить за погодой: в запросе токен аккаунта Zepp и координаты,
+      // поэтому содержимое не пишем в журнал и запрос не исполняем.
+      addLog('запрос погоды от часов (${p.length} байт, проигнорирован)');
+      return;
+    }
     addLog('0x${type.toRadixString(16).padLeft(4, '0')}: '
         '${p.map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ')}');
     if (type == 0x0029 && p[0] == 0x04 && p.length >= 4) {

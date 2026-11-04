@@ -104,7 +104,11 @@ class HuamiFetcher {
       }
       final data = buffer.toBytes();
       if (!valid) return FetchResult(Uint8List(0), start, 'Потеряны пакеты данных, повторите');
-      if (data.length != expected) {
+      // Для активности часы называют число минутных записей (по 8 байт), для остального — байты.
+      final expectedBytes = type == fetchTypeActivity && data.length == expected * 8
+          ? expected * 8
+          : expected;
+      if (data.length != expectedBytes) {
         await _write([0x03, 0x09]);
         return FetchResult(
             Uint8List(0), start, 'Получено ${data.length} байт из $expected, повторите');
