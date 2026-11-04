@@ -428,6 +428,15 @@ class _AmountSheetState extends State<_AmountSheet> {
             selected: {_unit},
             onSelectionChanged: (s) => _setUnit(s.first),
           ),
+          if (_unit == QtyUnit.piece && p.pieceWeight != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                  '1 шт. = ${fmtAuto(p.pieceWeight!)} ${_baseLabel} (справочное значение; '
+                  'вес штуки можно изменить в карточке продукта)',
+                  style: TextStyle(
+                      fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _qty,

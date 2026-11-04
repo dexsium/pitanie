@@ -8,7 +8,6 @@ import '../../app/theme.dart';
 import '../../core/dates.dart';
 import '../../core/labels.dart';
 import '../../shared/widgets.dart';
-import '../dashboard/day_data.dart';
 import '../calendar/calendar_page.dart';
 
 class ActivityPage extends ConsumerWidget {

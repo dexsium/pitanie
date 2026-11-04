@@ -104,6 +104,46 @@ void main() {
     });
   });
 
+  group('вес штуки', () {
+    test('штучные порции USDA распознаются, меры объёма и упаковки — нет', () {
+      expect(usdaPieceWeight('1 slice', 25), 25);
+      expect(usdaPieceWeight('1 medium', 118), 118);
+      expect(usdaPieceWeight('1 egg', 50), 50);
+      expect(usdaPieceWeight('1 cup', 240), isNull);
+      expect(usdaPieceWeight('1 fl oz', 30), isNull);
+      expect(usdaPieceWeight('1 serving', 34), isNull);
+      expect(usdaPieceWeight('1 package', 300), isNull);
+      expect(usdaPieceWeight('2 slices', 50), isNull);
+      expect(usdaPieceWeight('1/2 cup', 100), isNull);
+      expect(usdaPieceWeight(null, 10), isNull);
+    });
+    test('после импорта у штучных продуктов USDA есть вес штуки', () async {
+      await importCatalogFromFile(db, _catalog);
+      final withPiece = await (db.select(db.products)..where((t) => t.pieceWeight.isNotNull())).get();
+      expect(withPiece.length, greaterThan(500));
+      for (final p in withPiece.where((p) => p.verified)) {
+        expect(p.pieceWeight, p.portionSize); // вес штуки равен весу порции из USDA
+      }
+    });
+    test('повторный импорт дополняет уже импортированные записи весом штуки', () async {
+      await importCatalogFromFile(db, _catalog);
+      await db.customStatement('UPDATE products SET piece_weight = NULL');
+      await importCatalogFromFile(db, _catalog);
+      final withPiece = await (db.select(db.products)..where((t) => t.pieceWeight.isNotNull())).get();
+      expect(withPiece.length, greaterThan(500));
+    });
+    test('справочник: Orion Choco Pie можно добавлять штуками, в том числе в старой базе', () async {
+      await db.seedProducts();
+      var p = await (db.select(db.products)..where((t) => t.name.equals('Orion Choco Pie'))).getSingle();
+      expect(p.pieceWeight, 30);
+      await db.customStatement("UPDATE products SET piece_weight = NULL WHERE name = 'Orion Choco Pie'");
+      await db.setSetting('seed_version', '0');
+      await db.seedProducts();
+      p = await (db.select(db.products)..where((t) => t.name.equals('Orion Choco Pie'))).getSingle();
+      expect(p.pieceWeight, 30);
+    });
+  });
+
   group('миграция схемы 1 → 2', () {
     test('данные пользователя сохраняются, новые столбцы добавляются', () async {
       final dir = Directory.systemTemp.createTempSync('pitanie_mig');

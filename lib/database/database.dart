@@ -252,7 +252,15 @@ class AppDatabase extends _$AppDatabase {
     };
     await batch((b) {
       for (final s in seedFoods) {
-        if (existing.contains(s.name)) continue;
+        if (existing.contains(s.name)) {
+          // Продукт уже есть: добавляем вес штуки, если он не задан (значения пользователя не трогаем).
+          if (s.piece != null) {
+            b.update(products, ProductsCompanion(pieceWeight: Value(s.piece)),
+                where: (t) =>
+                    t.name.equals(s.name) & t.isCustom.equals(false) & t.pieceWeight.isNull());
+          }
+          continue;
+        }
         b.insert(
             products,
             ProductsCompanion.insert(

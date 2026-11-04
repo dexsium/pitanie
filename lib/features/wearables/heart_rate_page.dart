@@ -41,9 +41,18 @@ class _HeartRatePageState extends ConsumerState<HeartRatePage> {
         future: _load(),
         builder: (context, snap) {
           final recs = snap.data ?? const <ActivityRecord>[];
+          // Только точки выбранных суток и не из будущего: иначе запись соседнего дня
+          // (в графике группируется по времени суток) тянет линию к краю графика.
+          final nextDay = _day.add(const Duration(days: 1));
+          final now = DateTime.now();
           final pts = recs
               .map((r) => (r.startTime.toLocal(), r.value))
-              .where((p) => p.$2 >= 30 && p.$2 <= 230)
+              .where((p) =>
+                  p.$2 >= 30 &&
+                  p.$2 <= 230 &&
+                  !p.$1.isBefore(_day) &&
+                  p.$1.isBefore(nextDay) &&
+                  !p.$1.isAfter(now))
               .toList()
             ..sort((a, b) => a.$1.compareTo(b.$1));
           // Сглаживание: средние по 5 минутам, если точек много.

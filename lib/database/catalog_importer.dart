@@ -10,8 +10,26 @@ import 'database.dart';
 
 /// Версия вшитого каталога. При её увеличении недостающие записи добавляются
 /// (по паре источник + идентификатор), существующие и пользовательские не меняются.
-const catalogVersion = 1;
+const catalogVersion = 2;
 const _catalogVersionKey = 'catalog_version';
+
+const _notPiece = [
+  'cup', 'oz', 'tbsp', 'tablespoon', 'tsp', 'teaspoon', 'serving', 'package', 'container',
+  'packet', 'scoop', 'pint', 'quart', 'gallon', 'liter', 'bottle', 'can ', 'jar', 'bag',
+  'box', 'dash', 'pinch', 'portion', 'meal', 'sheet', 'pan', 'recipe', 'bowl', 'drink',
+];
+
+/// Вес одной штуки по порции USDA: только если порция описана как «1 <штучная единица>»
+/// (ломтик, яйцо, печенье и т. п.), без мер объёма и упаковок. Иначе null.
+double? usdaPieceWeight(String? label, double? grams) {
+  if (label == null || grams == null || grams < 0.5 || grams > 1000) return null;
+  final l = label.toLowerCase().trim();
+  if (!RegExp(r'^1\s+[a-z]').hasMatch(l)) return null;
+  for (final w in _notPiece) {
+    if (l.contains(w)) return null;
+  }
+  return grams;
+}
 
 class CatalogImportResult {
   final int added, alreadyThere, total;
@@ -36,6 +54,7 @@ Future<CatalogImportResult> importCatalogFromFile(AppDatabase db, String path,
         '${r.read(db.products.source)}|${r.read(db.products.sourceId)}'
     };
     var added = 0, skipped = 0;
+    final pieceUpdates = <(String, String, double)>[];
     const chunk = 500;
     for (var i = 0; i < rows.length; i += chunk) {
       final part = rows.skip(i).take(chunk).toList();
@@ -43,8 +62,12 @@ Future<CatalogImportResult> importCatalogFromFile(AppDatabase db, String path,
       for (final r in part) {
         final source = r['source'] as String;
         final sourceId = r['source_id'] as String;
+        final pieceW = usdaPieceWeight(
+            r['portion_label'] as String?, (r['portion_g'] as num?)?.toDouble());
         if (existing.contains('$source|$sourceId')) {
           skipped++;
+          // Каталог версии 2 добавил вес штуки: дополняем уже импортированные записи.
+          if (pieceW != null) pieceUpdates.add((source, sourceId, pieceW));
           continue;
         }
         final nameEn = r['name_en'] as String;
@@ -76,6 +99,7 @@ Future<CatalogImportResult> importCatalogFromFile(AppDatabase db, String path,
           isCustom: const Value(false),
           portionSize: Value((r['portion_g'] as num?)?.toDouble()),
           portionLabel: Value(r['portion_label'] as String?),
+          pieceWeight: Value(pieceW),
         ));
       }
       if (companions.isNotEmpty) {
@@ -84,6 +108,16 @@ Future<CatalogImportResult> importCatalogFromFile(AppDatabase db, String path,
       }
       onProgress?.call(i + part.length, rows.length);
       await Future<void>.delayed(Duration.zero); // не блокируем интерфейс надолго
+    }
+    if (pieceUpdates.isNotEmpty) {
+      await db.batch((b) {
+        for (final u in pieceUpdates) {
+          b.customStatement(
+              'UPDATE products SET piece_weight = ? WHERE source = ? AND source_id = ? '
+              'AND piece_weight IS NULL',
+              [u.$3, u.$1, u.$2]);
+        }
+      });
     }
     return CatalogImportResult(added, skipped, rows.length);
   } finally {
