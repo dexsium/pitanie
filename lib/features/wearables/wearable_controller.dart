@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:drift/drift.dart' show Value;
@@ -11,6 +12,7 @@ import '../../database/database.dart';
 import '../dashboard/day_data.dart' show kBleSource;
 import 'huami_auth.dart';
 import 'huami_fetch.dart';
+import 'watch_settings.dart';
 
 enum WearStatus { off, connecting, connected, authorizing, ready }
 
@@ -20,8 +22,8 @@ const _uChunkRead = '00000017-0000-3512-2118-0009af100700';
 const _uFetchCtl = '00000004-0000-3512-2118-0009af100700';
 const _uFetchData = '00000005-0000-3512-2118-0009af100700';
 
-final wearableProvider =
-    ChangeNotifierProvider<WearableController>((ref) => WearableController(ref.watch(dbProvider)));
+final wearableProvider = ChangeNotifierProvider<WearableController>(
+    (ref) => WearableController(ref.watch(dbProvider)));
 
 /// Общий сервис связи с часами: живёт, пока работает приложение, и не зависит от открытой страницы.
 class WearableController extends ChangeNotifier {
@@ -40,6 +42,11 @@ class WearableController extends ChangeNotifier {
   DateTime? hrAt, stepsAt, spo2At, lastRead;
   String? syncMsg;
   bool syncBusy = false;
+  WatchHealthSettings? watchCfg;
+  String? cfgMsg;
+  bool cfgBusy = false;
+  bool finding = false;
+  Completer<Uint8List>? _cfgWait;
   bool hrOn = false;
   String? savedId;
   bool hasKey = false;
@@ -52,7 +59,8 @@ class WearableController extends ChangeNotifier {
   StreamSubscription<BluetoothConnectionState>? _connSub;
   StreamSubscription<List<int>>? _hrSub;
 
-  bool get isConnected => status == WearStatus.connected ||
+  bool get isConnected =>
+      status == WearStatus.connected ||
       status == WearStatus.authorizing ||
       status == WearStatus.ready;
 
@@ -63,7 +71,8 @@ class WearableController extends ChangeNotifier {
 
   void addLog(String line) {
     final t = DateTime.now();
-    log.insert(0, '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')} $line');
+    log.insert(0,
+        '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')} $line');
     if (log.length > 150) log.removeLast();
   }
 
@@ -80,7 +89,8 @@ class WearableController extends ChangeNotifier {
       await loadSpo2();
       notifyListeners();
     }
-    addLog('запуск: часы ${savedId ?? 'не сохранены'}, ключ ${hasKey ? 'есть' : 'нет'}, '
+    addLog(
+        'запуск: часы ${savedId ?? 'не сохранены'}, ключ ${hasKey ? 'есть' : 'нет'}, '
         'состояние ${isConnected ? 'подключено' : 'нет связи'}');
     if (!isConnected && !_busy && savedId != null && hasKey) {
       _userOff = false;
@@ -138,7 +148,8 @@ class WearableController extends ChangeNotifier {
     });
     try {
       await FlutterBluePlus.stopScan();
-      await d.connect(license: License.free, timeout: const Duration(seconds: 20));
+      await d.connect(
+          license: License.free, timeout: const Duration(seconds: 20));
       final svcs = await d.discoverServices();
       BluetoothCharacteristic? find(String svc, String ch) {
         for (final sv in svcs) {
@@ -175,13 +186,15 @@ class WearableController extends ChangeNotifier {
       await db.setSetting('wearable_id', d.remoteId.str);
       _connSub?.cancel();
       _connSub = d.connectionState.listen((s) {
-        if (s == BluetoothConnectionState.disconnected && device != null) _onLost();
+        if (s == BluetoothConnectionState.disconnected && device != null)
+          _onLost();
       });
       return true;
     } catch (e) {
       _set(() {
         status = WearStatus.off;
-        message = 'Не удалось подключиться: $e. Закройте Zepp: часы держат одно соединение.';
+        message =
+            'Не удалось подключиться: $e. Закройте Zepp: часы держат одно соединение.';
       });
       try {
         await d.disconnect();
@@ -265,7 +278,8 @@ class WearableController extends ChangeNotifier {
       try {
         await d.requestMtu(247);
       } catch (_) {}
-      final auth = HuamiAuthenticator(write: w, read: r, secret: secret, mtu: d.mtuNow);
+      final auth =
+          HuamiAuthenticator(write: w, read: r, secret: secret, mtu: d.mtuNow);
       final res = await auth.authenticate();
       if (!res.ok) {
         _set(() {
@@ -330,6 +344,19 @@ class WearableController extends ChangeNotifier {
       addLog('запрос погоды от часов (${p.length} байт, проигнорирован)');
       return;
     }
+    if (type == cfgEndpoint) {
+      _onCfg(p);
+      return;
+    }
+    if (type == findEndpoint) {
+      addLog(
+          'найти часы: ${p.map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      if (p[0] == findStopFromBand && finding) {
+        finding = false;
+        notifyListeners();
+      }
+      return;
+    }
     addLog('0x${type.toRadixString(16).padLeft(4, '0')}: '
         '${p.map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ')}');
     if (type == 0x0029 && p[0] == 0x04 && p.length >= 4) {
@@ -381,7 +408,9 @@ class WearableController extends ChangeNotifier {
     hr = bpm;
     hrAt = now;
     notifyListeners();
-    if (bpm >= 30 && bpm <= 230 && now.difference(_lastHrStore).inSeconds >= 10) {
+    if (bpm >= 30 &&
+        bpm <= 230 &&
+        now.difference(_lastHrStore).inSeconds >= 10) {
       _lastHrStore = now;
       db.upsertActivity([
         ActivityRecordsCompanion.insert(
@@ -391,7 +420,8 @@ class WearableController extends ChangeNotifier {
             value: bpm.toDouble(),
             unit: 'bpm',
             source: kBleSource,
-            externalRecordId: 'ble-hrlive-${now.millisecondsSinceEpoch ~/ 1000}',
+            externalRecordId:
+                'ble-hrlive-${now.millisecondsSinceEpoch ~/ 1000}',
             tzOffsetMin: Value(now.timeZoneOffset.inMinutes),
             sourceName: const Value(_bleName))
       ]);
@@ -400,8 +430,10 @@ class WearableController extends ChangeNotifier {
 
   Future<void> loadSpo2() async {
     final now = DateTime.now();
-    final recs = await db.activityBetween(now.subtract(const Duration(days: 7)), now);
-    final list = recs.where((r) => r.type == 'spo2' && r.source == kBleSource).toList();
+    final recs =
+        await db.activityBetween(now.subtract(const Duration(days: 7)), now);
+    final list =
+        recs.where((r) => r.type == 'spo2' && r.source == kBleSource).toList();
     if (list.isEmpty) return;
     list.sort((a, b) => a.startTime.compareTo(b.startTime));
     spo2 = list.last.value.round();
@@ -433,15 +465,19 @@ class WearableController extends ChangeNotifier {
     final now = DateTime.now();
     final tzMin = now.timeZoneOffset.inMinutes;
     var stepMin = 0, hrN = 0, spoN = 0, sleepMin = 0;
+    var vitals = '';
     String? err;
     try {
       // Версия 2 разбора истории добавила сон: один раз перечитываем последние 3 дня.
-      final threeDays = now.subtract(const Duration(days: 3)).millisecondsSinceEpoch;
-      var since = DateTime.fromMillisecondsSinceEpoch(settings['ble_hist_v'] == '2'
-          ? int.tryParse(settings['ble_last_activity'] ?? '') ?? threeDays
-          : threeDays);
+      final threeDays =
+          now.subtract(const Duration(days: 3)).millisecondsSinceEpoch;
+      var since = DateTime.fromMillisecondsSinceEpoch(
+          settings['ble_hist_v'] == '2'
+              ? int.tryParse(settings['ble_last_activity'] ?? '') ?? threeDays
+              : threeDays);
       for (var round = 0; round < 5; round++) {
-        final res = await fetcher.fetch(fetchTypeActivity, since, onStage: addLog);
+        final res =
+            await fetcher.fetch(fetchTypeActivity, since, onStage: addLog);
         if (!res.ok) {
           err = res.error;
           break;
@@ -449,7 +485,8 @@ class WearableController extends ChangeNotifier {
         if (res.data.isEmpty) break;
         final samples = parseActivity(res.data, res.start!);
         if (samples == null) {
-          err = 'Неожиданный формат данных активности (${res.data.length} байт).';
+          err =
+              'Неожиданный формат данных активности (${res.data.length} байт).';
           break;
         }
         final recs = <ActivityRecordsCompanion>[];
@@ -471,11 +508,14 @@ class WearableController extends ChangeNotifier {
           }
           if (x.isSleep) {
             sleepMin++;
-            for (final t in ['sleep', switch (x.stage) {
-              SleepStage.deep => 'sleepDeep',
-              SleepStage.rem => 'sleepRem',
-              SleepStage.light => 'sleepLight',
-            }]) {
+            for (final t in [
+              'sleep',
+              switch (x.stage) {
+                SleepStage.deep => 'sleepDeep',
+                SleepStage.rem => 'sleepRem',
+                SleepStage.light => 'sleepLight',
+              }
+            ]) {
               recs.add(ActivityRecordsCompanion.insert(
                   type: t,
                   startTime: x.time,
@@ -504,7 +544,8 @@ class WearableController extends ChangeNotifier {
         }
         await db.upsertActivity(recs);
         final last = samples.last.time.add(const Duration(minutes: 1));
-        await db.setSetting('ble_last_activity', '${last.millisecondsSinceEpoch}');
+        await db.setSetting(
+            'ble_last_activity', '${last.millisecondsSinceEpoch}');
         await db.setSetting('ble_hist_v', '2');
         if (!last.isBefore(now) || samples.length < 2) break;
         since = last.toLocal();
@@ -513,7 +554,8 @@ class WearableController extends ChangeNotifier {
         final sSince = DateTime.fromMillisecondsSinceEpoch(
             int.tryParse(settings['ble_last_spo2'] ?? '') ??
                 now.subtract(const Duration(days: 7)).millisecondsSinceEpoch);
-        final res = await fetcher.fetch(fetchTypeSpo2Normal, sSince, onStage: addLog);
+        final res =
+            await fetcher.fetch(fetchTypeSpo2Normal, sSince, onStage: addLog);
         if (!res.ok) {
           err = res.error;
         } else if (res.data.isNotEmpty) {
@@ -530,16 +572,21 @@ class WearableController extends ChangeNotifier {
                     value: x.value.toDouble(),
                     unit: '%',
                     source: kBleSource,
-                    externalRecordId: 'ble-spo2-${x.time.millisecondsSinceEpoch ~/ 1000}',
+                    externalRecordId:
+                        'ble-spo2-${x.time.millisecondsSinceEpoch ~/ 1000}',
                     tzOffsetMin: Value(tzMin),
                     sourceName: const Value(_bleName))
             ]);
             spoN = list.length;
-            final last = list.map((e) => e.time).reduce((a, b) => a.isAfter(b) ? a : b);
-            await db.setSetting(
-                'ble_last_spo2', '${last.add(const Duration(minutes: 1)).millisecondsSinceEpoch}');
+            final last =
+                list.map((e) => e.time).reduce((a, b) => a.isAfter(b) ? a : b);
+            await db.setSetting('ble_last_spo2',
+                '${last.add(const Duration(minutes: 1)).millisecondsSinceEpoch}');
           }
         }
+      }
+      if (err == null) {
+        vitals = await _syncVitals(fetcher, settings, now, tzMin);
       }
     } catch (e) {
       err = 'Ошибка: $e';
@@ -548,8 +595,335 @@ class WearableController extends ChangeNotifier {
     _set(() {
       syncBusy = false;
       syncMsg = err != null
-          ? 'История загружена частично: $err (шаги: $stepMin мин, пульс: $hrN мин, сон: $sleepMin мин, SpO₂: $spoN)'
-          : 'История загружена: минут с шагами $stepMin, с пульсом $hrN, сна $sleepMin мин, измерений SpO₂ $spoN.';
+          ? 'История загружена частично: $err (шаги: $stepMin мин, пульс: $hrN мин, сон: $sleepMin мин, SpO₂: $spoN)$vitals'
+          : 'История загружена: минут с шагами $stepMin, с пульсом $hrN, сна $sleepMin мин, измерений SpO₂ $spoN.$vitals';
+    });
+  }
+
+  /// Пульс покоя, максимальный пульс, стресс и дыхание во сне. Это необязательные данные:
+  /// если часы не поддерживают тип или отклоняют запрос, история не считается неудачной.
+  Future<String> _syncVitals(HuamiFetcher f, Map<String, String> settings,
+      DateTime now, int tzMin) async {
+    var rest = 0, max = 0, stress = 0, resp = 0;
+    DateTime sinceOf(String key,
+        {required int days, Duration back = Duration.zero}) {
+      final ms = int.tryParse(settings[key] ?? '');
+      final t = ms == null
+          ? now.subtract(Duration(days: days))
+          : DateTime.fromMillisecondsSinceEpoch(ms).subtract(back);
+      return t;
+    }
+
+    ActivityRecordsCompanion rec(
+            String type, DateTime t, double v, String unit, String id) =>
+        ActivityRecordsCompanion.insert(
+            type: type,
+            startTime: t,
+            endTime: t.add(const Duration(minutes: 1)),
+            value: v,
+            unit: unit,
+            source: kBleSource,
+            externalRecordId: id,
+            tzOffsetMin: Value(tzMin),
+            sourceName: const Value(_bleName));
+
+    Future<void> dayHeart(
+        int type, String key, String recType, String tag, bool isRest) async {
+      final r = await f.fetch(
+          type, sinceOf(key, days: 30, back: const Duration(days: 2)),
+          onStage: addLog);
+      if (!r.ok) {
+        addLog('0x${type.toRadixString(16)}: ${r.error}');
+        return;
+      }
+      if (r.data.isEmpty) return;
+      final list = parseDayHeart(r.data);
+      if (list == null) {
+        addLog(
+            '0x${type.toRadixString(16)}: неожиданный формат (${r.data.length} байт)');
+        return;
+      }
+      final ok = [
+        for (final x in list)
+          if (x.bpm >= 30 && x.bpm <= 230) x
+      ];
+      await db.upsertActivity([
+        for (final x in ok)
+          rec(recType, x.time, x.bpm.toDouble(), 'bpm',
+              'ble-$tag-${x.time.millisecondsSinceEpoch ~/ 1000}')
+      ]);
+      if (ok.isNotEmpty) {
+        final last =
+            ok.map((e) => e.time).reduce((a, b) => a.isAfter(b) ? a : b);
+        await db.setSetting(key, '${last.millisecondsSinceEpoch}');
+        if (isRest) {
+          rest += ok.length;
+        } else {
+          max += ok.length;
+        }
+      }
+    }
+
+    try {
+      await dayHeart(
+          fetchTypeRestingHr, 'ble_last_rhr', 'restingHeartRate', 'rhr', true);
+      await dayHeart(
+          fetchTypeMaxHr, 'ble_last_maxhr', 'maxHeartRate', 'maxhr', false);
+
+      final s1 = await f.fetch(
+          fetchTypeStressAuto, sinceOf('ble_last_stress', days: 7),
+          onStage: addLog);
+      if (!s1.ok) {
+        addLog('стресс: ${s1.error}');
+      } else if (s1.data.isNotEmpty && s1.start != null) {
+        final list = parseStress(s1.data, s1.start!);
+        await db.upsertActivity([
+          for (final x in list)
+            rec('stress', x.time, x.value.toDouble(), 'score',
+                'ble-stress-${x.time.millisecondsSinceEpoch ~/ 60000}')
+        ]);
+        if (list.isNotEmpty) {
+          stress = list.length;
+          await db.setSetting('ble_last_stress',
+              '${list.last.time.add(const Duration(minutes: 1)).millisecondsSinceEpoch}');
+        }
+      }
+
+      final s2 = await f.fetch(
+          fetchTypeSleepResp, sinceOf('ble_last_resp', days: 14),
+          onStage: addLog);
+      if (!s2.ok) {
+        addLog('дыхание: ${s2.error}');
+      } else if (s2.data.isNotEmpty) {
+        final list = parseSleepResp(s2.data);
+        if (list == null) {
+          addLog('дыхание: неожиданный формат (${s2.data.length} байт)');
+        } else {
+          final ok = [
+            for (final x in list)
+              if (x.value >= 4 && x.value <= 60) x
+          ];
+          await db.upsertActivity([
+            for (final x in ok)
+              rec('respiration', x.time, x.value.toDouble(), 'br/min',
+                  'ble-resp-${x.time.millisecondsSinceEpoch ~/ 1000}')
+          ]);
+          if (ok.isNotEmpty) {
+            resp = ok.length;
+            await db.setSetting('ble_last_resp',
+                '${ok.map((e) => e.time).reduce((a, b) => a.isAfter(b) ? a : b).add(const Duration(seconds: 1)).millisecondsSinceEpoch}');
+          }
+        }
+      }
+    } catch (e) {
+      addLog('показатели покоя/стресса: $e');
+    }
+    return ' Пульс покоя: $rest, макс.: $max, стресс: $stress, дыхание: $resp.';
+  }
+
+  // ---------- настройки часов ----------
+
+  void _onCfg(Uint8List p) {
+    addLog(
+        'настройки: ${p.take(40).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ')}');
+    if (p[0] == cmdResponse) {
+      final parsed = parseHealthResponse(p);
+      if (parsed != null) {
+        watchCfg = (watchCfg ?? const WatchHealthSettings()).merge(parsed);
+        unawaited(_rememberOriginalCfg());
+      }
+    }
+    final w = _cfgWait;
+    if (w != null && !w.isCompleted && (p[0] == cmdResponse || p[0] == cmdAck))
+      w.complete(p);
+    notifyListeners();
+  }
+
+  Future<void> _rememberOriginalCfg() async {
+    final c = watchCfg;
+    if (c == null || c.isEmpty) return;
+    final saved = (await db.allSettings())['watch_cfg_orig'];
+    if (saved == null)
+      await db.setSetting('watch_cfg_orig', jsonEncode(c.toJson()));
+  }
+
+  Future<Uint8List?> _cfgExchange(Uint8List payload) async {
+    final s = session;
+    if (s == null) return null;
+    _cfgWait = Completer<Uint8List>();
+    try {
+      await s.send(cfgEndpoint, payload);
+      return await _cfgWait!.future.timeout(const Duration(seconds: 6));
+    } on TimeoutException {
+      return null;
+    } finally {
+      _cfgWait = null;
+    }
+  }
+
+  /// Читает текущие настройки мониторинга с часов.
+  Future<bool> readWatchSettings() async {
+    if (session == null || cfgBusy) return false;
+    cfgBusy = true;
+    cfgMsg = null;
+    notifyListeners();
+    final r = await _cfgExchange(encodeHealthRequest());
+    final ok =
+        r != null && r[0] == cmdResponse && parseHealthResponse(r) != null;
+    cfgBusy = false;
+    cfgMsg = ok
+        ? null
+        : 'Часы не вернули настройки мониторинга (не поддерживается или нет ответа).';
+    notifyListeners();
+    return ok;
+  }
+
+  /// Записывает значения и проверяет чтением обратно. Возвращает текст ошибки или null.
+  Future<String?> writeWatchSettings(Map<int, Object> values) async {
+    if (session == null) return 'Часы не подключены.';
+    if (cfgBusy) return 'Дождитесь завершения предыдущей операции.';
+    if (watchCfg == null)
+      return 'Сначала прочитайте текущие настройки с часов.';
+    cfgBusy = true;
+    cfgMsg = null;
+    notifyListeners();
+    String? err;
+    try {
+      final ack = await _cfgExchange(encodeHealthSet(values));
+      if (ack == null) {
+        err = 'Часы не подтвердили запись.';
+      } else {
+        addLog(
+            'настройки: подтверждение ${ack.map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ')}');
+        final back =
+            await _cfgExchange(encodeHealthRequest(values.keys.toList()));
+        final parsed = back == null ? null : parseHealthResponse(back);
+        if (parsed == null) {
+          err = 'Не удалось проверить результат чтением обратно.';
+        } else {
+          final j = parsed.toJson();
+          final want = WatchHealthSettings(
+                  hrInterval: values[keyHrInterval] as int?,
+                  sleepHr: values[keySleepHr] as bool?,
+                  sleepBreathing: values[keySleepBreathing] as bool?,
+                  stress: values[keyStress] as bool?,
+                  spo2AllDay: values[keySpo2AllDay] as bool?)
+              .toJson();
+          for (final e in want.entries) {
+            if (j[e.key] != e.value) {
+              err =
+                  'Часы не приняли изменение (после записи значение прежнее).';
+            }
+          }
+        }
+      }
+    } catch (e) {
+      err = 'Ошибка записи: $e';
+    }
+    cfgBusy = false;
+    cfgMsg = err;
+    notifyListeners();
+    return err;
+  }
+
+  /// Возвращает значения, которые были на часах при первом чтении приложением.
+  Future<String?> restoreOriginalWatchSettings() async {
+    final raw = (await db.allSettings())['watch_cfg_orig'];
+    if (raw == null) return 'Исходные значения ещё не сохранены.';
+    final o = WatchHealthSettings.fromJson(jsonDecode(raw) as Map);
+    return writeWatchSettings({
+      if (o.hrInterval != null) keyHrInterval: o.hrInterval!,
+      if (o.sleepHr != null) keySleepHr: o.sleepHr!,
+      if (o.sleepBreathing != null) keySleepBreathing: o.sleepBreathing!,
+      if (o.stress != null) keyStress: o.stress!,
+      if (o.spo2AllDay != null) keySpo2AllDay: o.spo2AllDay!,
+    });
+  }
+
+  /// Синхронизация времени через характеристику Current Time (2A2B).
+  Future<String?> syncWatchTime() async {
+    for (final sv in services) {
+      for (final ch in sv.characteristics) {
+        final u = ch.uuid.str128.toLowerCase();
+        if (u.startsWith('00002a2b')) {
+          try {
+            await ch.write(currentTimeBytes(DateTime.now()),
+                withoutResponse:
+                    ch.properties.writeWithoutResponse && !ch.properties.write);
+            addLog('время часов синхронизировано');
+            return null;
+          } catch (e) {
+            addLog('время: $e');
+            return 'Часы отклонили установку времени: $e';
+          }
+        }
+      }
+    }
+    return 'У часов не найдена характеристика времени.';
+  }
+
+  /// «Найти часы»: вибрация и сигнал на часах, пока не остановите.
+  Future<String?> findWatch(bool start) async {
+    final s = session;
+    if (s == null) return 'Часы не подключены.';
+    try {
+      await s.send(findEndpoint, [start ? findStart : findStopFromPhone]);
+      finding = start;
+      notifyListeners();
+      return null;
+    } catch (e) {
+      return 'Не удалось отправить команду: $e';
+    }
+  }
+
+  /// Диагностика: какие типы истории отвечают часы (для поиска HRV и других данных).
+  /// Только чтение. Для каждого типа в журнал пишется объявленный размер и начало данных.
+  Future<void> probeFetchTypes() async {
+    if (session == null || syncBusy) return;
+    BluetoothCharacteristic? c4, c5;
+    for (final sv in services) {
+      for (final ch in sv.characteristics) {
+        final u = ch.uuid.str.toLowerCase();
+        if (u == _uFetchCtl) c4 = ch;
+        if (u == _uFetchData) c5 = ch;
+      }
+    }
+    if (c4 == null || c5 == null) {
+      _set(() => syncMsg = 'У часов нет каналов 0004/0005 для истории.');
+      return;
+    }
+    _set(() {
+      syncBusy = true;
+      syncMsg = 'Поиск типов данных…';
+    });
+    final f = HuamiFetcher(c4, c5);
+    addLog('ПОИСК ТИПОВ: старт (0x01–0x40, лимит 20000 байт на тип)');
+    final since = DateTime.now().subtract(const Duration(days: 3));
+    var answered = 0;
+    for (var t = 0x01; t <= 0x40; t++) {
+      if (t == 0x07) continue; // журналы отладки: объёмные и не нужны
+      try {
+        final r = await f.fetch(t, since,
+            timeout: const Duration(seconds: 8), maxBytes: 20000);
+        if (r.ok && r.data.isNotEmpty) {
+          answered++;
+          final head = r.data
+              .take(48)
+              .map((b) => b.toRadixString(16).padLeft(2, '0'))
+              .join(' ');
+          addLog('ТИП 0x${t.toRadixString(16)}: ${r.data.length} байт: $head');
+        } else {
+          addLog('ТИП 0x${t.toRadixString(16)}: ${r.error ?? 'пусто'}');
+        }
+      } catch (e) {
+        addLog('ТИП 0x${t.toRadixString(16)}: ошибка $e');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+    addLog('ПОИСК ТИПОВ: готово, с данными: $answered');
+    _set(() {
+      syncBusy = false;
+      syncMsg = 'Поиск типов завершён: с данными $answered. Скопируйте журнал.';
     });
   }
 

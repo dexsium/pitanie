@@ -14,6 +14,7 @@ import '../health_integration/devices_page.dart';
 import '../sleep/sleep_page.dart';
 import 'heart_rate_page.dart';
 import 'huami_auth.dart';
+import 'watch_settings_page.dart';
 import 'wearable_controller.dart';
 
 /// Раздел «Умные часы». Вся логика связи живёт в [WearableController] и работает
@@ -34,9 +35,12 @@ class _WearablePageState extends ConsumerState<WearablePage> {
   @override
   void initState() {
     super.initState();
-    _subs.add(FlutterBluePlus.adapterState.listen((s) => setState(() => _adapter = s)));
-    _subs.add(FlutterBluePlus.scanResults.listen((r) => setState(() => _results = r)));
-    _subs.add(FlutterBluePlus.isScanning.listen((s) => setState(() => _scanning = s)));
+    _subs.add(FlutterBluePlus.adapterState
+        .listen((s) => setState(() => _adapter = s)));
+    _subs.add(FlutterBluePlus.scanResults
+        .listen((r) => setState(() => _results = r)));
+    _subs.add(FlutterBluePlus.isScanning
+        .listen((s) => setState(() => _scanning = s)));
     ref.read(wearableProvider).start();
   }
 
@@ -55,17 +59,22 @@ class _WearablePageState extends ConsumerState<WearablePage> {
 
   bool _isCandidate(ScanResult r) {
     final n = _name(r).toLowerCase();
-    if (n.contains('amazfit') || n.contains('gtr') || n.contains('zepp')) return true;
+    if (n.contains('amazfit') || n.contains('gtr') || n.contains('zepp'))
+      return true;
     return r.advertisementData.serviceUuids.any((u) {
       final x = u.str.toLowerCase();
-      return x.startsWith('0000fee0') || x.startsWith('0000fee1') || x == 'fee0' || x == 'fee1';
+      return x.startsWith('0000fee0') ||
+          x.startsWith('0000fee1') ||
+          x == 'fee0' ||
+          x == 'fee1';
     });
   }
 
   String _details(ScanResult r) {
     final ad = r.advertisementData;
     return [
-      if (ad.serviceUuids.isNotEmpty) 'службы: ${ad.serviceUuids.map((u) => u.str).join(', ')}',
+      if (ad.serviceUuids.isNotEmpty)
+        'службы: ${ad.serviceUuids.map((u) => u.str).join(', ')}',
       if (ad.manufacturerData.isNotEmpty)
         'производитель: ${ad.manufacturerData.keys.map((k) => '0x${k.toRadixString(16)}').join(', ')}',
       ad.connectable ? 'подключаемое' : 'не подключаемое',
@@ -76,7 +85,8 @@ class _WearablePageState extends ConsumerState<WearablePage> {
     setState(() => _scanError = null);
     try {
       if (_adapter != BluetoothAdapterState.on) {
-        setState(() => _scanError = 'Bluetooth выключен. Включите его и повторите поиск.');
+        setState(() =>
+            _scanError = 'Bluetooth выключен. Включите его и повторите поиск.');
         return;
       }
       await FlutterBluePlus.startScan(timeout: const Duration(seconds: 12));
@@ -115,7 +125,9 @@ class _WearablePageState extends ConsumerState<WearablePage> {
                 decoration: InputDecoration(labelText: 'Ключ', errorText: err)),
           ]),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Отмена')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Отмена')),
             FilledButton(
                 style: FilledButton.styleFrom(minimumSize: const Size(90, 40)),
                 onPressed: () async {
@@ -144,7 +156,14 @@ class _WearablePageState extends ConsumerState<WearablePage> {
     final shown = _results.where((r) => _showAll || _isCandidate(r)).toList()
       ..sort((a, b) => b.rssi.compareTo(a.rssi));
     return Scaffold(
-      appBar: AppBar(title: const Text('Умные часы')),
+      appBar: AppBar(title: const Text('Умные часы'), actions: [
+        IconButton(
+          tooltip: 'Настройки часов',
+          icon: const Icon(Icons.settings_outlined),
+          onPressed: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const WatchSettingsPage())),
+        ),
+      ]),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         AppCard(
           child: Text(
@@ -155,18 +174,25 @@ class _WearablePageState extends ConsumerState<WearablePage> {
           ),
         ),
         const SizedBox(height: 12),
-        if (!c.isConnected) ..._search(context, c, shown) else ..._connected(context, c),
+        if (!c.isConnected)
+          ..._search(context, c, shown)
+        else
+          ..._connected(context, c),
       ]),
     );
   }
 
-  List<Widget> _search(BuildContext context, WearableController c, List<ScanResult> shown) {
+  List<Widget> _search(
+      BuildContext context, WearableController c, List<ScanResult> shown) {
     final cs = Theme.of(context).colorScheme;
     return [
       if (c.status == WearStatus.connecting)
         const AppCard(
             child: Row(children: [
-          SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)),
+          SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2.5)),
           SizedBox(width: 12),
           Expanded(child: Text('Подключение к часам…')),
         ])),
@@ -175,14 +201,16 @@ class _WearablePageState extends ConsumerState<WearablePage> {
             onPressed: () => c.reconnect(),
             icon: const Icon(Icons.bluetooth_connected),
             label: const Text('Подключиться к сохранённым часам')),
-        TextButton(onPressed: c.forget, child: const Text('Забыть сохранённые часы')),
+        TextButton(
+            onPressed: c.forget, child: const Text('Забыть сохранённые часы')),
       ],
       if (c.message != null)
         Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Text(c.message!, style: TextStyle(color: cs.error))),
       FilledButton.icon(
-          onPressed: _scanning || c.status == WearStatus.connecting ? null : _scan,
+          onPressed:
+              _scanning || c.status == WearStatus.connecting ? null : _scan,
           icon: const Icon(Icons.bluetooth_searching),
           label: Text(_scanning ? 'Поиск…' : 'Найти часы')),
       SwitchListTile(
@@ -196,7 +224,8 @@ class _WearablePageState extends ConsumerState<WearablePage> {
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(_scanError!, style: TextStyle(color: cs.error))),
       if (shown.isEmpty && !_scanning)
-        const EmptyHint('Часы не найдены. Проверьте: на часах включён Bluetooth, Zepp закрыт '
+        const EmptyHint(
+            'Часы не найдены. Проверьте: на часах включён Bluetooth, Zepp закрыт '
             'и не держит соединение. Если не помогло, включите «Показывать все устройства».'),
       for (final r in shown)
         Padding(
@@ -207,13 +236,18 @@ class _WearablePageState extends ConsumerState<WearablePage> {
               const Icon(Icons.watch_outlined),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(_name(r).isEmpty ? 'Без названия' : _name(r),
-                      style: const TextStyle(fontWeight: FontWeight.w700)),
-                  Text(r.device.remoteId.str,
-                      style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                  Text(_details(r), style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant)),
-                ]),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(_name(r).isEmpty ? 'Без названия' : _name(r),
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                      Text(r.device.remoteId.str,
+                          style: TextStyle(
+                              fontSize: 12, color: cs.onSurfaceVariant)),
+                      Text(_details(r),
+                          style: TextStyle(
+                              fontSize: 11.5, color: cs.onSurfaceVariant)),
+                    ]),
               ),
               Text('${r.rssi} dBm'),
             ]),
@@ -248,13 +282,14 @@ class _WearablePageState extends ConsumerState<WearablePage> {
       if (c.syncMsg != null)
         Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Text(c.syncMsg!, style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant))),
+            child: Text(c.syncMsg!,
+                style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant))),
       const SizedBox(height: 10),
       Row(children: [
         Expanded(
           child: OutlinedButton.icon(
-              onPressed: () => Navigator.push(
-                  context, MaterialPageRoute(builder: (_) => const DevicesPage())),
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const DevicesPage())),
               icon: const Icon(Icons.tune),
               label: const Text('Источники')),
         ),
@@ -271,47 +306,73 @@ class _WearablePageState extends ConsumerState<WearablePage> {
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
           tilePadding: EdgeInsets.zero,
-          title: const Text('Диагностика', style: TextStyle(fontWeight: FontWeight.w700)),
+          title: const Text('Диагностика',
+              style: TextStyle(fontWeight: FontWeight.w700)),
           children: [
             AppCard(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Text('Журнал обмена', style: TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.copy),
-                  label: const Text('Скопировать журнал'),
-                  onPressed: () async {
-                    final text = [
-                      'Статус: ${c.status.name}; ${c.message ?? ''}',
-                      'История: ${c.syncMsg ?? '—'}',
-                      'Прошивка: ${c.fw ?? '—'}; аппаратная: ${c.hw ?? '—'}',
-                      ...c.log.reversed,
-                    ].join('\n');
-                    await Clipboard.setData(ClipboardData(text: text));
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Журнал скопирован')));
-                    }
-                  },
-                ),
-                const SizedBox(height: 8),
-                if (c.log.isEmpty)
-                  Text('Журнал пуст.', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                for (final l in c.log)
-                  Text(l, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-              ]),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Журнал обмена',
+                        style: TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.search),
+                      label: const Text('Найти типы данных (HRV и др.)'),
+                      onPressed: c.session == null || c.syncBusy
+                          ? null
+                          : c.probeFetchTypes,
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                        'Только чтение: часы по очереди спрашиваются о типах истории, результат '
+                        'пишется в журнал. Займёт около минуты; затем нажмите «Скопировать журнал».',
+                        style: TextStyle(fontSize: 12)),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.copy),
+                      label: const Text('Скопировать журнал'),
+                      onPressed: () async {
+                        final text = [
+                          'Статус: ${c.status.name}; ${c.message ?? ''}',
+                          'История: ${c.syncMsg ?? '—'}',
+                          'Прошивка: ${c.fw ?? '—'}; аппаратная: ${c.hw ?? '—'}',
+                          ...c.log.reversed,
+                        ].join('\n');
+                        await Clipboard.setData(ClipboardData(text: text));
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Журнал скопирован')));
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    if (c.log.isEmpty)
+                      Text('Журнал пуст.',
+                          style: TextStyle(
+                              fontSize: 11, color: cs.onSurfaceVariant)),
+                    for (final l in c.log)
+                      Text(l,
+                          style: TextStyle(
+                              fontSize: 11, color: cs.onSurfaceVariant)),
+                  ]),
             ),
             for (final sv in c.services)
               AppCard(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(sv.uuid.str, style: const TextStyle(fontWeight: FontWeight.w700)),
-                  for (final ch in sv.characteristics)
-                    Text(
-                        '  ${ch.uuid.str}  '
-                        '${ch.properties.read ? 'R' : ''}${ch.properties.write ? 'W' : ''}'
-                        '${ch.properties.notify ? 'N' : ''}',
-                        style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant)),
-                ]),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(sv.uuid.str,
+                          style: const TextStyle(fontWeight: FontWeight.w700)),
+                      for (final ch in sv.characteristics)
+                        Text(
+                            '  ${ch.uuid.str}  '
+                            '${ch.properties.read ? 'R' : ''}${ch.properties.write ? 'W' : ''}'
+                            '${ch.properties.notify ? 'N' : ''}',
+                            style: TextStyle(
+                                fontSize: 11.5, color: cs.onSurfaceVariant)),
+                    ]),
               ),
           ],
         ),
@@ -333,26 +394,32 @@ class _WearablePageState extends ConsumerState<WearablePage> {
           width: 56,
           height: 56,
           decoration: BoxDecoration(
-              color: kPrimary.withOpacity(0.14), borderRadius: BorderRadius.circular(18)),
+              color: kPrimary.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(18)),
           child: const Icon(Icons.watch_outlined, color: kPrimary, size: 30),
         ),
         const SizedBox(width: 14),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Amazfit GTR 4',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 2),
             Row(children: [
-              Icon(Icons.circle, size: 10, color: c.status == WearStatus.ready ? kGreen : kOrange),
+              Icon(Icons.circle,
+                  size: 10,
+                  color: c.status == WearStatus.ready ? kGreen : kOrange),
               const SizedBox(width: 6),
               Flexible(child: Text(statusText)),
             ]),
-            if (c.charging) const Text('Заряжается', style: TextStyle(fontSize: 12.5)),
+            if (c.charging)
+              const Text('Заряжается', style: TextStyle(fontSize: 12.5)),
             if (c.lastRead != null)
               Text('Последнее получение данных: ${_hhmm(c.lastRead!)}',
                   style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
             if (c.fw != null)
-              Text('Прошивка: ${c.fw}${c.hw == null ? '' : '  •  аппаратная: ${c.hw}'}',
+              Text(
+                  'Прошивка: ${c.fw}${c.hw == null ? '' : '  •  аппаратная: ${c.hw}'}',
                   style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
           ]),
         ),
@@ -367,8 +434,11 @@ class _WearablePageState extends ConsumerState<WearablePage> {
                           : bat > 15
                               ? Icons.battery_2_bar
                               : Icons.battery_alert,
-              color: bat == null ? cs.onSurfaceVariant : (bat > 15 ? kGreen : kRed)),
-          Text(bat == null ? '—' : '$bat%', style: const TextStyle(fontWeight: FontWeight.w800)),
+              color: bat == null
+                  ? cs.onSurfaceVariant
+                  : (bat > 15 ? kGreen : kRed)),
+          Text(bat == null ? '—' : '$bat%',
+              style: const TextStyle(fontWeight: FontWeight.w800)),
         ]),
       ]),
     );
@@ -380,16 +450,21 @@ class _WearablePageState extends ConsumerState<WearablePage> {
     final ok = c.status == WearStatus.ready;
     return AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Авторизация', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        const Text('Авторизация',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
         const SizedBox(height: 6),
-        Text(c.hasKey ? 'Ключ сохранён в защищённом хранилище.' : 'Ключ не введён.',
+        Text(
+            c.hasKey
+                ? 'Ключ сохранён в защищённом хранилище.'
+                : 'Ключ не введён.',
             style: TextStyle(color: cs.onSurfaceVariant)),
         if (c.message != null)
           Padding(
             padding: const EdgeInsets.only(top: 6),
             child: Text(c.message!,
                 style: TextStyle(
-                    color: ok ? kGreen : (busy ? null : cs.error), fontWeight: FontWeight.w600)),
+                    color: ok ? kGreen : (busy ? null : cs.error),
+                    fontWeight: FontWeight.w600)),
           ),
         const SizedBox(height: 10),
         Row(children: [
@@ -402,7 +477,8 @@ class _WearablePageState extends ConsumerState<WearablePage> {
           Expanded(
             child: FilledButton(
                 onPressed: busy || !c.hasKey || ok ? null : c.authorize,
-                child: Text(busy ? 'Подождите…' : (ok ? 'Готово' : 'Авторизоваться'))),
+                child: Text(
+                    busy ? 'Подождите…' : (ok ? 'Готово' : 'Авторизоваться'))),
           ),
         ]),
         if (c.hasKey)
@@ -427,32 +503,38 @@ class _WearablePageState extends ConsumerState<WearablePage> {
 
     final pulse = c.hr != null
         ? _Metric('Пульс', Icons.favorite, kRed, '${c.hr}', 'уд/мин',
-            'Bluetooth · ${_hhmm(c.hrAt!)}',
-            onTap: _openHr)
+            'Bluetooth · ${_hhmm(c.hrAt!)}', onTap: _openHr)
         : (act?.avgHr != null
-            ? _Metric('Пульс', Icons.favorite, kRed, fmt0(act!.avgHr!), 'уд/мин',
-                'среднее за день · $health',
-                onTap: _openHr)
-            : _Metric('Пульс', Icons.favorite, kRed, null, '', 'Недоступно', onTap: _openHr));
+            ? _Metric('Пульс', Icons.favorite, kRed, fmt0(act!.avgHr!),
+                'уд/мин', 'среднее за день · $health', onTap: _openHr)
+            : _Metric('Пульс', Icons.favorite, kRed, null, '', 'Недоступно',
+                onTap: _openHr));
     final steps = c.steps != null
         ? _Metric('Шаги', Icons.directions_walk, kBlue, fmt0(c.steps!), '',
             'Bluetooth · ${_hhmm(c.stepsAt!)}')
         : (act != null && act.steps > 0)
             ? _Metric('Шаги', Icons.directions_walk, kBlue, fmt0(act.steps), '',
                 'сегодня · $health')
-            : _Metric('Шаги', Icons.directions_walk, kBlue, null, '', 'Недоступно');
+            : _Metric(
+                'Шаги', Icons.directions_walk, kBlue, null, '', 'Недоступно');
     final kcal = (act != null && act.activeKcal > 0)
         ? _Metric('Активные калории', Icons.local_fire_department, kOrange,
             fmt0(act.activeKcal), 'ккал', 'без базового обмена · $health')
-        : _Metric('Активные калории', Icons.local_fire_department, kOrange, null, '',
-            'Недоступно (нет данных с часов)');
+        : _Metric('Активные калории', Icons.local_fire_department, kOrange,
+            null, '', 'Недоступно (нет данных с часов)');
     final sleep = (act != null && act.sleepMinutes > 0)
-        ? _Metric('Сон', Icons.bedtime_outlined, kViolet, hm(act.sleepMinutes), '',
+        ? _Metric(
+            'Сон',
+            Icons.bedtime_outlined,
+            kViolet,
+            hm(act.sleepMinutes),
+            '',
             act.sleepStart == null
                 ? 'за ночь · $health'
                 : '${_hhmm(act.sleepStart!.toLocal())}–${_hhmm(act.sleepEnd!.toLocal())} · глубокий ${hm(act.sleepDeepMin)}, REM ${hm(act.sleepRemMin)} (оценка)',
             onTap: _openSleep)
-        : _Metric('Сон', Icons.bedtime_outlined, kViolet, null, '', 'Недоступно',
+        : _Metric(
+            'Сон', Icons.bedtime_outlined, kViolet, null, '', 'Недоступно',
             onTap: _openSleep);
     final spo2 = c.spo2 != null
         ? _Metric('SpO₂', Icons.bloodtype_outlined, kBlue, '${c.spo2}', '%',
@@ -464,18 +546,21 @@ class _WearablePageState extends ConsumerState<WearablePage> {
       LayoutBuilder(builder: (context, box) {
         final w = (box.maxWidth - 10) / 2;
         return Wrap(spacing: 10, runSpacing: 10, children: [
-          for (final m in [pulse, steps, kcal, sleep, spo2]) SizedBox(width: w, child: m),
+          for (final m in [pulse, steps, kcal, sleep, spo2])
+            SizedBox(width: w, child: m),
         ]);
       }),
       const SizedBox(height: 12),
     ];
   }
 
-  void _openHr() =>
-      Navigator.push(context, MaterialPageRoute(builder: (_) => const HeartRatePage()));
+  void _openHr() => Navigator.push(
+      context, MaterialPageRoute(builder: (_) => const HeartRatePage()));
 
-  void _openSleep() => Navigator.push(context,
-      MaterialPageRoute(builder: (_) => SleepPage(day: dayStart(DateTime.now()))));
+  void _openSleep() => Navigator.push(
+      context,
+      MaterialPageRoute(
+          builder: (_) => SleepPage(day: dayStart(DateTime.now()))));
 }
 
 class _Metric extends StatelessWidget {
@@ -484,7 +569,8 @@ class _Metric extends StatelessWidget {
   final Color color;
   final String? value;
   final VoidCallback? onTap;
-  const _Metric(this.title, this.icon, this.color, this.value, this.unit, this.caption,
+  const _Metric(
+      this.title, this.icon, this.color, this.value, this.unit, this.caption,
       {this.onTap});
 
   @override
@@ -499,22 +585,30 @@ class _Metric extends StatelessWidget {
           Flexible(
               child: Text(title,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600))),
         ]),
         const SizedBox(height: 8),
         if (value == null)
           Text('Недоступно',
               style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant))
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurfaceVariant))
         else
           Text.rich(TextSpan(children: [
             TextSpan(
-                text: value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+                text: value,
+                style:
+                    const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
             if (unit.isNotEmpty)
-              TextSpan(text: ' $unit', style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
+              TextSpan(
+                  text: ' $unit',
+                  style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
           ])),
         const SizedBox(height: 4),
-        Text(caption, style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant)),
+        Text(caption,
+            style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant)),
       ]),
     );
   }

@@ -1,6 +1,8 @@
 // Загрузка истории с часов Huami / Zepp OS (характеристики 0004 и 0005).
 // Протокол описан по Gadgetbridge (AGPLv3): AbstractFetchOperation,
-// FetchActivityOperation, FetchSpo2NormalOperation. Реализация написана заново.
+// FetchActivityOperation, FetchSpo2NormalOperation, FetchHeartRateRestingOperation,
+// FetchHeartRateMaxOperation, FetchStressAutoOperation, FetchSleepRespiratoryRateOperation.
+// Реализация написана заново.
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -10,6 +12,10 @@ import 'huami_crypto.dart';
 
 const fetchTypeActivity = 0x01;
 const fetchTypeSpo2Normal = 0x25;
+const fetchTypeStressAuto = 0x13;
+const fetchTypeSleepResp = 0x38;
+const fetchTypeRestingHr = 0x3a;
+const fetchTypeMaxHr = 0x3d;
 
 class FetchResult {
   final Uint8List data;
@@ -47,13 +53,16 @@ class HuamiFetcher {
   final BluetoothCharacteristic dataChar; // 0005
   HuamiFetcher(this.control, this.dataChar);
 
-  Future<void> _write(List<int> v) =>
-      control.write(v, withoutResponse: control.properties.writeWithoutResponse);
+  Future<void> _write(List<int> v) => control.write(v,
+      withoutResponse: control.properties.writeWithoutResponse);
 
   /// Запрашивает данные [type] начиная с [since]. Подтверждает приём так, чтобы
   /// данные оставались на часах (0x09), ничего с часов не удаляется.
+  /// [maxBytes]: если часы объявляют больше, данные не загружаются (для диагностики).
   Future<FetchResult> fetch(int type, DateTime since,
-      {Duration timeout = const Duration(seconds: 20), void Function(String)? onStage}) async {
+      {Duration timeout = const Duration(seconds: 20),
+      void Function(String)? onStage,
+      int? maxBytes}) async {
     final buffer = BytesBuilder();
     final response = StreamController<Uint8List>();
     var lastCounter = -1;
@@ -62,9 +71,11 @@ class HuamiFetcher {
     final it = StreamIterator(response.stream);
     try {
       await control.setNotifyValue(true);
-      ctlSub = control.onValueReceived.listen((v) => response.add(Uint8List.fromList(v)));
+      ctlSub = control.onValueReceived
+          .listen((v) => response.add(Uint8List.fromList(v)));
       Future<Uint8List> next() async {
-        if (!await it.moveNext().timeout(timeout)) throw StateError('соединение закрыто');
+        if (!await it.moveNext().timeout(timeout))
+          throw StateError('соединение закрыто');
         return it.current;
       }
 
@@ -73,16 +84,23 @@ class HuamiFetcher {
       final r1 = await next();
       onStage?.call('тип 0x${type.toRadixString(16)}: ответ ${_hex(r1)}');
       if (r1.length < 3 || r1[0] != 0x10 || r1[1] != 0x01 || r1[2] != 0x01) {
-        return FetchResult(Uint8List(0), null, 'Часы отклонили запрос (${_hex(r1)})');
+        return FetchResult(
+            Uint8List(0), null, 'Часы отклонили запрос (${_hex(r1)})');
       }
       if (r1.length < 15) {
-        return FetchResult(Uint8List(0), null, 'Неожиданный ответ часов (${_hex(r1)})');
+        return FetchResult(
+            Uint8List(0), null, 'Неожиданный ответ часов (${_hex(r1)})');
       }
       final expected = ByteData.sublistView(r1).getUint32(3, Endian.little);
       final start = parseFetchTime(r1, 7);
       if (expected == 0) {
         await _write([0x03, 0x09]);
         return FetchResult(Uint8List(0), start);
+      }
+      if (maxBytes != null && expected > maxBytes) {
+        await _write([0x03, 0x09]);
+        return FetchResult(Uint8List(0), start,
+            'Объявлено $expected байт, больше лимита $maxBytes');
       }
 
       await dataChar.setNotifyValue(true);
@@ -100,18 +118,22 @@ class HuamiFetcher {
       final r2 = await next();
       onStage?.call('передача завершена: ${buffer.length} байт');
       if (r2.length < 3 || r2[0] != 0x10 || r2[1] != 0x02 || r2[2] != 0x01) {
-        return FetchResult(Uint8List(0), start, 'Часы прервали передачу (${_hex(r2)})');
+        return FetchResult(
+            Uint8List(0), start, 'Часы прервали передачу (${_hex(r2)})');
       }
       final data = buffer.toBytes();
-      if (!valid) return FetchResult(Uint8List(0), start, 'Потеряны пакеты данных, повторите');
+      if (!valid)
+        return FetchResult(
+            Uint8List(0), start, 'Потеряны пакеты данных, повторите');
       // Для активности часы называют число минутных записей (по 8 байт), для остального — байты.
-      final expectedBytes = type == fetchTypeActivity && data.length == expected * 8
-          ? expected * 8
-          : expected;
+      final expectedBytes =
+          type == fetchTypeActivity && data.length == expected * 8
+              ? expected * 8
+              : expected;
       if (data.length != expectedBytes) {
         await _write([0x03, 0x09]);
-        return FetchResult(
-            Uint8List(0), start, 'Получено ${data.length} байт из $expected, повторите');
+        return FetchResult(Uint8List(0), start,
+            'Получено ${data.length} байт из $expected, повторите');
       }
       String? warn;
       if (r2.length == 7) {
@@ -120,7 +142,8 @@ class HuamiFetcher {
           // Для активности Gadgetbridge тоже не проверяет сумму; для остальных это ошибка.
           if (type != fetchTypeActivity) {
             await _write([0x03, 0x09]);
-            return FetchResult(Uint8List(0), start, 'Контрольная сумма не совпала');
+            return FetchResult(
+                Uint8List(0), start, 'Контрольная сумма не совпала');
           }
           warn = null;
         }
@@ -140,7 +163,9 @@ class HuamiFetcher {
       await ctlSub?.cancel();
       await dataSub?.cancel();
       try {
-        await dataChar.setNotifyValue(false).timeout(const Duration(seconds: 5));
+        await dataChar
+            .setNotifyValue(false)
+            .timeout(const Duration(seconds: 5));
         await control.setNotifyValue(false).timeout(const Duration(seconds: 5));
       } catch (_) {}
     }
@@ -155,8 +180,8 @@ enum SleepStage { light, deep, rem }
 class ActivitySample {
   final DateTime time;
   final int kind, intensity, steps, heartRate, sleep, deepSleep, remSleep;
-  const ActivitySample(this.time, this.kind, this.intensity, this.steps, this.heartRate,
-      this.sleep, this.deepSleep, this.remSleep);
+  const ActivitySample(this.time, this.kind, this.intensity, this.steps,
+      this.heartRate, this.sleep, this.deepSleep, this.remSleep);
 
   /// Вид 120 в записях Zepp OS — сон (без разбивки на фазы), 115 — часы сняты, 118 — зарядка.
   bool get isSleep => kind == 120;
@@ -179,8 +204,15 @@ List<ActivitySample>? parseActivity(Uint8List bytes, DateTime start) {
   if (bytes.length % 8 != 0) return null;
   final out = <ActivitySample>[];
   for (var i = 0, n = 0; i < bytes.length; i += 8, n++) {
-    out.add(ActivitySample(start.add(Duration(minutes: n)), bytes[i], bytes[i + 1],
-        bytes[i + 2], bytes[i + 3], bytes[i + 5], bytes[i + 6], bytes[i + 7]));
+    out.add(ActivitySample(
+        start.add(Duration(minutes: n)),
+        bytes[i],
+        bytes[i + 1],
+        bytes[i + 2],
+        bytes[i + 3],
+        bytes[i + 5],
+        bytes[i + 6],
+        bytes[i + 7]));
   }
   return out;
 }
@@ -195,17 +227,72 @@ class Spo2Sample {
 /// SpO2: версия 2, затем записи по 65 байт: время (u32 LE, секунды Unix), значение
 /// (бит 7 — автоматическое измерение), 60 байт неизвестного назначения.
 List<Spo2Sample>? parseSpo2(Uint8List bytes) {
-  if (bytes.isEmpty || (bytes.length - 1) % 65 != 0 || bytes[0] != 2) return null;
+  if (bytes.isEmpty || (bytes.length - 1) % 65 != 0 || bytes[0] != 2)
+    return null;
   final bd = ByteData.sublistView(bytes);
   final out = <Spo2Sample>[];
   for (var o = 1; o < bytes.length; o += 65) {
     final raw = bytes[o + 4];
     final auto = raw >= 128;
     out.add(Spo2Sample(
-        DateTime.fromMillisecondsSinceEpoch(bd.getUint32(o, Endian.little) * 1000,
+        DateTime.fromMillisecondsSinceEpoch(
+            bd.getUint32(o, Endian.little) * 1000,
             isUtc: true),
         auto ? raw - 128 : raw,
         auto));
   }
   return out;
+}
+
+/// Дневное значение пульса: 6 байт — время (u32 LE, секунды Unix), смещение пояса
+/// (четверти часа, int8), пульс (u8). Так передаются «пульс в покое» и «максимальный пульс».
+class DayHeartSample {
+  final DateTime time;
+  final int bpm;
+  const DayHeartSample(this.time, this.bpm);
+}
+
+List<DayHeartSample>? parseDayHeart(Uint8List bytes) {
+  if (bytes.length % 6 != 0) return null;
+  final bd = ByteData.sublistView(bytes);
+  return [
+    for (var o = 0; o < bytes.length; o += 6)
+      DayHeartSample(
+          DateTime.fromMillisecondsSinceEpoch(
+              bd.getUint32(o, Endian.little) * 1000,
+              isUtc: true),
+          bytes[o + 5])
+  ];
+}
+
+class MinuteValue {
+  final DateTime time;
+  final int value;
+  const MinuteValue(this.time, this.value);
+}
+
+/// Автоматический стресс: по одному байту на минуту от времени начала ответа; 0xFF — нет
+/// измерения (минута пропускается). Значения 0–100.
+List<MinuteValue> parseStress(Uint8List bytes, DateTime start) {
+  final out = <MinuteValue>[];
+  for (var i = 0; i < bytes.length; i++) {
+    if (bytes[i] == 0xFF || bytes[i] > 100) continue;
+    out.add(MinuteValue(start.add(Duration(minutes: i)), bytes[i]));
+  }
+  return out;
+}
+
+/// Дыхание во сне: 8 байт — время (u32 LE), смещение пояса (int8), частота дыхания (u8),
+/// два байта неизвестного назначения.
+List<MinuteValue>? parseSleepResp(Uint8List bytes) {
+  if (bytes.length % 8 != 0) return null;
+  final bd = ByteData.sublistView(bytes);
+  return [
+    for (var o = 0; o < bytes.length; o += 8)
+      MinuteValue(
+          DateTime.fromMillisecondsSinceEpoch(
+              bd.getUint32(o, Endian.little) * 1000,
+              isUtc: true),
+          bytes[o + 5])
+  ];
 }

@@ -23,7 +23,8 @@ class ChunkedEncoder {
   /// Разбивает сообщение на пакеты для записи в характеристику 0016.
   List<Uint8List> encode(int type, Uint8List data,
       {bool extended = true, bool encrypt = false}) {
-    if (encrypt && _key == null) throw StateError('Нет ключа сессии для шифрования');
+    if (encrypt && _key == null)
+      throw StateError('Нет ключа сессии для шифрования');
     _handle = (_handle + 1) & 0xFF;
     final handle = _handle;
     final length = data.length;
@@ -74,7 +75,8 @@ class ChunkedEncoder {
         chunk[2] = handle;
         chunk[3] = count;
       }
-      chunk.setRange(headerSize, headerSize + copy, payload, payload.length - remaining);
+      chunk.setRange(
+          headerSize, headerSize + copy, payload, payload.length - remaining);
       chunks.add(chunk);
       remaining -= copy;
       headerSize = extended ? 5 : 4;
@@ -116,7 +118,8 @@ class ChunkedDecoder {
     lastHandle = handle;
     lastCount = data[i++];
     if (first) {
-      _length = ByteData.sublistView(data, i, i + 4).getUint32(0, Endian.little);
+      _length =
+          ByteData.sublistView(data, i, i + 4).getUint32(0, Endian.little);
       i += 4;
       _type = data[i] | (data[i + 1] << 8);
       i += 2;

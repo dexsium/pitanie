@@ -62,7 +62,9 @@ class _HeartRatePageState extends ConsumerState<HeartRatePage> {
         TextStyle(fontSize: s(px), fontWeight: w, color: c ?? ink, height: 1.2);
     final shadow = [
       BoxShadow(
-          color: _p.withOpacity(dark ? 0 : 0.08), blurRadius: s(26), offset: Offset(0, s(8)))
+          color: _p.withOpacity(dark ? 0 : 0.08),
+          blurRadius: s(26),
+          offset: Offset(0, s(8)))
     ];
 
     Widget roundBtn(IconData i, VoidCallback? onTap) => GestureDetector(
@@ -71,9 +73,12 @@ class _HeartRatePageState extends ConsumerState<HeartRatePage> {
             width: s(68),
             height: s(68),
             decoration: BoxDecoration(
-                color: _p.withOpacity(onTap == null ? 0.05 : (dark ? 0.25 : 0.11)),
+                color:
+                    _p.withOpacity(onTap == null ? 0.05 : (dark ? 0.25 : 0.11)),
                 shape: BoxShape.circle),
-            child: Icon(i, size: s(40), color: onTap == null ? muted.withOpacity(0.5) : accent),
+            child: Icon(i,
+                size: s(40),
+                color: onTap == null ? muted.withOpacity(0.5) : accent),
           ),
         );
 
@@ -83,8 +88,9 @@ class _HeartRatePageState extends ConsumerState<HeartRatePage> {
               Container(
                 width: s(46),
                 height: s(46),
-                decoration:
-                    BoxDecoration(color: c.withOpacity(dark ? 0.28 : 0.18), shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                    color: c.withOpacity(dark ? 0.28 : 0.18),
+                    shape: BoxShape.circle),
                 child: Icon(icon, size: s(30), color: c),
               ),
               SizedBox(width: s(14)),
@@ -124,272 +130,338 @@ class _HeartRatePageState extends ConsumerState<HeartRatePage> {
               bins.putIfAbsent(m ~/ 5 * 5, () => []).add(p.$2);
             }
             final spots = [
-              for (final e in (bins.entries.toList()..sort((a, b) => a.key.compareTo(b.key))))
-                FlSpot(e.key.toDouble(), e.value.reduce((a, b) => a + b) / e.value.length)
+              for (final e
+                  in (bins.entries.toList()
+                    ..sort((a, b) => a.key.compareTo(b.key))))
+                FlSpot(e.key.toDouble(),
+                    e.value.reduce((a, b) => a + b) / e.value.length)
             ];
             final values = pts.map((p) => p.$2).toList();
-            final min = values.isEmpty ? null : values.reduce((a, b) => a < b ? a : b);
-            final max = values.isEmpty ? null : values.reduce((a, b) => a > b ? a : b);
-            final avg = values.isEmpty ? null : values.reduce((a, b) => a + b) / values.length;
+            final min =
+                values.isEmpty ? null : values.reduce((a, b) => a < b ? a : b);
+            final max =
+                values.isEmpty ? null : values.reduce((a, b) => a > b ? a : b);
+            final avg = values.isEmpty
+                ? null
+                : values.reduce((a, b) => a + b) / values.length;
             final src = recs.isEmpty
                 ? null
-                : sourceLabel(
-                    recs.first.source == kBleSource ? kBleSource : recs.first.sourceName);
+                : sourceLabel(recs.first.source == kBleSource
+                    ? kBleSource
+                    : recs.first.sourceName);
 
-            return ListView(padding: EdgeInsets.fromLTRB(s(22), s(14), s(22), s(28)), children: [
-              // Заголовок
-              SizedBox(
-                height: s(78),
-                child: Row(children: [
-                  GestureDetector(
-                    onTap: () => Navigator.maybePop(context),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: s(20)),
-                      child: Icon(Icons.chevron_left, size: s(56), color: ink),
-                    ),
-                  ),
-                  SizedBox(width: s(22)),
-                  Text('Пульс', style: t(42, w: FontWeight.w800)),
-                ]),
-              ),
-              SizedBox(height: s(12)),
-
-              // Фиолетовая плашка
-              Container(
-                height: s(154),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(s(42)),
-                  gradient:
-                      const LinearGradient(colors: [Color(0xFF8A4BE8), Color(0xFF6A2BD6)]),
-                  boxShadow: [
-                    BoxShadow(
-                        color: _p.withOpacity(0.28), blurRadius: s(24), offset: Offset(0, s(10)))
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(s(42)),
-                  child: Stack(children: [
-                    Positioned(
-                      right: 0,
-                      top: s(18),
-                      bottom: s(18),
-                      width: s(300),
-                      child: CustomPaint(painter: _EcgPainter()),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: s(44)),
-                      child: Row(children: [
-                        Container(
-                          width: s(94),
-                          height: s(94),
-                          decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.92),
-                              borderRadius: BorderRadius.circular(s(28))),
-                          child: Icon(Icons.monitor_heart, size: s(64), color: _pl),
+            return ListView(
+                padding: EdgeInsets.fromLTRB(s(22), s(14), s(22), s(28)),
+                children: [
+                  // Заголовок
+                  SizedBox(
+                    height: s(78),
+                    child: Row(children: [
+                      GestureDetector(
+                        onTap: () => Navigator.maybePop(context),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: s(20)),
+                          child:
+                              Icon(Icons.chevron_left, size: s(56), color: ink),
                         ),
-                        SizedBox(width: s(40)),
-                        Expanded(
-                          child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Пульс', style: t(40, w: FontWeight.w800, c: Colors.white)),
-                                FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  alignment: Alignment.centerLeft,
-                                  child: Text('Частота сердечных сокращений',
-                                      style: t(24, c: Colors.white.withOpacity(0.92))),
-                                ),
-                              ]),
-                        ),
-                      ]),
-                    ),
-                  ]),
-                ),
-              ),
-              SizedBox(height: s(28)),
-
-              // Выбор дня
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: s(104)),
-                child: Row(children: [
-                  roundBtn(Icons.chevron_left,
-                      () => setState(() => _day = _day.subtract(const Duration(days: 1)))),
-                  SizedBox(width: s(12)),
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: _pickDay,
-                      child: Container(
-                        height: s(98),
-                        decoration: BoxDecoration(
-                            color: _p.withOpacity(dark ? 0.18 : 0.07),
-                            borderRadius: BorderRadius.circular(s(49))),
-                        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          Text(dayTitle(_day), style: t(34, w: FontWeight.w800)),
-                          Text(dayDateLine(_day), style: t(22, c: muted)),
-                        ]),
                       ),
-                    ),
+                      SizedBox(width: s(22)),
+                      Text('Пульс', style: t(42, w: FontWeight.w800)),
+                    ]),
                   ),
-                  SizedBox(width: s(12)),
-                  roundBtn(Icons.chevron_right,
-                      isToday ? null : () => setState(() => _day = _day.add(const Duration(days: 1)))),
-                ]),
-              ),
-              SizedBox(height: s(26)),
+                  SizedBox(height: s(12)),
 
-              // Мин / средний / макс
-              Container(
-                height: s(196),
-                decoration: BoxDecoration(
-                    color: card, borderRadius: BorderRadius.circular(s(40)), boxShadow: shadow),
-                padding: EdgeInsets.symmetric(vertical: s(18), horizontal: s(6)),
-                child: Row(children: [
-                  stat('Мин.', min, Icons.arrow_downward, const Color(0xFF3CC24F)),
-                  Container(width: 1, height: s(112), color: muted.withOpacity(0.22)),
-                  stat('Средний', avg, Icons.favorite, _pl),
-                  Container(width: 1, height: s(112), color: muted.withOpacity(0.22)),
-                  stat('Макс.', max, Icons.arrow_upward, const Color(0xFFF0658A)),
-                ]),
-              ),
-              SizedBox(height: s(24)),
-
-              // График
-              Container(
-                decoration: BoxDecoration(
-                    color: card, borderRadius: BorderRadius.circular(s(44)), boxShadow: shadow),
-                padding: EdgeInsets.fromLTRB(s(22), s(34), s(30), s(24)),
-                child: spots.length < 2
-                    ? SizedBox(
-                        height: s(380),
-                        child: Center(
-                            child: Text('Нет данных о пульсе за этот день',
-                                textAlign: TextAlign.center, style: t(26, c: muted))))
-                    : SizedBox(
-                        height: s(480),
-                        child: LineChart(LineChartData(
-                          minX: 0,
-                          maxX: 1440,
-                          minY: ((min ?? 50) - 10).floorToDouble().clamp(30, 200),
-                          maxY: ((max ?? 120) + 10).ceilToDouble().clamp(60, 230),
-                          gridData: FlGridData(
-                            show: true,
-                            drawVerticalLine: false,
-                            getDrawingHorizontalLine: (_) => FlLine(
-                                color: _p.withOpacity(dark ? 0.30 : 0.18),
-                                strokeWidth: 1.2,
-                                dashArray: [7, 7]),
-                          ),
-                          borderData: FlBorderData(
-                              show: true,
-                              border: Border(
-                                  bottom: BorderSide(color: muted.withOpacity(0.30), width: 1))),
-                          lineTouchData: LineTouchData(
-                            touchTooltipData: LineTouchTooltipData(
-                              getTooltipColor: (_) => const Color(0xFF263238),
-                              getTooltipItems: (list) => [
-                                for (final sp in list)
-                                  LineTooltipItem(
-                                      '${fmt0(sp.y)} уд/мин, '
-                                      '${(sp.x ~/ 60).toString().padLeft(2, '0')}:${(sp.x % 60).toInt().toString().padLeft(2, '0')}',
-                                      const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600)),
-                              ],
-                            ),
-                          ),
-                          titlesData: FlTitlesData(
-                            topTitles: const AxisTitles(),
-                            rightTitles: const AxisTitles(),
-                            leftTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                    showTitles: true,
-                                    reservedSize: s(76),
-                                    getTitlesWidget: (v, _) => Padding(
-                                          padding: EdgeInsets.only(right: s(12)),
-                                          child: Text(v.toInt().toString(),
-                                              textAlign: TextAlign.right,
-                                              style: t(23).copyWith(height: 1.0)),
-                                        ))),
-                            bottomTitles: AxisTitles(
-                                sideTitles: SideTitles(
-                                    showTitles: true,
-                                    reservedSize: s(48),
-                                    interval: 360,
-                                    getTitlesWidget: (v, _) => Padding(
-                                          padding: EdgeInsets.only(top: s(14)),
-                                          child: Text(
-                                              '${(v / 60).round().toString().padLeft(2, '0')}:00',
-                                              style: t(23)),
-                                        ))),
-                          ),
-                          lineBarsData: [
-                            LineChartBarData(
-                              spots: spots,
-                              isCurved: true,
-                              curveSmoothness: 0.15,
-                              preventCurveOverShooting: true,
-                              color: kRed,
-                              barWidth: math.max(2.5, s(5)),
-                              isStrokeCapRound: true,
-                              dotData: const FlDotData(show: false),
-                              belowBarData:
-                                  BarAreaData(show: true, color: kRed.withOpacity(0.10)),
-                            ),
-                          ],
-                        )),
-                      ),
-              ),
-              SizedBox(height: s(22)),
-
-              // Источник данных
-              Container(
-                decoration: BoxDecoration(
-                    color: card, borderRadius: BorderRadius.circular(s(36)), boxShadow: shadow),
-                child: Material(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(s(36)),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(s(36)),
-                    onTap: () => Navigator.push(
-                        context, MaterialPageRoute(builder: (_) => const WearablePage())),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: s(26), vertical: s(22)),
-                      child: Row(children: [
-                        Container(
-                          width: s(72),
-                          height: s(72),
-                          decoration: BoxDecoration(
-                              color: _p.withOpacity(dark ? 0.25 : 0.11),
-                              borderRadius: BorderRadius.circular(s(22))),
-                          child: Icon(Icons.watch_outlined, size: s(42), color: accent),
+                  // Фиолетовая плашка
+                  Container(
+                    height: s(154),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(s(42)),
+                      gradient: const LinearGradient(
+                          colors: [Color(0xFF8A4BE8), Color(0xFF6A2BD6)]),
+                      boxShadow: [
+                        BoxShadow(
+                            color: _p.withOpacity(0.28),
+                            blurRadius: s(24),
+                            offset: Offset(0, s(10)))
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(s(42)),
+                      child: Stack(children: [
+                        Positioned(
+                          right: 0,
+                          top: s(18),
+                          bottom: s(18),
+                          width: s(300),
+                          child: CustomPaint(painter: _EcgPainter()),
                         ),
-                        SizedBox(width: s(26)),
-                        Expanded(
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                  src == null ? 'Источник пока не определён' : 'Источник: $src',
-                                  style: t(28, w: FontWeight.w800)),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: s(44)),
+                          child: Row(children: [
+                            Container(
+                              width: s(94),
+                              height: s(94),
+                              decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.92),
+                                  borderRadius: BorderRadius.circular(s(28))),
+                              child: Icon(Icons.monitor_heart,
+                                  size: s(64), color: _pl),
                             ),
-                            Text(
-                                src == null
-                                    ? 'Данные накапливаются при подключении часов'
-                                    : 'Точек: ${fmt0(pts.length)} · История хранится в приложении',
-                                style: t(23, c: muted),
-                                maxLines: 2),
+                            SizedBox(width: s(40)),
+                            Expanded(
+                              child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Пульс',
+                                        style: t(40,
+                                            w: FontWeight.w800,
+                                            c: Colors.white)),
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                          'Частота сердечных сокращений',
+                                          style: t(24,
+                                              c: Colors.white
+                                                  .withOpacity(0.92))),
+                                    ),
+                                  ]),
+                            ),
                           ]),
                         ),
-                        Icon(Icons.chevron_right, size: s(40), color: muted),
                       ]),
                     ),
                   ),
-                ),
-              ),
-            ]);
+                  SizedBox(height: s(28)),
+
+                  // Выбор дня
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: s(104)),
+                    child: Row(children: [
+                      roundBtn(
+                          Icons.chevron_left,
+                          () => setState(() =>
+                              _day = _day.subtract(const Duration(days: 1)))),
+                      SizedBox(width: s(12)),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: _pickDay,
+                          child: Container(
+                            height: s(98),
+                            decoration: BoxDecoration(
+                                color: _p.withOpacity(dark ? 0.18 : 0.07),
+                                borderRadius: BorderRadius.circular(s(49))),
+                            child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(dayTitle(_day),
+                                      style: t(34, w: FontWeight.w800)),
+                                  Text(dayDateLine(_day),
+                                      style: t(22, c: muted)),
+                                ]),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: s(12)),
+                      roundBtn(
+                          Icons.chevron_right,
+                          isToday
+                              ? null
+                              : () => setState(() =>
+                                  _day = _day.add(const Duration(days: 1)))),
+                    ]),
+                  ),
+                  SizedBox(height: s(26)),
+
+                  // Мин / средний / макс
+                  Container(
+                    height: s(196),
+                    decoration: BoxDecoration(
+                        color: card,
+                        borderRadius: BorderRadius.circular(s(40)),
+                        boxShadow: shadow),
+                    padding:
+                        EdgeInsets.symmetric(vertical: s(18), horizontal: s(6)),
+                    child: Row(children: [
+                      stat('Мин.', min, Icons.arrow_downward,
+                          const Color(0xFF3CC24F)),
+                      Container(
+                          width: 1,
+                          height: s(112),
+                          color: muted.withOpacity(0.22)),
+                      stat('Средний', avg, Icons.favorite, _pl),
+                      Container(
+                          width: 1,
+                          height: s(112),
+                          color: muted.withOpacity(0.22)),
+                      stat('Макс.', max, Icons.arrow_upward,
+                          const Color(0xFFF0658A)),
+                    ]),
+                  ),
+                  SizedBox(height: s(24)),
+
+                  // График
+                  Container(
+                    decoration: BoxDecoration(
+                        color: card,
+                        borderRadius: BorderRadius.circular(s(44)),
+                        boxShadow: shadow),
+                    padding: EdgeInsets.fromLTRB(s(22), s(34), s(30), s(24)),
+                    child: spots.length < 2
+                        ? SizedBox(
+                            height: s(380),
+                            child: Center(
+                                child: Text('Нет данных о пульсе за этот день',
+                                    textAlign: TextAlign.center,
+                                    style: t(26, c: muted))))
+                        : SizedBox(
+                            height: s(480),
+                            child: LineChart(LineChartData(
+                              minX: 0,
+                              maxX: 1440,
+                              minY: ((min ?? 50) - 10)
+                                  .floorToDouble()
+                                  .clamp(30, 200),
+                              maxY: ((max ?? 120) + 10)
+                                  .ceilToDouble()
+                                  .clamp(60, 230),
+                              gridData: FlGridData(
+                                show: true,
+                                drawVerticalLine: false,
+                                getDrawingHorizontalLine: (_) => FlLine(
+                                    color: _p.withOpacity(dark ? 0.30 : 0.18),
+                                    strokeWidth: 1.2,
+                                    dashArray: [7, 7]),
+                              ),
+                              borderData: FlBorderData(
+                                  show: true,
+                                  border: Border(
+                                      bottom: BorderSide(
+                                          color: muted.withOpacity(0.30),
+                                          width: 1))),
+                              lineTouchData: LineTouchData(
+                                touchTooltipData: LineTouchTooltipData(
+                                  getTooltipColor: (_) =>
+                                      const Color(0xFF263238),
+                                  getTooltipItems: (list) => [
+                                    for (final sp in list)
+                                      LineTooltipItem(
+                                          '${fmt0(sp.y)} уд/мин, '
+                                          '${(sp.x ~/ 60).toString().padLeft(2, '0')}:${(sp.x % 60).toInt().toString().padLeft(2, '0')}',
+                                          const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                              ),
+                              titlesData: FlTitlesData(
+                                topTitles: const AxisTitles(),
+                                rightTitles: const AxisTitles(),
+                                leftTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                        showTitles: true,
+                                        reservedSize: s(76),
+                                        getTitlesWidget: (v, _) => Padding(
+                                              padding:
+                                                  EdgeInsets.only(right: s(12)),
+                                              child: Text(v.toInt().toString(),
+                                                  textAlign: TextAlign.right,
+                                                  style: t(23)
+                                                      .copyWith(height: 1.0)),
+                                            ))),
+                                bottomTitles: AxisTitles(
+                                    sideTitles: SideTitles(
+                                        showTitles: true,
+                                        reservedSize: s(48),
+                                        interval: 360,
+                                        getTitlesWidget: (v, _) => Padding(
+                                              padding:
+                                                  EdgeInsets.only(top: s(14)),
+                                              child: Text(
+                                                  '${(v / 60).round().toString().padLeft(2, '0')}:00',
+                                                  style: t(23)),
+                                            ))),
+                              ),
+                              lineBarsData: [
+                                LineChartBarData(
+                                  spots: spots,
+                                  isCurved: true,
+                                  curveSmoothness: 0.15,
+                                  preventCurveOverShooting: true,
+                                  color: kRed,
+                                  barWidth: math.max(2.5, s(5)),
+                                  isStrokeCapRound: true,
+                                  dotData: const FlDotData(show: false),
+                                  belowBarData: BarAreaData(
+                                      show: true,
+                                      color: kRed.withOpacity(0.10)),
+                                ),
+                              ],
+                            )),
+                          ),
+                  ),
+                  SizedBox(height: s(22)),
+
+                  // Источник данных
+                  Container(
+                    decoration: BoxDecoration(
+                        color: card,
+                        borderRadius: BorderRadius.circular(s(36)),
+                        boxShadow: shadow),
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(s(36)),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(s(36)),
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const WearablePage())),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: s(26), vertical: s(22)),
+                          child: Row(children: [
+                            Container(
+                              width: s(72),
+                              height: s(72),
+                              decoration: BoxDecoration(
+                                  color: _p.withOpacity(dark ? 0.25 : 0.11),
+                                  borderRadius: BorderRadius.circular(s(22))),
+                              child: Icon(Icons.watch_outlined,
+                                  size: s(42), color: accent),
+                            ),
+                            SizedBox(width: s(26)),
+                            Expanded(
+                              child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                          src == null
+                                              ? 'Источник пока не определён'
+                                              : 'Источник: $src',
+                                          style: t(28, w: FontWeight.w800)),
+                                    ),
+                                    Text(
+                                        src == null
+                                            ? 'Данные накапливаются при подключении часов'
+                                            : 'Точек: ${fmt0(pts.length)} · История хранится в приложении',
+                                        style: t(23, c: muted),
+                                        maxLines: 2),
+                                  ]),
+                            ),
+                            Icon(Icons.chevron_right,
+                                size: s(40), color: muted),
+                          ]),
+                        ),
+                      ),
+                    ),
+                  ),
+                ]);
           },
         ),
       ),

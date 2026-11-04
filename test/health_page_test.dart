@@ -66,7 +66,7 @@ void main() {
           await tester.pump(const Duration(milliseconds: 400));
           await tester.pump(const Duration(milliseconds: 400));
           expect(tester.takeException(), isNull);
-          expect(find.text('Восстановление'), findsOneWidget);
+          expect(find.text('Сегодня'), findsOneWidget);
           expect(find.textContaining('HRV'),
               findsWidgets); // честно показано, что HRV нет
           await tester.drag(find.byType(ListView), const Offset(0, -6000));

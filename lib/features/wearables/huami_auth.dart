@@ -23,14 +23,18 @@ class AuthKeyStore {
     var s = input.trim();
     if (s.startsWith('0x') || s.startsWith('0X')) s = s.substring(2);
     if (!RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(s)) return null;
-    return Uint8List.fromList(
-        [for (var i = 0; i < 32; i += 2) int.parse(s.substring(i, i + 2), radix: 16)]);
+    return Uint8List.fromList([
+      for (var i = 0; i < 32; i += 2)
+        int.parse(s.substring(i, i + 2), radix: 16)
+    ]);
   }
 
   static Future<bool> save(String input) async {
     final k = parse(input);
     if (k == null) return false;
-    await _storage.write(key: _name, value: k.map((b) => b.toRadixString(16).padLeft(2, '0')).join());
+    await _storage.write(
+        key: _name,
+        value: k.map((b) => b.toRadixString(16).padLeft(2, '0')).join());
     return true;
   }
 
@@ -65,7 +69,10 @@ class HuamiAuthenticator {
   StreamSubscription<List<int>>? _sub;
 
   HuamiAuthenticator(
-      {required this.write, required this.read, required this.secret, required this.mtu});
+      {required this.write,
+      required this.read,
+      required this.secret,
+      required this.mtu});
 
   /// Ключ сессии после успешной авторизации (нужен для дальнейшего шифрованного обмена).
   Uint8List? sessionKey;
@@ -81,13 +88,15 @@ class HuamiAuthenticator {
   /// Отправляет команду сервису; шифрование включается по списку сервисов часов.
   Future<void> send(int endpoint, List<int> data) async {
     final enc = encryptedEndpoints.contains(endpoint);
-    for (final chunk in _encoder.encode(endpoint, Uint8List.fromList(data), encrypt: enc)) {
+    for (final chunk
+        in _encoder.encode(endpoint, Uint8List.fromList(data), encrypt: enc)) {
       await _send(write, chunk);
     }
   }
 
   /// Запрашивает у часов список сервисов (какие шифруются). Ждёт ответ до [timeout].
-  Future<bool> requestServices({Duration timeout = const Duration(seconds: 6)}) async {
+  Future<bool> requestServices(
+      {Duration timeout = const Duration(seconds: 6)}) async {
     _services = Completer<void>();
     await send(0x0000, [0x03]);
     try {
@@ -102,13 +111,15 @@ class HuamiAuthenticator {
     await _sub?.cancel();
     _sub = null;
   }
+
   ChunkedEncoder get encoder => _encoder;
   ChunkedDecoder get decoder => _decoder;
 
   Future<void> _send(BluetoothCharacteristic c, List<int> data) =>
       c.write(data, withoutResponse: c.properties.writeWithoutResponse);
 
-  Future<AuthResult> authenticate({Duration timeout = const Duration(seconds: 30)}) async {
+  Future<AuthResult> authenticate(
+      {Duration timeout = const Duration(seconds: 30)}) async {
     try {
       await read.setNotifyValue(true);
       _sub = read.onValueReceived.listen(_onData);
@@ -117,7 +128,8 @@ class HuamiAuthenticator {
       final pair = await Isolate.run(() {
         final r = Random.secure();
         while (true) {
-          final p = Uint8List.fromList([for (var i = 0; i < 24; i++) r.nextInt(256)]);
+          final p =
+              Uint8List.fromList([for (var i = 0; i < 24; i++) r.nextInt(256)]);
           final pub = ecdhPublic(p);
           if (pub != null) return [p, pub];
         }
@@ -142,7 +154,8 @@ class HuamiAuthenticator {
   void _onData(List<int> v) {
     if (v.isEmpty) return;
     final data = Uint8List.fromList(v);
-    if (data[0] != 0x03) return; // 0x04 - подтверждение от часов, не требует обработки
+    if (data[0] != 0x03)
+      return; // 0x04 - подтверждение от часов, не требует обработки
     final needsAck = _decoder.decode(data);
     if (needsAck) {
       _send(read, [0x04, 0x00, _decoder.lastHandle, 0x01, _decoder.lastCount]);
@@ -165,10 +178,12 @@ class HuamiAuthenticator {
       final priv = _priv!;
       final shared = await Isolate.run(() => ecdhShared(priv, remotePub));
       if (shared == null) {
-        _finish(const AuthResult(AuthStatus.failed, 'Часы прислали некорректный ключ.'));
+        _finish(const AuthResult(
+            AuthStatus.failed, 'Часы прислали некорректный ключ.'));
         return;
       }
-      final seq = ByteData.sublistView(shared, 0, 4).getUint32(0, Endian.little);
+      final seq =
+          ByteData.sublistView(shared, 0, 4).getUint32(0, Endian.little);
       final session = Uint8List(16);
       for (var i = 0; i < 16; i++) {
         session[i] = shared[i + 8] ^ secret[i];
@@ -186,12 +201,14 @@ class HuamiAuthenticator {
         await _send(write, chunk);
       }
     } else if (p[0] == 0x10 && p[1] == 0x05 && p[2] == 0x01) {
-      _finish(const AuthResult(AuthStatus.success, 'Авторизация выполнена: часы приняли ключ.'));
-    } else if (p[0] == 0x10 && p[1] == 0x05 && p[2] == 0x25) {
       _finish(const AuthResult(
-          AuthStatus.wrongKey, 'Часы отклонили ключ. Проверьте ключ и не отвязывайте часы в Zepp.'));
+          AuthStatus.success, 'Авторизация выполнена: часы приняли ключ.'));
+    } else if (p[0] == 0x10 && p[1] == 0x05 && p[2] == 0x25) {
+      _finish(const AuthResult(AuthStatus.wrongKey,
+          'Часы отклонили ключ. Проверьте ключ и не отвязывайте часы в Zepp.'));
     } else {
-      _finish(AuthResult(AuthStatus.failed, 'Неожиданный ответ часов: ${p.take(3).toList()}'));
+      _finish(AuthResult(
+          AuthStatus.failed, 'Неожиданный ответ часов: ${p.take(3).toList()}'));
     }
   }
 

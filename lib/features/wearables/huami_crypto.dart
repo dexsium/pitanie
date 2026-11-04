@@ -19,10 +19,14 @@ BigInt _words(List<int> w) {
   return r;
 }
 
-final BigInt _coeffB = _words([0x4a3205fd, 0x512f7874, 0x1481eb10, 0xb8c953ca, 0x0a601907, 0x2]);
-final BigInt baseX = _words([0xe8343e36, 0xd4994637, 0xa0991168, 0x86a2d57e, 0xf0eba162, 0x3]);
-final BigInt baseY = _words([0x797324f1, 0xb11c5c0c, 0xa2cdd545, 0x71a0094f, 0xd51fbc6c, 0x0]);
-final BigInt baseOrder = _words([0xa4234c33, 0x77e70c12, 0x000292fe, 0x0, 0x0, 0x4]);
+final BigInt _coeffB =
+    _words([0x4a3205fd, 0x512f7874, 0x1481eb10, 0xb8c953ca, 0x0a601907, 0x2]);
+final BigInt baseX =
+    _words([0xe8343e36, 0xd4994637, 0xa0991168, 0x86a2d57e, 0xf0eba162, 0x3]);
+final BigInt baseY =
+    _words([0x797324f1, 0xb11c5c0c, 0xa2cdd545, 0x71a0094f, 0xd51fbc6c, 0x0]);
+final BigInt baseOrder =
+    _words([0xa4234c33, 0x77e70c12, 0x000292fe, 0x0, 0x0, 0x4]);
 
 BigInt _mul(BigInt a, BigInt b) {
   var res = BigInt.zero;
@@ -171,7 +175,8 @@ Uint8List? ecdhShared(Uint8List priv, Uint8List remotePub) {
 // ---------- AES-ECB без выравнивания и CRC32 ----------
 
 Uint8List _aes(bool encrypt, Uint8List data, Uint8List key) {
-  if (data.length % 16 != 0) throw ArgumentError('Длина данных должна быть кратна 16');
+  if (data.length % 16 != 0)
+    throw ArgumentError('Длина данных должна быть кратна 16');
   final cipher = AESEngine()..init(encrypt, KeyParameter(key));
   final out = Uint8List(data.length);
   for (var o = 0; o < data.length; o += 16) {
@@ -181,7 +186,8 @@ Uint8List _aes(bool encrypt, Uint8List data, Uint8List key) {
 }
 
 Uint8List aesEcbEncrypt(Uint8List data, Uint8List key) => _aes(true, data, key);
-Uint8List aesEcbDecrypt(Uint8List data, Uint8List key) => _aes(false, data, key);
+Uint8List aesEcbDecrypt(Uint8List data, Uint8List key) =>
+    _aes(false, data, key);
 
 int crc32(Uint8List data, [int start = 0, int? end]) {
   var c = 0xFFFFFFFF;

@@ -5,6 +5,7 @@ import '../../sleep/sleep_data.dart';
 import '../domain/algorithms/baseline.dart';
 import '../domain/algorithms/resting_hr.dart';
 import '../domain/models/health_models.dart';
+import '../services/health_data_quality_service.dart';
 import '../services/health_notification_engine.dart';
 import '../services/heart_rate_analysis_service.dart';
 import '../services/hrv_analysis_service.dart';
@@ -74,6 +75,8 @@ class HealthSnapshot {
   final DateTime? lastData;
   final int? feeling;
   final SleepDay sleepToday;
+  final Sample? stressLast, respLast;
+  final bool restingFromWatch;
   const HealthSnapshot({
     required this.now,
     required this.prefs,
@@ -89,6 +92,9 @@ class HealthSnapshot {
     required this.lastData,
     required this.feeling,
     required this.sleepToday,
+    required this.stressLast,
+    required this.respLast,
+    required this.restingFromWatch,
   });
 }
 
@@ -136,10 +142,27 @@ Future<HealthSnapshot> loadHealth(AppDatabase db, DateTime now) async {
       stepMinutes: stepMin,
       sleepMinutes: sleepMin,
       workouts: [for (final w in wk) (w.startTime, w.endTime)]);
-  final resting = [
+  // Пульс покоя: значение от часов (тип 0x3a), если оно есть за день; иначе расчёт по минутам.
+  final watchRest = <DateTime, double>{};
+  for (final r in _preferred(recs, (t) => t == 'restingHeartRate')) {
+    if (validHeartRate(r.value)) watchRest[dayOf(r.startTime)] = r.value;
+  }
+  final restingMap = <DateTime, double>{
     for (final d in days)
-      if (d.resting != null) DailyValue(d.day, d.resting!)
+      if (d.resting != null) d.day: d.resting!,
+    ...watchRest,
+  };
+  final resting = [
+    for (final e
+        in restingMap.entries.toList()..sort((a, b) => a.key.compareTo(b.key)))
+      DailyValue(e.key, e.value)
   ];
+  Sample? latestOf(String type) {
+    final l = _preferred(recs, (t) => t == type);
+    if (l.isEmpty) return null;
+    final r = l.reduce((a, b) => a.startTime.isAfter(b.startTime) ? a : b);
+    return Sample(r.startTime, r.value);
+  }
 
   final nightHr = {for (final d in days) d.day: d.night};
   final nights = <SleepNight>[];
@@ -219,13 +242,15 @@ Future<HealthSnapshot> loadHealth(AppDatabase db, DateTime now) async {
         'steps': lastOf((r) => r.type == 'steps'),
         'hrv': lastOf((r) => r.type.startsWith('hrv')),
         'resp': lastOf((r) => r.type == 'respiration'),
+        'rest': lastOf((r) => r.type == 'restingHeartRate'),
         'stress': lastOf((r) => r.type == 'stress'),
         'energy': lastOf((r) => r.type == 'activeEnergy'),
         'workouts': wk.isEmpty
             ? null
             : wk.map((w) => w.endTime).reduce((a, b) => a.isAfter(b) ? a : b),
       },
-      restingDays: resting.length);
+      restingDays: resting.length,
+      restingFromWatch: watchRest.isNotEmpty);
 
   return HealthSnapshot(
     now: now,
@@ -245,11 +270,14 @@ Future<HealthSnapshot> loadHealth(AppDatabase db, DateTime now) async {
     lastData: lastOf((r) => r.source == kBleSource),
     feeling: feeling,
     sleepToday: analyzeSleepDay(sleepRecs, today),
+    stressLast: latestOf('stress'),
+    respLast: latestOf('respiration'),
+    restingFromWatch: watchRest.isNotEmpty,
   );
 }
 
 List<Capability> _capabilities(DateTime now, Map<String, DateTime?> last,
-    {required int restingDays}) {
+    {required int restingDays, required bool restingFromWatch}) {
   Capability cap(String id, String label,
       {required bool channel, required String gone}) {
     final t = last[id];
@@ -272,13 +300,19 @@ List<Capability> _capabilities(DateTime now, Map<String, DateTime?> last,
 
   return [
     cap('hr', 'Пульс', channel: true, gone: ''),
-    Capability(
-        'rest',
-        'Пульс в покое',
-        restingDays > 0 ? Availability.available : Availability.awaitingSync,
-        restingDays > 0
-            ? 'Рассчитывается приложением по минутным значениям пульса ($restingDays дн.). Часы его отдельно не передают.'
-            : 'Рассчитывается по пульсу; пока недостаточно данных.'),
+    restingFromWatch
+        ? Capability('rest', 'Пульс в покое', Availability.available,
+            'Значение приходит с часов${last['rest'] == null ? '' : ''}. Если за день его нет, используется расчёт по минутному пульсу.',
+            last: last['rest'])
+        : Capability(
+            'rest',
+            'Пульс в покое',
+            restingDays > 0
+                ? Availability.available
+                : Availability.awaitingSync,
+            restingDays > 0
+                ? 'Рассчитывается приложением по минутным значениям пульса ($restingDays дн.): значения от часов пока не получены.'
+                : 'Пока недостаточно данных; ожидается синхронизация часов.'),
     cap('hrv', 'HRV',
         channel: false,
         gone:

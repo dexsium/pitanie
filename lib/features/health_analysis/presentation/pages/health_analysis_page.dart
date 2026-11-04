@@ -120,7 +120,7 @@ class _Body extends ConsumerWidget {
                         : '${fmt0(restingNow!.resting!)} уд/мин',
                     sub: restingNow == null
                         ? 'нет данных'
-                        : 'расчёт, ${DateFormat('d MMM', 'ru').format(restingNow.day)}'),
+                        : '${s.restingFromWatch ? 'часы' : 'расчёт'}, ${DateFormat('d MMM', 'ru').format(restingNow.day)}'),
               ]),
               const SizedBox(height: 14),
               Row(children: [
@@ -131,6 +131,20 @@ class _Body extends ConsumerWidget {
                 stat('SpO₂',
                     r.spo2.latest == null ? '—' : '${fmt0(r.spo2.latest!.v)} %',
                     sub: r.spo2.latest == null ? null : _dm(r.spo2.latest!.at)),
+              ]),
+              const SizedBox(height: 14),
+              Row(children: [
+                stat('Стресс',
+                    s.stressLast == null ? 'нет данных' : fmt0(s.stressLast!.v),
+                    sub: s.stressLast == null
+                        ? 'включите мониторинг в настройках часов'
+                        : _dm(s.stressLast!.at)),
+                stat(
+                    'Дыхание во сне',
+                    s.respLast == null
+                        ? 'нет данных'
+                        : '${fmt0(s.respLast!.v)} вдохов/мин',
+                    sub: s.respLast == null ? null : _dm(s.respLast!.at)),
               ]),
               const SizedBox(height: 10),
               Text(
