@@ -492,7 +492,7 @@ class ProfilePage extends ConsumerWidget {
               SizedBox(height: s(10)),
               Text(
                   'Приём по Bluetooth работает, пока приложение открыто. '
-                  'Сохраняется только вес; состав тела не рассчитывается.',
+                  'Сохраняются вес и импеданс; состав тела считается по формулам (оценка).',
                   style: t(23, c: muted)),
               if (scale.lastKg != null)
                 Padding(

@@ -1,7 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import '../wearables/wearable_page.dart';
-import '../wearables/wearable_controller.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
@@ -9,11 +9,19 @@ import '../../app/theme.dart';
 import '../../core/dates.dart';
 import '../../core/labels.dart';
 import '../../shared/widgets.dart';
+import '../activity/activity_page.dart' show defaultStepsGoal;
 import '../calendar/calendar_page.dart';
 import '../settings/settings_page.dart';
 import '../water/water_page.dart';
+import '../wearables/wearable_controller.dart';
+import '../wearables/wearable_page.dart';
 import '../weight/weight_page.dart';
 import 'day_data.dart';
+
+/// Размеры экрана заданы в пикселях макета (ширина 851) и масштабируются по ширине устройства.
+const _mockWidth = 851.0;
+const _p = Color(0xFF6F2BD8);
+const _pl = Color(0xFF9145EC);
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
@@ -23,60 +31,181 @@ class DashboardPage extends ConsumerWidget {
     final day = ref.watch(selectedDayProvider);
     final key = dayKey(day);
     final data = ref.watch(dayDataProvider(key));
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      children: [
-        DayBar(
-          onCalendar: () => Navigator.push(
-              context, MaterialPageRoute(builder: (_) => const CalendarPage())),
-          trailing: IconButton.filledTonal(
-              onPressed: () => Navigator.push(
-                  context, MaterialPageRoute(builder: (_) => const SettingsPage())),
-              icon: const Icon(Icons.settings_outlined)),
-        ),
-        const SizedBox(height: 10),
-        const WatchStatusChip(),
-        const SizedBox(height: 10),
-        data.when(
-          loading: () => const Padding(
-              padding: EdgeInsets.all(48),
-              child: Center(child: CircularProgressIndicator())),
-          error: (e, _) => EmptyHint('Ошибка: $e'),
-          data: (d) => _Body(d),
-        ),
-      ],
+    final cs = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final k = MediaQuery.sizeOf(context).width / _mockWidth;
+    double s(double v) => v * k;
+    final accent = dark ? _pl : _p;
+    TextStyle t(double px, {FontWeight w = FontWeight.w400, Color? c}) =>
+        TextStyle(fontSize: s(px), fontWeight: w, color: c ?? cs.onSurface, height: 1.2);
+
+    void shift(int d) => ref.read(selectedDayProvider.notifier).state =
+        DateTime(day.year, day.month, day.day + d);
+
+    Widget topBtn(IconData i, VoidCallback onTap) => GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: s(78),
+            height: s(78),
+            decoration: BoxDecoration(
+                color: _p.withOpacity(dark ? 0.25 : 0.10),
+                borderRadius: BorderRadius.circular(s(26))),
+            child: Icon(i, size: s(44), color: accent),
+          ),
+        );
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: dark
+                ? const [Color(0xFF17131F), Color(0xFF101017)]
+                : const [Color(0xFFEEE7FC), Color(0xFFF7F4FD)]),
+      ),
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(s(20), s(16), s(20), s(28)),
+        children: [
+          // Шапка: календарь, день, настройки
+          SizedBox(
+            height: s(86),
+            child: Row(children: [
+              SizedBox(width: s(20)),
+              topBtn(Icons.calendar_month_outlined, () => Navigator.push(
+                  context, MaterialPageRoute(builder: (_) => const CalendarPage()))),
+              Expanded(
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  GestureDetector(
+                      onTap: () => shift(-1),
+                      child: Icon(Icons.chevron_left, size: s(52), color: cs.onSurface)),
+                  SizedBox(width: s(40)),
+                  Column(mainAxisSize: MainAxisSize.min, children: [
+                    Text(dayTitle(day), style: t(44, w: FontWeight.w800)),
+                    Text(dayDateLine(day), style: t(24, c: cs.onSurface.withOpacity(0.8))),
+                  ]),
+                  SizedBox(width: s(40)),
+                  GestureDetector(
+                      onTap: () => shift(1),
+                      child: Icon(Icons.chevron_right, size: s(52), color: cs.onSurface)),
+                ]),
+              ),
+              topBtn(Icons.settings_outlined, () => Navigator.push(
+                  context, MaterialPageRoute(builder: (_) => const SettingsPage()))),
+              SizedBox(width: s(20)),
+            ]),
+          ),
+          SizedBox(height: s(14)),
+          const WatchStatusChip(),
+          SizedBox(height: s(16)),
+          data.when(
+            loading: () => const Padding(
+                padding: EdgeInsets.all(48), child: Center(child: CircularProgressIndicator())),
+            error: (e, _) => EmptyHint('Ошибка: $e'),
+            data: (d) => _Body(d),
+          ),
+        ],
+      ),
     );
   }
 }
 
-/// Индикатор связи с часами: подключены / подключаются / не подключены.
+/// Баннер связи с часами: фиолетовая плашка с часами и состоянием подключения.
 class WatchStatusChip extends ConsumerWidget {
   const WatchStatusChip({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = ref.watch(wearableProvider);
-    if (c.savedId == null && !c.isConnected && c.status != WearStatus.connecting) {
-      return const SizedBox.shrink();
-    }
-    final (text, color) = switch (c.status) {
+    final k = MediaQuery.sizeOf(context).width / _mockWidth;
+    double s(double v) => v * k;
+
+    final (text, badge, icon) = switch (c.status) {
       WearStatus.ready => (
-        'Часы подключены${c.hr == null ? '' : ' · ♥ ${c.hr}'}${c.battery == null ? '' : ' · ${c.battery}%'}',
-        kGreen
+        'Часы подключены${c.battery == null ? '' : ' · ${c.battery}%'}',
+        const Color(0xFF3CC24F),
+        Icons.link
       ),
-      WearStatus.connected || WearStatus.authorizing => ('Часы подключены, авторизация…', kOrange),
-      WearStatus.connecting => ('Подключаем часы…', kOrange),
-      WearStatus.off => ('Часы не подключены', Colors.grey),
+      WearStatus.connected || WearStatus.authorizing => (
+        'Часы подключены, авторизация…',
+        kOrange,
+        Icons.link
+      ),
+      WearStatus.connecting => ('Подключаем часы…', kOrange, Icons.sync),
+      WearStatus.off => (
+        c.savedId == null ? 'Подключить часы' : 'Часы не подключены',
+        const Color(0xFF9CA3AF),
+        Icons.link_off
+      ),
     };
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: ActionChip(
-        avatar: c.status == WearStatus.connecting
-            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-            : Icon(Icons.watch_outlined, size: 18, color: color),
-        label: Text(text, style: const TextStyle(fontWeight: FontWeight.w600)),
-        onPressed: () => Navigator.push(
-            context, MaterialPageRoute(builder: (_) => const WearablePage())),
+    final hr = c.status == WearStatus.ready && c.hr != null ? '  ·  ♥ ${c.hr}' : '';
+
+    return GestureDetector(
+      onTap: () =>
+          Navigator.push(context, MaterialPageRoute(builder: (_) => const WearablePage())),
+      child: Container(
+        height: s(203),
+        margin: EdgeInsets.symmetric(horizontal: s(10)),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(s(100)),
+          gradient: const LinearGradient(colors: [Color(0xFF8A4BE8), Color(0xFF6A2BD6)]),
+          boxShadow: [
+            BoxShadow(color: _p.withOpacity(0.30), blurRadius: s(26), offset: Offset(0, s(10)))
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(s(100)),
+          child: Stack(children: [
+            Positioned(
+              left: s(32),
+              top: 0,
+              width: s(250),
+              height: s(203),
+              child: ShaderMask(
+                blendMode: BlendMode.dstIn,
+                shaderCallback: (r) => const LinearGradient(
+                  colors: [Colors.transparent, Colors.black, Colors.black, Colors.transparent],
+                  stops: [0.0, 0.10, 0.88, 1.0],
+                ).createShader(r),
+                child: Image.asset('assets/dashboard/watch.png', fit: BoxFit.cover),
+              ),
+            ),
+            Positioned(
+              left: s(305),
+              right: s(26),
+              top: s(53),
+              height: s(67) + s(0),
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: s(14)),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(s(34)),
+                  border: Border.all(color: Colors.white.withOpacity(0.85), width: s(2.5)),
+                  color: Colors.white.withOpacity(0.06),
+                ),
+                child: Row(children: [
+                  Container(
+                    width: s(50),
+                    height: s(50),
+                    decoration: BoxDecoration(color: badge, shape: BoxShape.circle),
+                    child: Icon(icon, size: s(32), color: Colors.white),
+                  ),
+                  SizedBox(width: s(18)),
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text('$text$hr',
+                          style: TextStyle(
+                              fontSize: s(29),
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white)),
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, size: s(40), color: Colors.white),
+                ]),
+              ),
+            ),
+          ]),
+        ),
       ),
     );
   }
@@ -93,150 +222,392 @@ class _Body extends ConsumerWidget {
     final left = target - eaten.calories;
     final pct = target > 0 ? eaten.calories / target : 0.0;
     final cs = Theme.of(context).colorScheme;
-    return Column(children: [
-      AppCard(
-        child: Column(children: [
-          Row(children: [
-            CalorieRing(
-              progress: pct,
-              size: 140,
-              center: Column(mainAxisSize: MainAxisSize.min, children: [
-                Text('${(pct * 100).round()}%',
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
-                Text(pct > 1 ? 'превышено' : 'выполнено',
-                    style: TextStyle(color: cs.onSurfaceVariant)),
-              ]),
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final k = MediaQuery.sizeOf(context).width / _mockWidth;
+    double s(double v) => v * k;
+    final card = dark ? const Color(0xFF1C1C26) : Colors.white;
+    final ink = cs.onSurface;
+    final muted = cs.onSurfaceVariant;
+    final accent = dark ? _pl : _p;
+    TextStyle t(double px, {FontWeight w = FontWeight.w400, Color? c}) =>
+        TextStyle(fontSize: s(px), fontWeight: w, color: c ?? ink, height: 1.2);
+    final shadow = [
+      BoxShadow(
+          color: _p.withOpacity(dark ? 0 : 0.09), blurRadius: s(28), offset: Offset(0, s(8)))
+    ];
+
+    Widget cardBox({required Widget child, EdgeInsets? padding, double radius = 44, VoidCallback? onTap}) =>
+        Container(
+          margin: EdgeInsets.symmetric(horizontal: s(2)),
+          decoration: BoxDecoration(
+              color: card, borderRadius: BorderRadius.circular(s(radius)), boxShadow: shadow),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(s(radius)),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(s(radius)),
+              onTap: onTap,
+              child: Padding(padding: padding ?? EdgeInsets.all(s(28)), child: child),
             ),
-            const SizedBox(width: 16),
+          ),
+        );
+
+    Widget bar(double value, double goal) {
+      final f = goal <= 0 ? 0.0 : (value / goal).clamp(0.0, 1.0);
+      return Container(
+        height: s(14),
+        decoration: BoxDecoration(
+            color: muted.withOpacity(0.16), borderRadius: BorderRadius.circular(s(7))),
+        alignment: Alignment.centerLeft,
+        child: FractionallySizedBox(
+          widthFactor: f,
+          child: Container(
+              decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [_pl, _p]),
+                  borderRadius: BorderRadius.circular(s(7)))),
+        ),
+      );
+    }
+
+    String pctOf(double v, double g) => g <= 0 ? '0%' : '${(v / g * 100).round()}%';
+
+    Widget macro(IconData icon, String label, double v, double goal) => Expanded(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: s(14)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(icon, size: s(40), color: accent),
+                SizedBox(width: s(12)),
+                Flexible(
+                    child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(label, style: t(30, w: FontWeight.w800)))),
+              ]),
+              SizedBox(height: s(8)),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text.rich(TextSpan(children: [
+                  TextSpan(text: fmt0(v), style: t(38, w: FontWeight.w800)),
+                  TextSpan(text: ' / ${fmt0(goal)} г', style: t(26, c: muted)),
+                ])),
+              ),
+              SizedBox(height: s(12)),
+              bar(v, goal),
+              SizedBox(height: s(8)),
+              Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(pctOf(v, goal), style: t(24))),
+            ]),
+          ),
+        );
+
+    final divider = Container(width: 1, color: muted.withOpacity(0.22));
+
+    Widget mealRow(Meal m, {required bool last}) {
+      final n = d.mealTotal(m.name);
+      final green = m == Meal.lunch;
+      final c = green ? const Color(0xFF3CC24F) : accent;
+      final icon = switch (m) {
+        Meal.breakfast => Icons.wb_twilight,
+        Meal.lunch => Icons.room_service_outlined,
+        Meal.dinner => Icons.nightlight_round,
+        Meal.snack => Icons.apple,
+      };
+      return Column(children: [
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: s(8)),
+          child: Row(children: [
+            Container(
+              width: s(88),
+              height: s(88),
+              decoration: BoxDecoration(
+                  color: c.withOpacity(dark ? 0.25 : 0.14),
+                  borderRadius: BorderRadius.circular(s(26))),
+              child: Icon(icon, size: s(48), color: c),
+            ),
+            SizedBox(width: s(34)),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Row(children: [
-                  Icon(Icons.local_fire_department, color: kOrange),
-                  SizedBox(width: 4),
-                  Text('Калории', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                ]),
-                const SizedBox(height: 6),
+                Text(m.label, style: t(32, w: FontWeight.w800)),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
-                  child: Text.rich(TextSpan(children: [
-                    TextSpan(
-                        text: fmt0(eaten.calories),
-                        style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800)),
-                    TextSpan(
-                        text: ' / ${fmt0(target)} ккал',
-                        style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant)),
-                  ])),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                      color: (left >= 0 ? kGreen : kRed).withOpacity(0.18),
-                      borderRadius: BorderRadius.circular(20)),
                   child: Text(
-                      left >= 0
-                          ? 'Осталось: ${fmt0(left)} ккал'
-                          : 'Превышено: ${fmt0(-left)} ккал',
-                      style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: left >= 0 ? const Color(0xFF2E9E3A) : kRed)),
+                      'Б: ${fmt0(n.proteins)} г    Ж: ${fmt0(n.fats)} г    У: ${fmt0(n.carbs)} г',
+                      style: t(24, c: muted)),
                 ),
-                if (d.mode.name == 'dynamic')
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text('Динамическая цель (база ${fmt0(d.goal.calories)})',
-                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                  ),
               ]),
             ),
+            Text('${fmt0(n.calories)} ккал', style: t(28, w: FontWeight.w800)),
+            SizedBox(width: s(10)),
+            Icon(Icons.chevron_right, size: s(40), color: ink),
           ]),
-          const Divider(height: 28),
-          Row(children: [
-            Expanded(
-                child: MacroBar(
-                    label: 'Белки',
-                    icon: Icons.fitness_center,
-                    value: eaten.proteins,
-                    goal: d.goal.proteins,
-                    color: kBlue)),
-            const SizedBox(width: 12),
-            Expanded(
-                child: MacroBar(
-                    label: 'Жиры',
-                    icon: Icons.water_drop_outlined,
-                    value: eaten.fats,
-                    goal: d.goal.fats,
-                    color: kOrange)),
-            const SizedBox(width: 12),
-            Expanded(
-                child: MacroBar(
-                    label: 'Углеводы',
-                    icon: Icons.grain,
-                    value: eaten.carbs,
-                    goal: d.goal.carbs,
-                    color: kViolet)),
-          ]),
-        ]),
-      ),
-      const SizedBox(height: 14),
-      AppCard(
-        onTap: () => ref.read(tabProvider.notifier).state = 1,
+        ),
+        if (!last)
+          Padding(
+            padding: EdgeInsets.only(left: s(122)),
+            child: Divider(height: 1, color: muted.withOpacity(0.2)),
+          ),
+      ]);
+    }
+
+    return Column(children: [
+      // Калории и макронутриенты
+      cardBox(
+        radius: 44,
+        padding: EdgeInsets.fromLTRB(s(38), s(24), s(32), s(20)),
         child: Column(children: [
-          SectionTitle('Приёмы пищи',
-              icon: Icons.restaurant,
-              trailing: Row(children: [
-                Text('${fmt0(eaten.calories)} ккал',
-                    style: const TextStyle(fontWeight: FontWeight.w700)),
-                const Icon(Icons.chevron_right),
-              ])),
-          const SizedBox(height: 8),
-          for (final m in Meal.values) _MealRow(m, d),
+          SizedBox(
+            height: s(270),
+            child: Row(children: [
+              SizedBox(
+                width: s(280),
+                height: s(270),
+                child: Stack(alignment: Alignment.center, children: [
+                  CustomPaint(
+                      size: Size(s(276), s(276)),
+                      painter: _RingPainter(pct, s(28), dark)),
+                  Column(mainAxisSize: MainAxisSize.min, children: [
+                    Text('${(pct * 100).round()}%', style: t(60, w: FontWeight.w800)),
+                    Text(pct > 1 ? 'превышено' : 'выполнено', style: t(24)),
+                  ]),
+                ]),
+              ),
+              SizedBox(width: s(26)),
+              Container(width: 1, height: s(210), color: muted.withOpacity(0.22)),
+              SizedBox(width: s(40)),
+              Expanded(
+                child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Icon(Icons.local_fire_department, size: s(46), color: accent),
+                        SizedBox(width: s(14)),
+                        Text('Калории', style: t(30, w: FontWeight.w800)),
+                      ]),
+                      SizedBox(height: s(6)),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text.rich(TextSpan(children: [
+                          TextSpan(text: fmt0(eaten.calories), style: t(70, w: FontWeight.w800)),
+                          TextSpan(text: '  / ${fmt0(target)} ккал', style: t(32, c: muted)),
+                        ])),
+                      ),
+                      SizedBox(height: s(14)),
+                      Container(
+                        height: s(62),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                            color: left >= 0 ? _p.withOpacity(dark ? 0.30 : 0.14) : kRed.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(s(31))),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: s(16)),
+                            child: Text(
+                                left >= 0
+                                    ? 'Осталось: ${fmt0(left)} ккал'
+                                    : 'Превышено: ${fmt0(-left)} ккал',
+                                style: t(28,
+                                    w: FontWeight.w800, c: left >= 0 ? accent : kRed)),
+                          ),
+                        ),
+                      ),
+                      if (d.mode.name == 'dynamic')
+                        Padding(
+                          padding: EdgeInsets.only(top: s(8)),
+                          child: Text('Динамическая цель (база ${fmt0(d.goal.calories)})',
+                              style: t(20, c: muted)),
+                        ),
+                    ]),
+              ),
+            ]),
+          ),
+          Divider(height: s(30), color: muted.withOpacity(0.2)),
+          IntrinsicHeight(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              macro(Icons.fitness_center, 'Белки', eaten.proteins, d.goal.proteins),
+              divider,
+              macro(Icons.water_drop_outlined, 'Жиры', eaten.fats, d.goal.fats),
+              divider,
+              macro(Icons.grass, 'Углеводы', eaten.carbs, d.goal.carbs),
+            ]),
+          ),
         ]),
       ),
-      const SizedBox(height: 14),
+      SizedBox(height: s(22)),
+
+      // Приёмы пищи
+      cardBox(
+        radius: 44,
+        onTap: () => ref.read(tabProvider.notifier).state = 1,
+        padding: EdgeInsets.fromLTRB(s(32), s(22), s(26), s(14)),
+        child: Column(children: [
+          Padding(
+            padding: EdgeInsets.only(bottom: s(10)),
+            child: Row(children: [
+              Icon(Icons.restaurant, size: s(48), color: accent),
+              SizedBox(width: s(22)),
+              Expanded(child: Text('Приёмы пищи', style: t(36, w: FontWeight.w800))),
+              Text('${fmt0(eaten.calories)} ккал', style: t(28, w: FontWeight.w800)),
+              SizedBox(width: s(10)),
+              Icon(Icons.chevron_right, size: s(40), color: ink),
+            ]),
+          ),
+          for (final (i, m) in Meal.values.indexed) mealRow(m, last: i == Meal.values.length - 1),
+        ]),
+      ),
+      SizedBox(height: s(22)),
+
+      // Вода и активность
       IntrinsicHeight(
         child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Expanded(child: _WaterCard(d)),
-          const SizedBox(width: 12),
+          SizedBox(width: s(22)),
           Expanded(child: _ActivityCard(d)),
         ]),
       ),
-      const SizedBox(height: 14),
+      SizedBox(height: s(22)),
       const _WeightCard(),
     ]);
   }
 }
 
-class _MealRow extends StatelessWidget {
-  final Meal m;
-  final DayData d;
-  const _MealRow(this.m, this.d);
+class _RingPainter extends CustomPainter {
+  final double progress, stroke;
+  final bool dark;
+  _RingPainter(this.progress, this.stroke, this.dark);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = (size.shortestSide - stroke) / 2;
+    final c = size.center(Offset.zero);
+    canvas.drawCircle(
+        c,
+        r,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke
+          ..color = dark ? const Color(0xFF2E2E3A) : const Color(0xFFE9E6F4));
+    final p = progress.clamp(0.0, 1.0);
+    if (p <= 0) return;
+    canvas.drawArc(
+        Rect.fromCircle(center: c, radius: r),
+        -math.pi / 2,
+        math.max(0.02, 2 * math.pi * p),
+        false,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeWidth = stroke
+          ..shader = const SweepGradient(
+            startAngle: -math.pi / 2,
+            endAngle: 3 * math.pi / 2,
+            colors: [_pl, _p, Color(0xFF5B1DB5)],
+          ).createShader(Offset.zero & size));
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter o) =>
+      o.progress != progress || o.stroke != stroke || o.dark != dark;
+}
+
+/// Маленькая карточка со значением, полосой и кнопкой «+» (вода, активность).
+class _MiniCard extends StatelessWidget {
+  final IconData icon;
+  final String title, value, unit;
+  final double fraction;
+  final VoidCallback onTap, onPlus;
+  const _MiniCard(
+      {required this.icon,
+      required this.title,
+      required this.value,
+      required this.unit,
+      required this.fraction,
+      required this.onTap,
+      required this.onPlus});
+
   @override
   Widget build(BuildContext context) {
-    final n = d.mealTotal(m.name);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(children: [
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-              color: m.color.withOpacity(0.16), borderRadius: BorderRadius.circular(14)),
-          child: Icon(m.icon, color: m.color),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(m.label, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            Text('Б: ${fmt0(n.proteins)} г   Ж: ${fmt0(n.fats)} г   У: ${fmt0(n.carbs)} г',
-                style: TextStyle(
-                    fontSize: 12.5, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+    final cs = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final k = MediaQuery.sizeOf(context).width / _mockWidth;
+    double s(double v) => v * k;
+    final card = dark ? const Color(0xFF1C1C26) : Colors.white;
+    final accent = dark ? _pl : _p;
+    TextStyle t(double px, {FontWeight w = FontWeight.w400, Color? c}) =>
+        TextStyle(fontSize: s(px), fontWeight: w, color: c ?? cs.onSurface, height: 1.2);
+    return Container(
+      decoration: BoxDecoration(
+          color: card,
+          borderRadius: BorderRadius.circular(s(40)),
+          boxShadow: [
+            BoxShadow(
+                color: _p.withOpacity(dark ? 0 : 0.09), blurRadius: s(28), offset: Offset(0, s(8)))
           ]),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(s(40)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(s(40)),
+          onTap: onTap,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(s(36), s(26), s(26), s(18)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(icon, size: s(46), color: accent),
+                SizedBox(width: s(18)),
+                Expanded(
+                    child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(title, style: t(32, w: FontWeight.w800)))),
+                GestureDetector(
+                  onTap: onPlus,
+                  child: Container(
+                    width: s(56),
+                    height: s(56),
+                    decoration: BoxDecoration(
+                        color: _p.withOpacity(dark ? 0.30 : 0.12), shape: BoxShape.circle),
+                    child: Icon(Icons.add, size: s(38), color: accent),
+                  ),
+                ),
+              ]),
+              SizedBox(height: s(14)),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text.rich(TextSpan(children: [
+                  TextSpan(text: value, style: t(48, w: FontWeight.w800)),
+                  TextSpan(text: ' $unit', style: t(28, c: cs.onSurfaceVariant)),
+                ])),
+              ),
+              SizedBox(height: s(14)),
+              Container(
+                height: s(14),
+                decoration: BoxDecoration(
+                    color: cs.onSurfaceVariant.withOpacity(0.16),
+                    borderRadius: BorderRadius.circular(s(7))),
+                alignment: Alignment.centerLeft,
+                child: FractionallySizedBox(
+                  widthFactor: fraction.clamp(0.0, 1.0),
+                  child: Container(
+                      decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [_pl, _p]),
+                          borderRadius: BorderRadius.circular(s(7)))),
+                ),
+              ),
+              SizedBox(height: s(6)),
+              Align(
+                  alignment: Alignment.centerRight,
+                  child: Text('${(fraction * 100).round()}%', style: t(24))),
+            ]),
+          ),
         ),
-        Text('${fmt0(n.calories)} ккал',
-            style: const TextStyle(fontWeight: FontWeight.w700)),
-      ]),
+      ),
     );
   }
 }
@@ -244,60 +615,58 @@ class _MealRow extends StatelessWidget {
 class _WaterCard extends ConsumerWidget {
   final DayData d;
   const _WaterCard(this.d);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final db = ref.read(dbProvider);
     final ml = d.plainWaterMl;
-    final pct = d.goal.waterMl > 0 ? ml / d.goal.waterMl : 0.0;
-    return AppCard(
-      onTap: () => Navigator.push(
-          context, MaterialPageRoute(builder: (_) => const WaterPage())),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const SectionTitle('Вода', icon: Icons.water_drop, color: kBlue),
-        const SizedBox(height: 10),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text.rich(TextSpan(children: [
-            TextSpan(
-                text: fmt0(ml),
-                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
-            TextSpan(
-                text: ' / ${fmt0(d.goal.waterMl)} мл',
-                style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          ])),
-        ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: LinearProgressIndicator(
-              value: pct.clamp(0.0, 1.0),
-              minHeight: 9,
-              color: kBlue,
-              backgroundColor: kBlue.withOpacity(0.18)),
-        ),
-        Align(
-            alignment: Alignment.centerRight,
-            child: Text('${(pct * 100).round()}%', style: const TextStyle(fontSize: 12))),
-        const Spacer(),
-        Wrap(spacing: 6, runSpacing: 6, children: [
-          for (final v in [100, 200, 250, 500])
-            InkWell(
-              borderRadius: BorderRadius.circular(10),
-              onTap: () async {
-                if (!await guardPast(context, d.key)) return;
-                await db.addWater(d.key, v.toDouble());
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                    color: kBlue.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
-                child: Text('+$v',
-                    style: const TextStyle(color: kBlue, fontWeight: FontWeight.w700)),
+    final goal = d.goal.waterMl;
+    final pct = goal > 0 ? ml / goal : 0.0;
+
+    Future<void> add(double v) async {
+      if (!await guardPast(context, d.key)) return;
+      await db.addWater(d.key, v);
+    }
+
+    void plus() => showModalBottomSheet(
+        context: context,
+        builder: (ctx) => SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Text('Добавить воды',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 14),
+                  Wrap(spacing: 10, runSpacing: 10, children: [
+                    for (final v in [100, 200, 250, 500])
+                      ActionChip(
+                        label: Text('+$v мл'),
+                        onPressed: () async {
+                          Navigator.pop(ctx);
+                          await add(v.toDouble());
+                        },
+                      ),
+                    ActionChip(
+                      label: const Text('Другой объём…'),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        Navigator.push(
+                            context, MaterialPageRoute(builder: (_) => const WaterPage()));
+                      },
+                    ),
+                  ]),
+                ]),
               ),
-            ),
-        ]),
-      ]),
+            ));
+
+    return _MiniCard(
+      icon: Icons.water_drop_outlined,
+      title: 'Вода',
+      value: fmt1(ml / 1000),
+      unit: '/ ${fmtAuto(goal / 1000)} л',
+      fraction: pct,
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WaterPage())),
+      onPlus: plus,
     );
   }
 }
@@ -305,44 +674,22 @@ class _WaterCard extends ConsumerWidget {
 class _ActivityCard extends ConsumerWidget {
   final DayData d;
   const _ActivityCard(this.d);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final a = d.activity;
-    final src = ref.watch(sourceProvider).valueOrNull;
-    final cs = Theme.of(context).colorScheme;
-    Widget row(IconData i, Color c, String t) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Row(children: [
-            Icon(i, color: c, size: 20),
-            const SizedBox(width: 8),
-            Expanded(
-                child: Text(t,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600))),
-          ]),
-        );
-    return AppCard(
-      onTap: () => ref.read(tabProvider.notifier).state = 2,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const SectionTitle('Активность', icon: Icons.directions_run, color: kPrimary),
-        const SizedBox(height: 8),
-        if (!a.hasData)
-          Text(src == null ? 'Часы не подключены' : 'Нет данных за день',
-              style: TextStyle(color: cs.onSurfaceVariant))
-        else ...[
-          row(Icons.directions_walk, Colors.grey, '${fmt0(a.steps)} шагов'),
-          row(Icons.place, kGreen, '${fmt1(a.distanceKm)} км'),
-          row(Icons.local_fire_department, kOrange, '${fmt0(a.activeKcal)} ккал'),
-          row(Icons.schedule, kBlue, '${fmt0(a.workoutMinutes)} мин'),
-        ],
-        const Spacer(),
-        Text(
-          src?.lastSync == null
-              ? 'Синхронизации не было'
-              : 'Синхронизировано в ${fmtTime(src!.lastSync!)}',
-          style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
-        ),
-      ]),
+    final goal = double.tryParse(ref.watch(settingsProvider).valueOrNull?['steps_goal'] ?? '') ??
+        defaultStepsGoal;
+    final pct = goal > 0 ? a.steps / goal : 0.0;
+    void open() => ref.read(tabProvider.notifier).state = 2;
+    return _MiniCard(
+      icon: Icons.directions_run,
+      title: 'Активность',
+      value: fmt0(a.steps),
+      unit: '/ ${fmt0(goal)} шагов',
+      fraction: pct,
+      onTap: open,
+      onPlus: open,
     );
   }
 }
@@ -354,61 +701,90 @@ class _WeightCard extends ConsumerWidget {
     final ws = ref.watch(weightsProvider).valueOrNull ?? [];
     final user = ref.watch(userProvider).valueOrNull;
     final cs = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final k = MediaQuery.sizeOf(context).width / _mockWidth;
+    double s(double v) => v * k;
+    final accent = dark ? _pl : _p;
     final cur = ws.isEmpty ? null : ws.last.weightKg;
     final delta = ws.length < 2 ? null : ws.last.weightKg - ws.first.weightKg;
     final recent = ws.length > 12 ? ws.sublist(ws.length - 12) : ws;
-    return AppCard(
-      onTap: () => Navigator.push(
-          context, MaterialPageRoute(builder: (_) => const WeightPage())),
-      child: Row(children: [
-        Expanded(
-          flex: 4,
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const SectionTitle('Вес', icon: Icons.monitor_weight_outlined),
-            const SizedBox(height: 8),
-            Text(cur == null ? '— кг' : '${fmt1(cur)} кг',
-                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800)),
-            if (delta != null)
-              Text('${delta >= 0 ? '+' : ''}${fmt1(delta)} кг с начала',
-                  style: TextStyle(
-                      color: delta >= 0 ? const Color(0xFF2E9E3A) : kBlue,
-                      fontWeight: FontWeight.w600)),
-            if (user?.targetWeightKg != null)
-              Text('Цель: ${fmt1(user!.targetWeightKg!)} кг',
-                  style: TextStyle(color: cs.onSurfaceVariant)),
+    TextStyle t(double px, {FontWeight w = FontWeight.w400, Color? c}) =>
+        TextStyle(fontSize: s(px), fontWeight: w, color: c ?? cs.onSurface, height: 1.2);
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: s(2)),
+      decoration: BoxDecoration(
+          color: dark ? const Color(0xFF1C1C26) : Colors.white,
+          borderRadius: BorderRadius.circular(s(40)),
+          boxShadow: [
+            BoxShadow(
+                color: _p.withOpacity(dark ? 0 : 0.09), blurRadius: s(28), offset: Offset(0, s(8)))
           ]),
-        ),
-        Expanded(
-          flex: 5,
-          child: SizedBox(
-            height: 80,
-            child: recent.length < 2
-                ? Center(
-                    child: Text('Добавьте замеры',
-                        style: TextStyle(color: cs.onSurfaceVariant)))
-                : LineChart(LineChartData(
-                    gridData: const FlGridData(show: false),
-                    titlesData: const FlTitlesData(show: false),
-                    borderData: FlBorderData(show: false),
-                    lineTouchData: const LineTouchData(enabled: false),
-                    lineBarsData: [
-                      LineChartBarData(
-                        spots: [
-                          for (var i = 0; i < recent.length; i++)
-                            FlSpot(i.toDouble(), recent[i].weightKg)
-                        ],
-                        isCurved: true,
-                        color: kPrimary,
-                        barWidth: 2.5,
-                        dotData: const FlDotData(show: true),
-                        belowBarData: BarAreaData(
-                            show: true, color: kPrimary.withOpacity(0.12)),
-                      ),
-                    ],
-                  )),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(s(40)),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(s(40)),
+          onTap: () =>
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const WeightPage())),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(s(36), s(26), s(30), s(26)),
+            child: Row(children: [
+              Expanded(
+                flex: 4,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Icon(Icons.monitor_weight_outlined, size: s(46), color: accent),
+                    SizedBox(width: s(18)),
+                    Text('Вес', style: t(32, w: FontWeight.w800)),
+                  ]),
+                  SizedBox(height: s(10)),
+                  FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(cur == null ? '— кг' : '${fmt1(cur)} кг',
+                          style: t(48, w: FontWeight.w800))),
+                  if (delta != null)
+                    Text('${delta >= 0 ? '+' : ''}${fmt1(delta)} кг с начала',
+                        style: t(24, w: FontWeight.w600, c: accent)),
+                  if (user?.targetWeightKg != null)
+                    Text('Цель: ${fmt1(user!.targetWeightKg!)} кг',
+                        style: t(24, c: cs.onSurfaceVariant)),
+                ]),
+              ),
+              Expanded(
+                flex: 5,
+                child: SizedBox(
+                  height: s(160),
+                  child: recent.length < 2
+                      ? Center(
+                          child: Text('Добавьте замеры', style: t(24, c: cs.onSurfaceVariant)))
+                      : LineChart(LineChartData(
+                          gridData: const FlGridData(show: false),
+                          titlesData: const FlTitlesData(show: false),
+                          borderData: FlBorderData(show: false),
+                          lineTouchData: const LineTouchData(enabled: false),
+                          lineBarsData: [
+                            LineChartBarData(
+                              spots: [
+                                for (var i = 0; i < recent.length; i++)
+                                  FlSpot(i.toDouble(), recent[i].weightKg)
+                              ],
+                              isCurved: true,
+                              preventCurveOverShooting: true,
+                              color: accent,
+                              barWidth: 3,
+                              dotData: const FlDotData(show: true),
+                              belowBarData:
+                                  BarAreaData(show: true, color: _pl.withOpacity(0.15)),
+                            ),
+                          ],
+                        )),
+                ),
+              ),
+            ]),
           ),
         ),
-      ]),
+      ),
     );
   }
 }

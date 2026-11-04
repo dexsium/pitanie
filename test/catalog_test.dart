@@ -160,6 +160,7 @@ void main() {
       raw.execute(
           "INSERT INTO products (name, calories, proteins, fats, carbohydrates, source, is_custom) "
           "VALUES ('Моя гречка', 110, 3.6, 1.2, 21.3, 'Пользователь', 1)");
+      raw.execute('ALTER TABLE weight_entries DROP COLUMN impedance');
       raw.execute('PRAGMA user_version = 1');
       raw.dispose();
 

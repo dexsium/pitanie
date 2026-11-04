@@ -109,6 +109,8 @@ class WeightEntries extends Table {
   TextColumn get date => text()();
   DateTimeColumn get measuredAt => dateTime()();
   RealColumn get weightKg => real()();
+  // Импеданс (Ом) с умных весов: по нему считается состав тела. У ручных замеров его нет.
+  RealColumn get impedance => real().nullable()();
 }
 
 class ActivityRecords extends Table {
@@ -204,7 +206,7 @@ class AppDatabase extends _$AppDatabase {
       }));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -234,6 +236,9 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(products, products.portionLabel);
             await customStatement(
                 'CREATE INDEX IF NOT EXISTS idx_product_source ON products(source, source_id)');
+          }
+          if (from < 3) {
+            await m.addColumn(weightEntries, weightEntries.impedance);
           }
         },
         beforeOpen: (details) async {
@@ -629,13 +634,19 @@ class AppDatabase extends _$AppDatabase {
         ..orderBy([(t) => OrderingTerm.asc(t.measuredAt)]))
       .watch();
 
+  Future<WeightEntry> weightById(int id) =>
+      (select(weightEntries)..where((t) => t.id.equals(id))).getSingle();
+
   Future<List<WeightEntry>> allWeights() => (select(weightEntries)
         ..orderBy([(t) => OrderingTerm.asc(t.measuredAt)]))
       .get();
 
-  Future<int> addWeight(DateTime at, double kg) =>
+  Future<int> addWeight(DateTime at, double kg, {double? impedance}) =>
       into(weightEntries).insert(WeightEntriesCompanion.insert(
-          date: dayKey(at), measuredAt: at, weightKg: kg));
+          date: dayKey(at),
+          measuredAt: at,
+          weightKg: kg,
+          impedance: Value(impedance)));
 
   Future<void> updateWeight(int id, DateTime at, double kg) =>
       (update(weightEntries)..where((t) => t.id.equals(id))).write(

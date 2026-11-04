@@ -13,6 +13,9 @@ final scaleProvider =
 
 final _uScale2 = Guid('181b');
 
+/// Этап измерения для окна «Измерение веса».
+enum ScalePhase { idle, measuring, saving, done }
+
 /// Слушает рекламные пакеты Mi Body Composition Scale 2 и сохраняет завершённые взвешивания.
 /// Работает, пока приложение открыто: iOS не отдаёт такие пакеты свёрнутому приложению.
 class ScaleController extends ChangeNotifier {
@@ -25,6 +28,16 @@ class ScaleController extends ChangeNotifier {
   String? lastStamp;
   bool scanning = false;
   final log = <String>[];
+
+  // Состояние текущего взвешивания (для окна измерения)
+  ScalePhase phase = ScalePhase.idle;
+  double? liveKg;
+  WeightEntry? savedEntry;
+
+  /// Пользователь закрыл окно измерения: до конца этого взвешивания его не открываем снова.
+  bool dismissed = false;
+  DateTime? _lastPacketAt;
+  Timer? _watchdog;
 
   bool _loaded = false;
   StreamSubscription<List<ScanResult>>? _sub;
@@ -87,6 +100,9 @@ class ScaleController extends ChangeNotifier {
     }
   }
 
+  MiScaleReading? _pending;
+  Timer? _pendingTimer;
+
   Future<void> _onResults(List<ScanResult> list) async {
     for (final r in list) {
       final data = r.advertisementData.serviceData[_uScale2];
@@ -96,23 +112,104 @@ class ScaleController extends ChangeNotifier {
         _addLog('пакет 0x181B не распознан (${data.length} байт)');
         continue;
       }
-      if (!reading.isFinal || reading.stamp == lastStamp) continue;
-      lastStamp = reading.stamp;
-      final now = DateTime.now();
-      await db.addWeight(now, reading.weightKg);
-      await db.setSetting('scale_last_stamp', reading.stamp);
-      await db.setSetting('scale_last_kg', '${reading.weightKg}');
-      await db.setSetting('scale_last_at', '${now.millisecondsSinceEpoch}');
-      lastKg = reading.weightKg;
-      lastAt = now;
-      _addLog('вес ${reading.weightKg} кг сохранён'
-          '${reading.impedance == null ? '' : ' (импеданс ${reading.impedance} Ом, не используется)'}');
-      notifyListeners();
+      await onReading(reading);
     }
+  }
+
+  void _setPhase(ScalePhase p) {
+    phase = p;
+    if (p == ScalePhase.idle) {
+      dismissed = false;
+      liveKg = null;
+      savedEntry = null;
+    }
+    notifyListeners();
+  }
+
+  /// Обработка одного распознанного пакета весов.
+  @visibleForTesting
+  Future<void> onReading(MiScaleReading reading, {DateTime? now}) async {
+    final t = now ?? DateTime.now();
+    _lastPacketAt = t;
+    // Пакет уже сохранённого взвешивания или «нагрузка снята»: человек сошёл с весов.
+    if (reading.stamp == lastStamp || reading.loadRemoved) {
+      if (phase == ScalePhase.measuring) {
+        _pending = null;
+        _pendingTimer?.cancel();
+        _addLog('измерение прервано: человек сошёл с весов');
+        _setPhase(ScalePhase.idle);
+      } else if (phase == ScalePhase.done) {
+        _setPhase(ScalePhase.idle);
+      }
+      return;
+    }
+    if (phase == ScalePhase.done || phase == ScalePhase.saving) {
+      if (reading.stamp != lastStamp) _setPhase(ScalePhase.idle);
+    }
+    _watchdog ??= Timer.periodic(const Duration(seconds: 2), (_) => checkStale());
+    if (phase == ScalePhase.idle) {
+      phase = ScalePhase.measuring;
+      _addLog('весы: начато измерение');
+    }
+    liveKg = reading.weightKg;
+    notifyListeners();
+    if (!reading.isFinal) return;
+
+    final p = _pending;
+    if (p != null && p.stamp != reading.stamp) {
+      // Пришло другое взвешивание: удержанное сохраняем как есть.
+      await _flush();
+    }
+    if (reading.impedance != null) {
+      _pendingTimer?.cancel();
+      _pending = reading;
+      await _flush();
+    } else if (_pending == null) {
+      // Вес стабилен, а импеданс ещё не измерен: ждём пакет с импедансом, но не дольше 15 секунд.
+      _pending = reading;
+      _pendingTimer?.cancel();
+      _pendingTimer = Timer(const Duration(seconds: 15), _flush);
+    }
+  }
+
+  /// Если пакеты перестали приходить во время измерения, измерение считается прерванным.
+  @visibleForTesting
+  void checkStale({DateTime? now}) {
+    final t = now ?? DateTime.now();
+    final last = _lastPacketAt;
+    if (phase == ScalePhase.measuring && last != null && t.difference(last).inSeconds > 25) {
+      _pending = null;
+      _pendingTimer?.cancel();
+      _addLog('измерение прервано: весы перестали передавать данные');
+      _setPhase(ScalePhase.idle);
+    }
+  }
+
+  Future<void> _flush() async {
+    final reading = _pending;
+    _pending = null;
+    _pendingTimer?.cancel();
+    if (reading == null || reading.stamp == lastStamp) return;
+    lastStamp = reading.stamp;
+    _setPhase(ScalePhase.saving);
+    final now = DateTime.now();
+    final id = await db.addWeight(now, reading.weightKg, impedance: reading.impedance?.toDouble());
+    await db.setSetting('scale_last_stamp', reading.stamp);
+    await db.setSetting('scale_last_kg', '${reading.weightKg}');
+    await db.setSetting('scale_last_at', '${now.millisecondsSinceEpoch}');
+    lastKg = reading.weightKg;
+    lastAt = now;
+    liveKg = reading.weightKg;
+    savedEntry = await db.weightById(id);
+    _addLog('вес ${reading.weightKg} кг сохранён'
+        '${reading.impedance == null ? ' (без импеданса)' : ' (импеданс ${reading.impedance} Ом)'}');
+    _setPhase(ScalePhase.done);
   }
 
   @override
   void dispose() {
+    _watchdog?.cancel();
+    _pendingTimer?.cancel();
     _timer?.cancel();
     _sub?.cancel();
     super.dispose();

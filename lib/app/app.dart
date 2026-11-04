@@ -12,6 +12,7 @@ import '../features/statistics/statistics_page.dart';
 import '../features/wearables/wearable_controller.dart';
 import '../database/catalog_importer.dart';
 import '../features/scale/scale_controller.dart';
+import '../features/scale/scale_measure_page.dart';
 import 'providers.dart';
 import 'theme.dart';
 
@@ -67,6 +68,8 @@ class HomeShell extends ConsumerStatefulWidget {
 }
 
 class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserver {
+  bool _measureOpen = false;
+
   @override
   void initState() {
     super.initState();
@@ -123,6 +126,19 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
   @override
   Widget build(BuildContext context) {
     final tab = ref.watch(tabProvider);
+    // Человек встал на весы, пока приложение открыто: само открываем окно измерения.
+    ref.listen<ScaleController>(scaleProvider, (prev, next) {
+      if (next.phase == ScalePhase.measuring &&
+          !next.dismissed &&
+          !_measureOpen &&
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.paused) {
+        _measureOpen = true;
+        Navigator.of(context)
+            .push(MaterialPageRoute(
+                fullscreenDialog: true, builder: (_) => const ScaleMeasurePage()))
+            .whenComplete(() => _measureOpen = false);
+      }
+    });
     return Scaffold(
       body: SafeArea(
         child: IndexedStack(index: tab, children: const [
@@ -135,7 +151,18 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
       ),
       bottomNavigationBar: Theme(
         data: tab == 2 ? _greenNav(Theme.of(context)) : Theme.of(context),
-        child: NavigationBar(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0x24FFFFFF)
+                    : const Color(0xFFDCDCE4),
+                width: 1,
+              ),
+            ),
+          ),
+          child: NavigationBar(
         selectedIndex: tab,
         onDestinationSelected: (i) => ref.read(tabProvider.notifier).state = i,
         destinations: const [
@@ -146,6 +173,7 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Профиль'),
         ],
       ),
+        ),
       ),
     );
   }
