@@ -15,6 +15,7 @@ import 'package:pitanie/features/wearables/wearable_controller.dart';
 Uint8List u8(List<int> l) => Uint8List.fromList(l);
 
 void main() {
+  eventsTest();
   group('команды настроек часов', () {
     test('запрос группы «Здоровье»', () {
       expect(encodeHealthRequest(), [3, 0, 8, 5, 0x01, 0x11, 0x12, 0x13, 0x31]);
@@ -166,4 +167,25 @@ void main() {
       });
     }
   }
+}
+
+void eventsTest() {
+  test('сводка потока событий 0x2c: параметры и диапазоны', () {
+    List<int> rec(int hr) => [
+          0x2a, 0x21, 0x08, 0x81, 0x30, 0x10, 0x98, 0xcd, 0xaf, 0xd7, 0x06, //
+          0x18, 0x96, 0xcd, 0xaf, 0xd7, 0x06, 0x22, 0x04, 0x82, 0x80, 0x98,
+          0x38, 0x2a, 0x04, 0x08, 0x22, 0x10, 0x02, 0x2a, 0x04, 0x08, 0x0e,
+          0x10, hr,
+        ];
+    final data = u8([
+      0xfe, 0xef, 0xff, 0x06, 0x0a, 0x02, 0x31, 0x32, // заголовок
+      ...rec(0x45), ...rec(0x44),
+    ]);
+    final r = summarizeEvents(data);
+    expect(r.first, contains('записей: 2'));
+    expect(r.join('\n'), contains('событие 6145'));
+    expect(r.join('\n'), contains('14:2×[68..69]'));
+    expect(r.join('\n'), contains('34:2×[2..2]'));
+    expect(summarizeEvents(u8([1, 2, 3])).length, 1);
+  });
 }

@@ -21,7 +21,8 @@ class FetchResult {
   final Uint8List data;
   final DateTime? start; // момент первой записи (UTC-инстант)
   final String? error;
-  const FetchResult(this.data, this.start, [this.error]);
+  final String? note; // пояснение к принятым данным (диагностика)
+  const FetchResult(this.data, this.start, [this.error, this.note]);
   bool get ok => error == null;
 }
 
@@ -62,7 +63,8 @@ class HuamiFetcher {
   Future<FetchResult> fetch(int type, DateTime since,
       {Duration timeout = const Duration(seconds: 20),
       void Function(String)? onStage,
-      int? maxBytes}) async {
+      int? maxBytes,
+      bool lenient = false}) async {
     final buffer = BytesBuilder();
     final response = StreamController<Uint8List>();
     var lastCounter = -1;
@@ -130,6 +132,11 @@ class HuamiFetcher {
           type == fetchTypeActivity && data.length == expected * 8
               ? expected * 8
               : expected;
+      if (lenient && data.isNotEmpty && data.length != expectedBytes) {
+        await _write([0x03, 0x09]);
+        return FetchResult(data, start, null,
+            'размер не совпал: заявлено $expected, получено ${data.length} байт');
+      }
       if (data.length != expectedBytes) {
         await _write([0x03, 0x09]);
         return FetchResult(Uint8List(0), start,
@@ -351,4 +358,137 @@ String dumpProtobuf(Uint8List b, [int depth = 0]) {
     }
   }
   return out.join(' ');
+}
+
+/// Диагностика: сводка по потоку событий (тип 0x2c): типы событий и параметры внутри них.
+/// Поток — protobuf; записи — поле 5, внутри: 1 — номер события, 2/3 — числа, 5 — пары
+/// (1 — номер параметра, 2 — значение). Возвращает строки для журнала.
+List<String> summarizeEvents(Uint8List data) {
+  for (final skip in const [4, 0]) {
+    final r = _summarizeEventsAt(data, skip);
+    if (r.isNotEmpty) return r;
+  }
+  return const ['не удалось разобрать как protobuf'];
+}
+
+class _Rd {
+  final Uint8List b;
+  int o;
+  _Rd(this.b, this.o);
+  bool get more => o < b.length;
+  int? varint() {
+    var r = 0, shift = 0;
+    while (o < b.length && shift < 64) {
+      final x = b[o++];
+      r |= (x & 0x7f) << shift;
+      if (x & 0x80 == 0) return r;
+      shift += 7;
+    }
+    return null;
+  }
+
+  /// Пропускает значение поля; для вложенных данных возвращает диапазон.
+  (int, int)? skipValue(int wt) {
+    switch (wt) {
+      case 0:
+        return varint() == null ? null : (0, 0);
+      case 1:
+        o += 8;
+        return o <= b.length ? (0, 0) : null;
+      case 5:
+        o += 4;
+        return o <= b.length ? (0, 0) : null;
+      case 2:
+        final n = varint();
+        if (n == null || n < 0 || o + n > b.length) return null;
+        final s = o;
+        o += n;
+        return (s, o);
+      default:
+        return null;
+    }
+  }
+}
+
+List<String> _summarizeEventsAt(Uint8List data, int skip) {
+  final events = <int, _EvStat>{};
+  final top = _Rd(data, skip);
+  var records = 0;
+  while (top.more) {
+    final tag = top.varint();
+    if (tag == null) break;
+    final wt = tag & 7;
+    if (tag >> 3 == 5 && wt == 2) {
+      final n = top.varint();
+      if (n == null || top.o + n > data.length) break;
+      final end = top.o + n;
+      final rec = _Rd(data, top.o);
+      top.o = end;
+      int? id;
+      final params = <int, List<int>>{};
+      while (rec.o < end) {
+        final t = rec.varint();
+        if (t == null) break;
+        final f = t >> 3, w = t & 7;
+        if (f == 1 && w == 0) {
+          id = rec.varint();
+        } else if (f == 5 && w == 2) {
+          final m = rec.varint();
+          if (m == null || rec.o + m > end) break;
+          final sub = _Rd(data, rec.o);
+          final subEnd = rec.o + m;
+          rec.o = subEnd;
+          int? pid, pv;
+          while (sub.o < subEnd) {
+            final st = sub.varint();
+            if (st == null) break;
+            if (st >> 3 == 1 && st & 7 == 0) {
+              pid = sub.varint();
+            } else if (st >> 3 == 2 && st & 7 == 0) {
+              pv = sub.varint();
+            } else if (sub.skipValue(st & 7) == null) {
+              break;
+            }
+          }
+          if (pid != null && pv != null) (params[pid] ??= []).add(pv);
+        } else if (rec.skipValue(w) == null) {
+          break;
+        }
+      }
+      if (id != null) {
+        records++;
+        final st = events[id] ??= _EvStat();
+        st.count++;
+        params.forEach((k, v) => (st.params[k] ??= []).addAll(v));
+      }
+    } else if (top.skipValue(wt) == null) {
+      break;
+    }
+  }
+  if (records == 0) return const [];
+  final out = <String>['записей: $records, типов событий: ${events.length}'];
+  final keys = events.keys.toList()
+    ..sort((a, b) => events[b]!.count.compareTo(events[a]!.count));
+  for (final k in keys.take(40)) {
+    final st = events[k]!;
+    final ps = <String>[];
+    final pk = st.params.keys.toList()..sort();
+    for (final p in pk.take(8)) {
+      final v = st.params[p]!;
+      var mn = v.first, mx = v.first;
+      for (final x in v) {
+        if (x < mn) mn = x;
+        if (x > mx) mx = x;
+      }
+      ps.add('$p:${v.length}×[$mn..$mx]');
+    }
+    out.add(
+        '  событие $k (0x${k.toRadixString(16)}) ×${st.count}: ${ps.join(' ')}');
+  }
+  return out;
+}
+
+class _EvStat {
+  int count = 0;
+  final Map<int, List<int>> params = {};
 }

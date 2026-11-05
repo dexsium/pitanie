@@ -904,14 +904,17 @@ class WearableController extends ChangeNotifier {
       if (t == 0x07) continue; // журналы отладки: объёмные и не нужны
       try {
         final r = await f.fetch(t, since,
-            timeout: const Duration(seconds: 8), maxBytes: 20000);
+            timeout: const Duration(seconds: 8),
+            maxBytes: 20000,
+            lenient: true);
         if (r.ok && r.data.isNotEmpty) {
           answered++;
           final head = r.data
               .take(48)
               .map((b) => b.toRadixString(16).padLeft(2, '0'))
               .join(' ');
-          addLog('ТИП 0x${t.toRadixString(16)}: ${r.data.length} байт: $head');
+          addLog(
+              'ТИП 0x${t.toRadixString(16)}: ${r.data.length} байт${r.note == null ? '' : ' (${r.note})'}: $head');
         } else {
           addLog('ТИП 0x${t.toRadixString(16)}: ${r.error ?? 'пусто'}');
         }
@@ -921,19 +924,26 @@ class WearableController extends ChangeNotifier {
       await Future<void>.delayed(const Duration(milliseconds: 400));
     }
     // Второй проход: большие и неизвестные типы читаются целиком, в журнал — полный дамп.
-    addLog('ГЛУБОКИЙ РАЗБОР: типы 0x2c, 0x3b, 0x0d (до 120000 байт)');
+    addLog('ГЛУБОКИЙ РАЗБОР: типы 0x3b, 0x2c (сводка), 0x0d (до 120000 байт)');
     final deepSince = DateTime.now().subtract(const Duration(days: 7));
     for (final t in const [0x3b, 0x2c, 0x0d]) {
       try {
         final r = await f.fetch(t, deepSince,
-            timeout: const Duration(seconds: 25), maxBytes: 120000);
+            timeout: const Duration(seconds: 40),
+            maxBytes: 120000,
+            lenient: true);
         if (!r.ok || r.data.isEmpty) {
           addLog('ГЛУБОКО 0x${t.toRadixString(16)}: ${r.error ?? 'пусто'}');
         } else {
           addLog(
-              'ГЛУБОКО 0x${t.toRadixString(16)}: ${r.data.length} байт (показано до 1200)');
+              'ГЛУБОКО 0x${t.toRadixString(16)}: ${r.data.length} байт (показано до 1200)${r.note == null ? '' : ', ${r.note}'}');
           final shown = r.data.length > 1200 ? r.data.sublist(0, 1200) : r.data;
-          for (var i = 0; i < shown.length; i += 48) {
+          if (t == 0x2c) {
+            for (final l in summarizeEvents(r.data)) {
+              addLog(l);
+            }
+          }
+          for (var i = 0; i < (t == 0x2c ? 0 : shown.length); i += 48) {
             final end = i + 48 > shown.length ? shown.length : i + 48;
             addLog(
                 '  ${i.toRadixString(16).padLeft(4, '0')}: ${shown.sublist(i, end).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
