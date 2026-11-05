@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../app/providers.dart';
 import '../../app/theme.dart';
@@ -345,6 +347,37 @@ class _WearablePageState extends ConsumerState<WearablePage> {
                               const SnackBar(
                                   content: Text('Журнал скопирован')));
                         }
+                      },
+                    ),
+                    const SizedBox(height: 4),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.inventory_2_outlined),
+                      label: const Text('Скопировать архив данных часов'),
+                      onPressed: () async {
+                        final text = await c.archiveReport();
+                        await Clipboard.setData(ClipboardData(text: text));
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('Архив скопирован')));
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 4),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.ios_share),
+                      label: const Text('Отправить файл архива'),
+                      onPressed: () async {
+                        final path = await c.archivePath();
+                        if (!File(path).existsSync()) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Архив пока пуст')));
+                          }
+                          return;
+                        }
+                        await Share.shareXFiles([XFile(path)]);
                       },
                     ),
                     const SizedBox(height: 8),

@@ -12,6 +12,7 @@ import '../../database/database.dart';
 import '../dashboard/day_data.dart' show kBleSource;
 import 'huami_auth.dart';
 import 'huami_fetch.dart';
+import 'watch_archive.dart';
 import 'watch_settings.dart';
 
 enum WearStatus { off, connecting, connected, authorizing, ready }
@@ -588,6 +589,7 @@ class WearableController extends ChangeNotifier {
       if (err == null) {
         vitals = await _syncVitals(fetcher, settings, now, tzMin);
       }
+      if (err == null) await _archiveStreams(fetcher, now);
     } catch (e) {
       err = 'Ошибка: $e';
     }
@@ -876,6 +878,43 @@ class WearableController extends ChangeNotifier {
     }
   }
 
+  /// Типы, которые часы отдают один раз: читаем целиком и сразу кладём в архив.
+  static const _archiveTypes = {0x02, 0x0d, 0x12, 0x2c, 0x3b};
+
+  /// Сохраняет блок в архив и пишет в журнал его описание. Ничего не теряется,
+  /// даже если разбор в приложении ещё не написан.
+  Future<void> _keepRaw(int t, Uint8List data, String? note) async {
+    addLog(
+        'ТИП 0x${t.toRadixString(16)}: ${data.length} байт${note == null ? '' : ' ($note)'}');
+    for (final l in describeRaw(t, data)) {
+      addLog('  $l');
+    }
+    try {
+      await WatchArchive.add(t, data, note: note);
+    } catch (e) {
+      addLog('архив: $e');
+    }
+  }
+
+  /// Читает «одноразовые» потоки при каждой синхронизации, чтобы они не пропадали.
+  Future<void> _archiveStreams(HuamiFetcher f, DateTime now) async {
+    for (final t in _archiveTypes) {
+      try {
+        final r = await f.fetch(t, now.subtract(const Duration(days: 7)),
+            timeout: const Duration(seconds: 40),
+            maxBytes: 300000,
+            lenient: true);
+        if (r.ok && r.data.isNotEmpty) await _keepRaw(t, r.data, r.note);
+      } catch (e) {
+        addLog('архив 0x${t.toRadixString(16)}: $e');
+      }
+    }
+  }
+
+  Future<String> archiveReport() => WatchArchive.report();
+
+  Future<String> archivePath() async => (await WatchArchive.file()).path;
+
   /// Диагностика: какие типы истории отвечают часы (для поиска HRV и других данных).
   /// Только чтение. Для каждого типа в журнал пишется объявленный размер и начало данных.
   Future<void> probeFetchTypes() async {
@@ -897,61 +936,26 @@ class WearableController extends ChangeNotifier {
       syncMsg = 'Поиск типов данных…';
     });
     final f = HuamiFetcher(c4, c5);
-    addLog('ПОИСК ТИПОВ: старт (0x01–0x40, лимит 20000 байт на тип)');
-    final since = DateTime.now().subtract(const Duration(days: 3));
+    addLog(
+        'ПОИСК ТИПОВ: старт (0x01–0x40); всё прочитанное сохраняется в архив');
+    final since = DateTime.now().subtract(const Duration(days: 7));
     var answered = 0;
     for (var t = 0x01; t <= 0x40; t++) {
       if (t == 0x07) continue; // журналы отладки: объёмные и не нужны
+      final big = _archiveTypes.contains(t);
       try {
         final r = await f.fetch(t, since,
-            timeout: const Duration(seconds: 8),
-            maxBytes: 20000,
+            timeout: Duration(seconds: big ? 40 : 8),
+            maxBytes: big ? 300000 : 20000,
             lenient: true);
         if (r.ok && r.data.isNotEmpty) {
           answered++;
-          final head = r.data
-              .take(48)
-              .map((b) => b.toRadixString(16).padLeft(2, '0'))
-              .join(' ');
-          addLog(
-              'ТИП 0x${t.toRadixString(16)}: ${r.data.length} байт${r.note == null ? '' : ' (${r.note})'}: $head');
+          await _keepRaw(t, r.data, r.note);
         } else {
           addLog('ТИП 0x${t.toRadixString(16)}: ${r.error ?? 'пусто'}');
         }
       } catch (e) {
         addLog('ТИП 0x${t.toRadixString(16)}: ошибка $e');
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-    }
-    // Второй проход: большие и неизвестные типы читаются целиком, в журнал — полный дамп.
-    addLog('ГЛУБОКИЙ РАЗБОР: типы 0x3b, 0x2c (сводка), 0x0d (до 120000 байт)');
-    final deepSince = DateTime.now().subtract(const Duration(days: 7));
-    for (final t in const [0x3b, 0x2c, 0x0d]) {
-      try {
-        final r = await f.fetch(t, deepSince,
-            timeout: const Duration(seconds: 40),
-            maxBytes: 120000,
-            lenient: true);
-        if (!r.ok || r.data.isEmpty) {
-          addLog('ГЛУБОКО 0x${t.toRadixString(16)}: ${r.error ?? 'пусто'}');
-        } else {
-          addLog(
-              'ГЛУБОКО 0x${t.toRadixString(16)}: ${r.data.length} байт (показано до 1200)${r.note == null ? '' : ', ${r.note}'}');
-          final shown = r.data.length > 1200 ? r.data.sublist(0, 1200) : r.data;
-          if (t == 0x2c) {
-            for (final l in summarizeEvents(r.data)) {
-              addLog(l);
-            }
-          }
-          for (var i = 0; i < (t == 0x2c ? 0 : shown.length); i += 48) {
-            final end = i + 48 > shown.length ? shown.length : i + 48;
-            addLog(
-                '  ${i.toRadixString(16).padLeft(4, '0')}: ${shown.sublist(i, end).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
-          }
-          if (t == 0x3b) addLog('  protobuf: ${dumpProtobuf(shown)}');
-        }
-      } catch (e) {
-        addLog('ГЛУБОКО 0x${t.toRadixString(16)}: ошибка $e');
       }
       await Future<void>.delayed(const Duration(milliseconds: 400));
     }
