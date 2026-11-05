@@ -267,12 +267,13 @@ class _MainSourceCard extends ConsumerWidget {
     final cs = Theme.of(context).colorScheme;
     return AppCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Основные часы',
+        const Text('Какие часы сейчас используются',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
         Text(
-            'Если данные приходят с нескольких часов, за день показываются данные одного '
-            'источника: суммы не складываются. Нужные источники появляются после синхронизации.',
+            'Часы подключаются по одним: выберите те, которыми пользуетесь сейчас (например, '
+            'Amazfit или Huawei Watch Fit 4). Данные берутся из выбранного источника, суммы '
+            'разных часов не складываются. Источники из Apple Health появляются после синхронизации.',
             style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
         const SizedBox(height: 8),
         for (final o in options.entries)

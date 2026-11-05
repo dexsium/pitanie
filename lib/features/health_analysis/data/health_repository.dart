@@ -1,6 +1,6 @@
 import '../../../core/dates.dart';
 import '../../../database/database.dart';
-import '../../dashboard/day_data.dart' show kBleSource, mainSourceOf;
+import '../../dashboard/day_data.dart' show mainSourceOf;
 import '../../sleep/sleep_data.dart';
 import '../domain/algorithms/baseline.dart';
 import '../domain/algorithms/resting_hr.dart';
