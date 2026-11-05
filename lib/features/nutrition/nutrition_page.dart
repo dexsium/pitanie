@@ -343,8 +343,8 @@ class _MealCardState extends ConsumerState<MealCard> {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(meal.label,
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                Text('Б: ${fmt0(t.proteins)} г   Ж: ${fmt0(t.fats)} г   У: ${fmt0(t.carbs)} г',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                Text('Б:${fmt0(t.proteins)} г   Ж: ${fmt0(t.fats)} г   У: ${fmt0(t.carbs)} г',
                     style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
               ]),
             ),
@@ -374,6 +374,8 @@ class _MealCardState extends ConsumerState<MealCard> {
               child: Text('Пока ничего не добавлено',
                   style: TextStyle(color: cs.onSurfaceVariant)),
             ),
+          // Первая полоска не должна касаться значка приёма пищи.
+          if (entries.isNotEmpty) const SizedBox(height: 6),
           for (final e in entries) ...[
             const Divider(height: 1),
             _EntryTile(entry: e, dayKeyStr: data.key),
