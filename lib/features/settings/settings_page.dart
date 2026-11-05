@@ -1,3 +1,4 @@
+import '../reports/report_page.dart';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -42,8 +43,10 @@ class SettingsPage extends ConsumerWidget {
       appBar: AppBar(title: const Text('Настройки')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
         AppCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Тема', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Тема',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             const SizedBox(height: 8),
             SegmentedButton<String>(
               segments: const [
@@ -58,14 +61,16 @@ class SettingsPage extends ConsumerWidget {
         ),
         const SizedBox(height: 14),
         AppCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Режим расчёта норм',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             const SizedBox(height: 8),
             SegmentedButton<CalcMode>(
               showSelectedIcon: false,
               segments: const [
-                ButtonSegment(value: CalcMode.adaptive, label: Text('Адаптивный')),
+                ButtonSegment(
+                    value: CalcMode.adaptive, label: Text('Адаптивный')),
                 ButtonSegment(value: CalcMode.standard, label: Text('Формулы')),
                 ButtonSegment(value: CalcMode.manual, label: Text('Вручную')),
               ],
@@ -89,25 +94,30 @@ class SettingsPage extends ConsumerWidget {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Применять предложения автоматически'),
-                subtitle: const Text('В профиле появится кнопка «Отменить» на 3 дня'),
+                subtitle:
+                    const Text('В профиле появится кнопка «Отменить» на 3 дня'),
                 value: s[kCalcAutoApplyKey] == '1',
-                onChanged: (v) => db.setSetting(kCalcAutoApplyKey, v ? '1' : '0'),
+                onChanged: (v) =>
+                    db.setSetting(kCalcAutoApplyKey, v ? '1' : '0'),
               ),
             if (parseHistory(s[kCalcHistoryKey]).isNotEmpty) ...[
               const SizedBox(height: 8),
-              const Text('История расчётов', style: TextStyle(fontWeight: FontWeight.w700)),
+              const Text('История расчётов',
+                  style: TextStyle(fontWeight: FontWeight.w700)),
               for (final h in parseHistory(s[kCalcHistoryKey]).reversed.take(5))
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text('${shortDate(h.at)}: ${h.text}',
-                      style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+                      style: TextStyle(
+                          fontSize: 12.5, color: cs.onSurfaceVariant)),
                 ),
             ],
           ]),
         ),
         const SizedBox(height: 14),
         AppCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Расчёт калорий с учётом активности',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             const SizedBox(height: 8),
@@ -131,34 +141,43 @@ class SettingsPage extends ConsumerWidget {
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Активность, уже учтённая в норме'),
                 subtitle: const Text('Эти ккал не добавляются повторно'),
-                trailing: Text('${fmt0(double.tryParse(s['included_active_kcal'] ?? '') ?? 0)} ккал'),
+                trailing: Text(
+                    '${fmt0(double.tryParse(s['included_active_kcal'] ?? '') ?? 0)} ккал'),
                 onTap: () async {
-                  final v = await promptNumber(context, 'Уже учтённая активность',
-                      initial: double.tryParse(s['included_active_kcal'] ?? '') ?? 0,
+                  final v = await promptNumber(
+                      context, 'Уже учтённая активность',
+                      initial:
+                          double.tryParse(s['included_active_kcal'] ?? '') ?? 0,
                       suffix: 'ккал',
                       max: 5000);
-                  if (v != null) await db.setSetting('included_active_kcal', '$v');
+                  if (v != null)
+                    await db.setSetting('included_active_kcal', '$v');
                 },
               ),
           ]),
         ),
         const SizedBox(height: 14),
         AppCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Уведомления', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Уведомления',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             for (final r in reminders)
               _ReminderTile(r, s[r.key] ?? '0|${r.defaultTime}', (v) async {
                 await db.setSetting(r.key, v);
-                if (v.startsWith('1')) await ref.read(notificationsProvider).requestPermission();
+                if (v.startsWith('1'))
+                  await ref.read(notificationsProvider).requestPermission();
                 await reschedule();
               }),
             if (!NotificationService.supported)
-              const Text('Уведомления доступны на Android и iOS.', style: TextStyle(fontSize: 12)),
+              const Text('Уведомления доступны на Android и iOS.',
+                  style: TextStyle(fontSize: 12)),
           ]),
         ),
         const SizedBox(height: 14),
         AppCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Данные и резервные копии',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             const SizedBox(height: 8),
@@ -170,7 +189,8 @@ class SettingsPage extends ConsumerWidget {
               onTap: () async {
                 try {
                   final text = await backup.exportJson();
-                  await shareText('pitanie_backup_${dayKey(DateTime.now())}.json', text);
+                  await shareText(
+                      'pitanie_backup_${dayKey(DateTime.now())}.json', text);
                 } catch (e) {
                   if (context.mounted) toast(context, 'Ошибка экспорта: $e');
                 }
@@ -178,11 +198,20 @@ class SettingsPage extends ConsumerWidget {
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.picture_as_pdf_outlined),
+              title: const Text('PDF-отчёт за период'),
+              subtitle: const Text('Просмотр, сохранение и отправка'),
+              onTap: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const ReportPage())),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.table_chart_outlined),
               title: const Text('Экспорт статистики в CSV'),
               onTap: () async {
                 try {
-                  await shareText('pitanie_stats_${dayKey(DateTime.now())}.csv', await backup.exportCsv());
+                  await shareText('pitanie_stats_${dayKey(DateTime.now())}.csv',
+                      await backup.exportCsv());
                 } catch (e) {
                   if (context.mounted) toast(context, 'Ошибка экспорта: $e');
                 }
@@ -212,7 +241,8 @@ class SettingsPage extends ConsumerWidget {
                   await backup.restore(text);
                   if (context.mounted) toast(context, 'Данные восстановлены');
                 } catch (e) {
-                  if (context.mounted) toast(context, 'Ошибка восстановления: $e');
+                  if (context.mounted)
+                    toast(context, 'Ошибка восстановления: $e');
                 }
               },
             ),
@@ -220,7 +250,8 @@ class SettingsPage extends ConsumerWidget {
         ),
         const SizedBox(height: 14),
         AppCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Источники данных о продуктах',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             const SizedBox(height: 8),
@@ -277,18 +308,23 @@ class _ReminderTile extends StatelessWidget {
     final time = parts.length > 1 ? parts[1] : r.defaultTime;
     final step = parts.length > 2 ? parts[2] : '2';
     final isWater = r.key == 'rem_water';
-    String join(bool o, String t, String st) => '${o ? 1 : 0}|$t${isWater ? '|$st' : ''}';
+    String join(bool o, String t, String st) =>
+        '${o ? 1 : 0}|$t${isWater ? '|$st' : ''}';
     return ListTile(
       contentPadding: EdgeInsets.zero,
       title: Text(r.title),
       subtitle: Text(isWater ? 'с $time каждые $step ч до 21:00' : time),
-      trailing: Switch(value: on, onChanged: (v) => onChanged(join(v, time, step))),
+      trailing:
+          Switch(value: on, onChanged: (v) => onChanged(join(v, time, step))),
       onTap: () async {
         final hm = time.split(':');
         final t = await showTimePicker(
-            context: context, initialTime: TimeOfDay(hour: int.parse(hm[0]), minute: int.parse(hm[1])));
+            context: context,
+            initialTime:
+                TimeOfDay(hour: int.parse(hm[0]), minute: int.parse(hm[1])));
         if (t == null) return;
-        final tt = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+        final tt =
+            '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
         onChanged(join(on, tt, step));
       },
     );

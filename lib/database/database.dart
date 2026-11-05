@@ -151,6 +151,44 @@ class Workouts extends Table {
       ];
 }
 
+/// Дневник силовых тренировок. Отдельно от `Workouts` (тренировки, пришедшие с часов).
+class LiftExercises extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+  // weight — внешний вес (штанга, гантели, тренажёр); bodyweight — собственный вес,
+  // дополнительное отягощение необязательно.
+  TextColumn get kind => text().withDefault(const Constant('weight'))();
+  BoolColumn get isCustom => boolean().withDefault(const Constant(false))();
+}
+
+class LiftSessions extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get title => text().withDefault(const Constant(''))();
+  DateTimeColumn get startedAt => dateTime()();
+  IntColumn get durationMin => integer().nullable()();
+  TextColumn get note => text().withDefault(const Constant(''))();
+  // Сопоставление с тренировкой с часов (Workouts.id) при ручной привязке.
+  IntColumn get watchWorkoutId => integer().nullable()();
+}
+
+class LiftSets extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get sessionId => integer().references(LiftSessions, #id, onDelete: KeyAction.cascade)();
+  IntColumn get exerciseId => integer().references(LiftExercises, #id)();
+  IntColumn get position => integer()(); // порядок упражнения в тренировке
+  IntColumn get setIndex => integer()();
+  IntColumn get reps => integer()();
+  RealColumn get weightKg => real().nullable()(); // рабочий или дополнительный вес
+  IntColumn get restSec => integer().nullable()();
+  TextColumn get note => text().withDefault(const Constant(''))();
+}
+
+class LiftTemplates extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+  TextColumn get exerciseIds => text()(); // JSON-список id упражнений по порядку
+}
+
 class DailyGoals extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get effectiveDate => text().unique()();
@@ -190,6 +228,10 @@ class AppSettings extends Table {
   WeightEntries,
   ActivityRecords,
   Workouts,
+  LiftExercises,
+  LiftSessions,
+  LiftSets,
+  LiftTemplates,
   DailyGoals,
   ConnectedSources,
   AppSettings,
@@ -206,7 +248,7 @@ class AppDatabase extends _$AppDatabase {
       }));
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -240,12 +282,52 @@ class AppDatabase extends _$AppDatabase {
           if (from < 3) {
             await m.addColumn(weightEntries, weightEntries.impedance);
           }
+          if (from < 4) {
+            // Только новые таблицы: существующие данные не затрагиваются.
+            await m.createTable(liftExercises);
+            await m.createTable(liftSessions);
+            await m.createTable(liftSets);
+            await m.createTable(liftTemplates);
+          }
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
           await seedProducts();
+          await seedLiftExercises();
         },
       );
+
+  /// Базовый список упражнений при первом запуске. Дальше пользователь правит его сам.
+  Future<void> seedLiftExercises() async {
+    if ((await allSettings())['lift_seed'] == '1') return;
+    const base = <(String, String)>[
+      ('Жим штанги лёжа', 'weight'),
+      ('Жим гантелей лёжа', 'weight'),
+      ('Жим стоя', 'weight'),
+      ('Приседания со штангой', 'weight'),
+      ('Становая тяга', 'weight'),
+      ('Румынская тяга', 'weight'),
+      ('Тяга штанги в наклоне', 'weight'),
+      ('Тяга верхнего блока', 'weight'),
+      ('Тяга гантели в наклоне', 'weight'),
+      ('Жим ногами', 'weight'),
+      ('Подъём на бицепс', 'weight'),
+      ('Французский жим', 'weight'),
+      ('Подтягивания', 'bodyweight'),
+      ('Отжимания', 'bodyweight'),
+      ('Отжимания на брусьях', 'bodyweight'),
+      ('Выпады', 'bodyweight'),
+      ('Планка (секунды в повторениях)', 'bodyweight'),
+      ('Скручивания', 'bodyweight'),
+    ];
+    await batch((b) {
+      for (final e in base) {
+        b.insert(liftExercises,
+            LiftExercisesCompanion.insert(name: e.$1, kind: Value(e.$2)));
+      }
+    });
+    await setSetting('lift_seed', '1');
+  }
 
   /// Добавляет недостающие справочные продукты (по имени). Выполняется один раз
   /// на версию каталога, существующие и удалённые пользователем записи не трогает.

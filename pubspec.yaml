@@ -1,7 +1,7 @@
 name: pitanie
 description: Дневник питания, воды и физической активности
 publish_to: none
-version: 1.15.0+1
+version: 1.16.0+1
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -24,6 +24,8 @@ dependencies:
   timezone: ^0.11.0
   flutter_timezone: ^5.1.1
   share_plus: ^13.3.1
+  pdf: ^3.11.3
+  printing: ^5.14.2
   file_picker: ^13.3.2
   sqlite3: ^2.4.6
   crypto: ^3.0.5
@@ -46,6 +48,8 @@ flutter:
     - assets/catalog/catalog.sqlite
     - assets/catalog/import_report.json
     - assets/profile/avatar.png
+    - assets/fonts/Roboto-Regular.ttf
+    - assets/fonts/Roboto-Bold.ttf
     - assets/profile/watch.png
     - assets/profile/scale.png
     - assets/dashboard/watch_card.png

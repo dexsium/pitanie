@@ -9,6 +9,7 @@ import '../../core/labels.dart';
 import '../../database/database.dart';
 import '../../shared/widgets.dart';
 import '../calendar/calendar_page.dart';
+import '../training/training_page.dart';
 import 'pending_workouts.dart';
 import '../health_analysis/presentation/pages/health_analysis_page.dart';
 import '../sleep/sleep_page.dart';
@@ -393,6 +394,24 @@ class ActivityPage extends ConsumerWidget {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('Анализ здоровья', style: t(31, w: FontWeight.w800)),
                 Text('Пульс покоя, сон, SpO₂, восстановление', style: t(22, c: muted)),
+              ]),
+            ),
+            Icon(Icons.chevron_right, size: s(44), color: muted),
+          ]),
+        ),
+        SizedBox(height: s(20)),
+        cardBox(
+          radius: 40,
+          padding: EdgeInsets.symmetric(horizontal: s(34), vertical: s(24)),
+          onTap: () => Navigator.push(
+              context, MaterialPageRoute(builder: (_) => const TrainingPage())),
+          child: Row(children: [
+            Icon(Icons.fitness_center, size: s(52), color: _p),
+            SizedBox(width: s(24)),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Дневник тренировок', style: t(31, w: FontWeight.w800)),
+                Text('Подходы, вес, прогресс силы', style: t(22, c: muted)),
               ]),
             ),
             Icon(Icons.chevron_right, size: s(44), color: muted),

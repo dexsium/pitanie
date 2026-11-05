@@ -33,6 +33,12 @@ class BackupService {
             (await db.select(db.activityRecords).get()).map((e) => e.toJson()).toList(),
         'workouts': (await db.select(db.workouts).get()).map((e) => e.toJson()).toList(),
         'dailyGoals': (await db.select(db.dailyGoals).get()).map((e) => e.toJson()).toList(),
+        'liftExercises':
+            (await db.select(db.liftExercises).get()).map((e) => e.toJson()).toList(),
+        'liftSessions': (await db.select(db.liftSessions).get()).map((e) => e.toJson()).toList(),
+        'liftSets': (await db.select(db.liftSets).get()).map((e) => e.toJson()).toList(),
+        'liftTemplates':
+            (await db.select(db.liftTemplates).get()).map((e) => e.toJson()).toList(),
         'appSettings': (await db.select(db.appSettings).get()).map((e) => e.toJson()).toList(),
       };
 
@@ -88,6 +94,14 @@ class BackupService {
       await db.delete(db.workouts).go();
       await db.delete(db.dailyGoals).go();
       await db.delete(db.appSettings).go();
+      // Копии старых версий не содержат дневник тренировок: тогда его не трогаем.
+      final hasLift = d.containsKey('liftSets');
+      if (hasLift) {
+        await db.delete(db.liftSets).go();
+        await db.delete(db.liftSessions).go();
+        await db.delete(db.liftTemplates).go();
+        await db.delete(db.liftExercises).go();
+      }
       Future<void> put<T extends Table, D>(
           TableInfo<T, D> t, String k, D Function(Map<String, dynamic>) from) async {
         for (final r in _rows(d, k)) {
@@ -106,6 +120,12 @@ class BackupService {
       await put(db.workouts, 'workouts', Workout.fromJson);
       await put(db.dailyGoals, 'dailyGoals', DailyGoal.fromJson);
       await put(db.appSettings, 'appSettings', AppSetting.fromJson);
+      if (hasLift) {
+        await put(db.liftExercises, 'liftExercises', LiftExercise.fromJson);
+        await put(db.liftSessions, 'liftSessions', LiftSession.fromJson);
+        await put(db.liftTemplates, 'liftTemplates', LiftTemplate.fromJson);
+        await put(db.liftSets, 'liftSets', LiftSet.fromJson);
+      }
     });
   }
 
