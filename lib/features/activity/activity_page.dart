@@ -9,6 +9,7 @@ import '../../core/labels.dart';
 import '../../database/database.dart';
 import '../../shared/widgets.dart';
 import '../calendar/calendar_page.dart';
+import 'pending_workouts.dart';
 import '../health_analysis/presentation/pages/health_analysis_page.dart';
 import '../sleep/sleep_page.dart';
 import '../wearables/heart_rate_page.dart';
@@ -400,6 +401,7 @@ class ActivityPage extends ConsumerWidget {
         SizedBox(height: s(26)),
 
         // Тренировки
+        const PendingWorkouts(),
         _Workouts(
           workouts: a?.workouts ?? const [],
           card: card,

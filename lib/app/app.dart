@@ -12,6 +12,7 @@ import '../features/profile/profile_page.dart';
 import '../features/settings/notification_service.dart';
 import '../features/statistics/statistics_page.dart';
 import '../features/wearables/wearable_controller.dart';
+import '../features/wearables/workout_service.dart';
 import '../database/catalog_importer.dart';
 import '../features/scale/scale_controller.dart';
 import '../features/scale/scale_measure_page.dart';
@@ -113,6 +114,11 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
       final n = ref.read(notificationsProvider);
       await runHealthMonitor(ref.read(dbProvider),
           (id, title, body, urgent) => n.showNow(id, title, body, urgent: urgent));
+    } catch (_) {}
+    // Тренировки по пульсу: новая найденная тренировка приходит уведомлением.
+    try {
+      final n = ref.read(notificationsProvider);
+      await scanWorkouts(ref.read(dbProvider), (id, title, body) => n.showNow(id, title, body));
     } catch (_) {}
   }
 

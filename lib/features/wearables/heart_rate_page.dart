@@ -123,11 +123,12 @@ class _HeartRatePageState extends ConsumerState<HeartRatePage> {
                     !p.$1.isAfter(now))
                 .toList()
               ..sort((a, b) => a.$1.compareTo(b.$1));
-            // Сглаживание: средние по 5 минутам, если точек много.
+            // Точки по минутам (среднее внутри минуты). Пятиминутное усреднение срезало
+            // пики: максимум 147 в статистике, а линия графика доходила только до 120.
             final bins = <int, List<double>>{};
             for (final p in pts) {
               final m = p.$1.hour * 60 + p.$1.minute;
-              bins.putIfAbsent(m ~/ 5 * 5, () => []).add(p.$2);
+              bins.putIfAbsent(m, () => []).add(p.$2);
             }
             final spots = [
               for (final e
