@@ -296,3 +296,59 @@ List<MinuteValue>? parseSleepResp(Uint8List bytes) {
           bytes[o + 5])
   ];
 }
+
+/// Диагностика: грубый разбор protobuf без схемы. Поле:тип=значение, вложенные сообщения в [].
+String dumpProtobuf(Uint8List b, [int depth = 0]) {
+  final out = <String>[];
+  var o = 0;
+  int? varint() {
+    var r = 0, shift = 0;
+    while (o < b.length && shift < 63) {
+      final x = b[o++];
+      r |= (x & 0x7f) << shift;
+      if (x & 0x80 == 0) return r;
+      shift += 7;
+    }
+    return null;
+  }
+
+  while (o < b.length) {
+    final tag = varint();
+    if (tag == null) return '${out.join(' ')} ?обрыв';
+    final field = tag >> 3, wt = tag & 7;
+    if (field == 0) return '${out.join(' ')} ?поле0';
+    switch (wt) {
+      case 0:
+        final v = varint();
+        if (v == null) return '${out.join(' ')} ?обрыв';
+        out.add('$field=$v');
+      case 1:
+        if (o + 8 > b.length) return '${out.join(' ')} ?обрыв';
+        out.add(
+            '$field:f64=${ByteData.sublistView(b, o, o + 8).getFloat64(0, Endian.little).toStringAsFixed(3)}');
+        o += 8;
+      case 5:
+        if (o + 4 > b.length) return '${out.join(' ')} ?обрыв';
+        final bd = ByteData.sublistView(b, o, o + 4);
+        out.add(
+            '$field:i32=${bd.getUint32(0, Endian.little)}/f${bd.getFloat32(0, Endian.little).toStringAsFixed(3)}');
+        o += 4;
+      case 2:
+        final n = varint();
+        if (n == null || o + n > b.length) return '${out.join(' ')} ?обрыв';
+        final sub = Uint8List.sublistView(b, o, o + n);
+        o += n;
+        if (depth < 3 && n > 1) {
+          final d = dumpProtobuf(sub, depth + 1);
+          if (!d.contains('?')) {
+            out.add('$field[$d]');
+            break;
+          }
+        }
+        out.add('$field:b$n');
+      default:
+        return '${out.join(' ')} ?тип$wt';
+    }
+  }
+  return out.join(' ');
+}

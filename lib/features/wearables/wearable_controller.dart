@@ -73,7 +73,7 @@ class WearableController extends ChangeNotifier {
     final t = DateTime.now();
     log.insert(0,
         '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')} $line');
-    if (log.length > 150) log.removeLast();
+    if (log.length > 400) log.removeLast();
   }
 
   /// Вызывается при запуске приложения и при возврате в него.
@@ -917,6 +917,31 @@ class WearableController extends ChangeNotifier {
         }
       } catch (e) {
         addLog('ТИП 0x${t.toRadixString(16)}: ошибка $e');
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+    // Второй проход: большие и неизвестные типы читаются целиком, в журнал — полный дамп.
+    addLog('ГЛУБОКИЙ РАЗБОР: типы 0x2c, 0x3b, 0x0d (до 120000 байт)');
+    final deepSince = DateTime.now().subtract(const Duration(days: 7));
+    for (final t in const [0x3b, 0x2c, 0x0d]) {
+      try {
+        final r = await f.fetch(t, deepSince,
+            timeout: const Duration(seconds: 25), maxBytes: 120000);
+        if (!r.ok || r.data.isEmpty) {
+          addLog('ГЛУБОКО 0x${t.toRadixString(16)}: ${r.error ?? 'пусто'}');
+        } else {
+          addLog(
+              'ГЛУБОКО 0x${t.toRadixString(16)}: ${r.data.length} байт (показано до 1200)');
+          final shown = r.data.length > 1200 ? r.data.sublist(0, 1200) : r.data;
+          for (var i = 0; i < shown.length; i += 48) {
+            final end = i + 48 > shown.length ? shown.length : i + 48;
+            addLog(
+                '  ${i.toRadixString(16).padLeft(4, '0')}: ${shown.sublist(i, end).map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
+          }
+          if (t == 0x3b) addLog('  protobuf: ${dumpProtobuf(shown)}');
+        }
+      } catch (e) {
+        addLog('ГЛУБОКО 0x${t.toRadixString(16)}: ошибка $e');
       }
       await Future<void>.delayed(const Duration(milliseconds: 400));
     }
