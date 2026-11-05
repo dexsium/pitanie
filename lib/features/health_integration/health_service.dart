@@ -126,8 +126,18 @@ class HealthService {
           ? now.subtract(const Duration(days: 30))
           : src.lastSync!.subtract(const Duration(days: 2));
 
-      final points = await _health.getHealthDataFromTypes(
-          types: types, startTime: from, endTime: now);
+      List<HealthDataPoint> points;
+      try {
+        points = await _health.getHealthDataFromTypes(
+            types: types, startTime: from, endTime: now);
+      } catch (e) {
+        // iOS: для части типов (например, добавленных в новой версии) доступ ещё не запрошен.
+        // Система покажет окно разрешений только для них, затем повторяем чтение.
+        if (!e.toString().contains('not determined')) rethrow;
+        await _health.requestAuthorization(types, permissions: _perms);
+        points = await _health.getHealthDataFromTypes(
+            types: types, startTime: from, endTime: now);
+      }
 
       final recs = <ActivityRecordsCompanion>[];
       final works = <WorkoutsCompanion>[];
