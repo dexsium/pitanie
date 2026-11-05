@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../core/dates.dart';
+import '../dashboard/day_data.dart' show kMainSourceKey, kBleSource;
 import '../../shared/widgets.dart';
 import '../wearables/wearable_page.dart';
 import 'health_service.dart';
@@ -23,7 +24,7 @@ String statusLabel(String s) => switch (s) {
 
 String syncMessage(SyncResult r) => switch (r.status) {
       'ok' => 'Синхронизировано: записей ${r.records}, тренировок ${r.workouts}',
-      'no_data' => 'Новых данных нет. Проверьте, что Zepp экспортирует данные в хранилище здоровья.',
+      'no_data' => 'Новых данных нет. Проверьте, что приложение часов (Huawei Health, Zepp) записывает данные в хранилище здоровья.',
       'unavailable' => 'Health Connect не установлен или недоступен',
       'not_connected' => 'Сначала подключите источник',
       'unsupported' => 'Платформа не поддерживает источник здоровья',
@@ -81,7 +82,9 @@ class DevicesPage extends ConsumerWidget {
             const Row(children: [
               Icon(Icons.watch, color: kPrimary, size: 30),
               SizedBox(width: 12),
-              Text('Amazfit GTR 4', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+              Flexible(
+                  child: Text('Часы через хранилище здоровья',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800))),
             ]),
             const SizedBox(height: 12),
             _row('Источник данных', svc.sourceLabel),
@@ -154,12 +157,15 @@ class DevicesPage extends ConsumerWidget {
         AppCard(
           child: Text(
             'Подключение к ${svc.sourceLabel} не означает прямого Bluetooth-соединения с часами. '
-            'Часы синхронизируются с приложением Zepp, а Zepp передаёт данные в ${svc.sourceLabel}, '
-            'откуда их читает это приложение. Поэтому данные появляются с задержкой и только те, '
-            'которые Zepp реально экспортирует.',
+            'Часы (Huawei Watch Fit 4, Amazfit и другие) синхронизируются со своим приложением '
+            '(Huawei Health, Zepp), а оно передаёт данные в ${svc.sourceLabel}, откуда их читает '
+            'это приложение. Данные появляются с задержкой и только те, которые приложение часов '
+            'реально записывает. Для Huawei Health включите запись в Apple Health в его настройках.',
             style: TextStyle(color: cs.onSurfaceVariant),
           ),
         ),
+        const SizedBox(height: 12),
+        _MainSourceCard(report),
         const SizedBox(height: 12),
         AppCard(
           onTap: () => Navigator.push(
@@ -202,6 +208,10 @@ class _Diagnostics extends StatelessWidget {
       'activeEnergy': 'Активные калории',
       'totalEnergy': 'Общий расход',
       'heartRate': 'Пульс',
+      'restingHeartRate': 'Пульс покоя',
+      'hrvSdnn': 'HRV (SDNN)',
+      'spo2': 'SpO₂',
+      'respiration': 'Частота дыхания',
       'sleep': 'Сон',
       'WORKOUT': 'Тренировки',
     };
@@ -210,7 +220,7 @@ class _Diagnostics extends StatelessWidget {
         const Text('Диагностика последней синхронизации',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
-        const Text('Показывает, какие данные реально пришли от Zepp.',
+        const Text('Показывает, какие данные реально пришли из хранилища здоровья.',
             style: TextStyle(fontSize: 12.5)),
         const SizedBox(height: 8),
         for (final e in all.entries)
@@ -229,6 +239,53 @@ class _Diagnostics extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Text('Ошибка: ${r['error']}', style: const TextStyle(color: kRed, fontSize: 12.5)),
+          ),
+      ]),
+    );
+  }
+}
+
+
+/// Выбор основного источника данных: когда подключены двое часов, нужно решить, чьи данные
+/// показывать за день (без суммирования и дублей).
+class _MainSourceCard extends ConsumerWidget {
+  final Map<String, dynamic>? report;
+  const _MainSourceCard(this.report);
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsProvider).valueOrNull ?? const {};
+    final current = settings[kMainSourceKey] ?? 'ble';
+    final found = (report?['sources'] as Map?)?.cast<String, dynamic>() ?? {};
+    final options = <String, String>{
+      'ble': 'Amazfit GTR 4 (Bluetooth)',
+      'auto': 'Автоматически (источник с большим объёмом за день)',
+      for (final e in found.entries)
+        if (e.key != kBleSource) e.key: '${e.value}',
+    };
+    final value = options.containsKey(current) ? current : 'ble';
+    final cs = Theme.of(context).colorScheme;
+    return AppCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Основные часы',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 4),
+        Text(
+            'Если данные приходят с нескольких часов, за день показываются данные одного '
+            'источника: суммы не складываются. Нужные источники появляются после синхронизации.',
+            style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+        const SizedBox(height: 8),
+        for (final o in options.entries)
+          RadioListTile<String>(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: Text(o.value),
+            value: o.key,
+            groupValue: value,
+            onChanged: (v) async {
+              if (v == null) return;
+              await ref.read(dbProvider).setSetting(kMainSourceKey, v);
+            },
           ),
       ]),
     );

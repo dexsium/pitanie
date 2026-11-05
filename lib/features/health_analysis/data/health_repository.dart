@@ -1,6 +1,6 @@
 import '../../../core/dates.dart';
 import '../../../database/database.dart';
-import '../../dashboard/day_data.dart' show kBleSource;
+import '../../dashboard/day_data.dart' show kBleSource, mainSourceOf;
 import '../../sleep/sleep_data.dart';
 import '../domain/algorithms/baseline.dart';
 import '../domain/algorithms/resting_hr.dart';
@@ -107,25 +107,27 @@ HrvMetric _hrvMetric(String type) => switch (type) {
 /// Предпочитаются данные часов по Bluetooth; другие источники берутся для типа только если
 /// от часов нет ни одной записи (без суммирования и дублей).
 List<ActivityRecord> _preferred(
-    List<ActivityRecord> all, bool Function(String) typeMatch) {
+    List<ActivityRecord> all, String? main, bool Function(String) typeMatch) {
   final of = all.where((r) => typeMatch(r.type)).toList();
-  final ble = of.where((r) => r.source == kBleSource).toList();
-  return ble.isNotEmpty ? ble : of;
+  if (main == null) return of;
+  final chosen = of.where((r) => r.source == main).toList();
+  return chosen.isNotEmpty ? chosen : of;
 }
 
 Future<HealthSnapshot> loadHealth(AppDatabase db, DateTime now) async {
   final settings = await db.allSettings();
   final prefs = parsePrefs(settings);
+  final main = mainSourceOf(settings);
   final today = dayStart(now);
   final from = today.subtract(const Duration(days: 35));
   final recs =
       await db.activityBetween(from, now.add(const Duration(minutes: 1)));
   final wk = await db.workoutsBetween(from, now);
 
-  final hrRecs = _preferred(recs, (t) => t == 'heartRate');
-  final stepRecs = _preferred(recs, (t) => t == 'steps');
-  final sleepRecs = _preferred(recs, (t) => t.startsWith('sleep'));
-  final spoRecs = _preferred(recs, (t) => t == 'spo2');
+  final hrRecs = _preferred(recs, main, (t) => t == 'heartRate');
+  final stepRecs = _preferred(recs, main, (t) => t == 'steps');
+  final sleepRecs = _preferred(recs, main, (t) => t.startsWith('sleep'));
+  final spoRecs = _preferred(recs, main, (t) => t == 'spo2');
   final hrvRecs = recs.where((r) => r.type.startsWith('hrv')).toList();
 
   int minute(DateTime t) => t.millisecondsSinceEpoch ~/ 60000;
@@ -144,7 +146,7 @@ Future<HealthSnapshot> loadHealth(AppDatabase db, DateTime now) async {
       workouts: [for (final w in wk) (w.startTime, w.endTime)]);
   // Пульс покоя: значение от часов (тип 0x3a), если оно есть за день; иначе расчёт по минутам.
   final watchRest = <DateTime, double>{};
-  for (final r in _preferred(recs, (t) => t == 'restingHeartRate')) {
+  for (final r in _preferred(recs, main, (t) => t == 'restingHeartRate')) {
     if (validHeartRate(r.value)) watchRest[dayOf(r.startTime)] = r.value;
   }
   final restingMap = <DateTime, double>{
@@ -158,7 +160,7 @@ Future<HealthSnapshot> loadHealth(AppDatabase db, DateTime now) async {
       DailyValue(e.key, e.value)
   ];
   Sample? latestOf(String type) {
-    final l = _preferred(recs, (t) => t == type);
+    final l = _preferred(recs, main, (t) => t == type);
     if (l.isEmpty) return null;
     final r = l.reduce((a, b) => a.startTime.isAfter(b.startTime) ? a : b);
     return Sample(r.startTime, r.value);
@@ -267,7 +269,7 @@ Future<HealthSnapshot> loadHealth(AppDatabase db, DateTime now) async {
     history: parseNotifyHistory(settings[kHmHist]),
     lastHr:
         lastHrRec == null ? null : Sample(lastHrRec.startTime, lastHrRec.value),
-    lastData: lastOf((r) => r.source == kBleSource),
+    lastData: lastOf((r) => main == null || r.source == main),
     feeling: feeling,
     sleepToday: analyzeSleepDay(sleepRecs, today),
     stressLast: latestOf('stress'),

@@ -7,6 +7,18 @@ import '../../database/database.dart';
 /// Если за сутки есть его данные, они используются вместо Health (без суммирования).
 const kBleSource = 'amazfit_ble';
 
+/// Настройка «основные часы»: 'ble' (по умолчанию) — часы по Bluetooth, 'auto' — источник с
+/// наибольшим объёмом за день, иначе — идентификатор источника из Apple Health / Health Connect.
+const kMainSourceKey = 'main_source';
+
+/// Предпочитаемый источник для сведения данных; null — выбирать автоматически.
+String? mainSourceOf(Map<String, String> settings) {
+  final v = settings[kMainSourceKey];
+  if (v == null || v.isEmpty || v == 'ble') return kBleSource;
+  if (v == 'auto') return null;
+  return v;
+}
+
 String sourceLabel(String? s) => s == kBleSource ? 'Amazfit GTR 4 (Bluetooth)' : (s ?? '');
 
 class ActivityDay {
@@ -144,7 +156,7 @@ Future<DayData> loadDayData(AppDatabase db, String key) async {
   final water = await db.waterForDay(key);
   final goal = await db.goalFor(key);
   final act =
-      await loadActivityDay(db, parseDayKey(key), kBleSource);
+      await loadActivityDay(db, parseDayKey(key), mainSourceOf(settings));
   final weights = (await db.allWeights()).where((w) => w.date == key).toList();
   return DayData(
     key,
@@ -176,7 +188,7 @@ class DayStat {
 
 Future<Map<String, DayStat>> computeRangeStats(
     AppDatabase db, String fromKey, String toKey) async {
-  const preferred = kBleSource;
+  final preferred = mainSourceOf(await db.allSettings());
   final food = await db.foodBetween(fromKey, toKey);
   final water = await db.waterBetween(fromKey, toKey);
   final goals = await db.allGoals();

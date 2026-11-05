@@ -51,6 +51,11 @@ class HealthService {
           HealthDataType.HEART_RATE,
           HealthDataType.SLEEP_ASLEEP,
           HealthDataType.WORKOUT,
+          // Показатели для «Анализа здоровья»: часы пишут их, если умеют измерять.
+          HealthDataType.RESTING_HEART_RATE,
+          HealthDataType.HEART_RATE_VARIABILITY_SDNN,
+          HealthDataType.BLOOD_OXYGEN,
+          HealthDataType.RESPIRATORY_RATE,
         ]
       : [
           HealthDataType.STEPS,
@@ -97,7 +102,7 @@ class HealthService {
     await db.saveSource(
         sourceType,
         ConnectedSourcesCompanion(
-          deviceName: const Value('Amazfit GTR 4'),
+          deviceName: Value('Часы через $sourceLabel'),
           permissions: Value(ok ? 'granted' : 'denied'),
           syncStatus: Value(ok ? 'waiting' : 'no_access'),
         ));
@@ -177,6 +182,11 @@ class HealthService {
           HealthDataType.ACTIVE_ENERGY_BURNED => ('activeEnergy', 'kcal', v),
           HealthDataType.TOTAL_CALORIES_BURNED => ('totalEnergy', 'kcal', v),
           HealthDataType.HEART_RATE => ('heartRate', 'bpm', v),
+          HealthDataType.RESTING_HEART_RATE => ('restingHeartRate', 'bpm', v),
+          HealthDataType.HEART_RATE_VARIABILITY_SDNN => ('hrvSdnn', 'ms', v),
+          // Apple Health отдаёт насыщение кислородом долей (0.97), приводим к процентам.
+          HealthDataType.BLOOD_OXYGEN => ('spo2', '%', v <= 1.0 ? v * 100 : v),
+          HealthDataType.RESPIRATORY_RATE => ('respiration', 'br/min', v),
           HealthDataType.SLEEP_SESSION ||
           HealthDataType.SLEEP_ASLEEP =>
             ('sleep', 'min', p.dateTo.difference(p.dateFrom).inMinutes.toDouble()),
