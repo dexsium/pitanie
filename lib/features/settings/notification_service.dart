@@ -13,13 +13,19 @@ class Reminder {
 }
 
 const reminders = [
-  Reminder('rem_breakfast', 1, 'Завтрак', 'Запишите завтрак в дневник', '08:30'),
+  Reminder(
+      'rem_breakfast', 1, 'Завтрак', 'Запишите завтрак в дневник', '08:30'),
   Reminder('rem_lunch', 2, 'Обед', 'Запишите обед в дневник', '13:00'),
   Reminder('rem_dinner', 3, 'Ужин', 'Запишите ужин в дневник', '19:00'),
   Reminder('rem_water', 4, 'Вода', 'Пора выпить воды', '10:00'),
   Reminder('rem_weight', 5, 'Вес', 'Внесите текущий вес', '07:30'),
-  Reminder('rem_diary', 6, 'Дневник', 'Заполните дневник питания за сегодня', '21:30'),
+  Reminder('rem_diary', 6, 'Дневник', 'Заполните дневник питания за сегодня',
+      '21:30'),
 ];
+
+/// Вечерняя подсказка «чем добрать норму»: время задаётся здесь, текст считается по дневнику.
+const coachReminder = Reminder('rem_coach', 7, 'Добор нормы',
+    'Подсказка, чем добрать КБЖУ к вечеру', '20:00');
 
 /// Значение настройки: "1|08:30" (включено|время). Для воды: "1|10:00|2"
 /// (с какого времени, интервал в часах; до 21:00).
@@ -33,9 +39,11 @@ class NotificationService {
     if (!supported || _ready) return;
     tzdata.initializeTimeZones();
     try {
-      tz.setLocalLocation(tz.getLocation((await FlutterTimezone.getLocalTimezone()).identifier));
+      tz.setLocalLocation(tz
+          .getLocation((await FlutterTimezone.getLocalTimezone()).identifier));
     } catch (_) {}
-    await _plugin.initialize(settings: const InitializationSettings(
+    await _plugin.initialize(
+        settings: const InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       iOS: DarwinInitializationSettings(
           requestAlertPermission: false,
@@ -53,7 +61,8 @@ class NotificationService {
     if (a != null) return (await a.requestNotificationsPermission()) ?? false;
     final i = _plugin.resolvePlatformSpecificImplementation<
         IOSFlutterLocalNotificationsPlugin>();
-    return (await i?.requestPermissions(alert: true, badge: true, sound: true)) ??
+    return (await i?.requestPermissions(
+            alert: true, badge: true, sound: true)) ??
         false;
   }
 
@@ -64,7 +73,8 @@ class NotificationService {
       );
 
   /// Немедленное уведомление анализа здоровья (канал «Анализ здоровья»).
-  Future<void> showNow(int id, String title, String body, {bool urgent = false}) async {
+  Future<void> showNow(int id, String title, String body,
+      {bool urgent = false}) async {
     if (!supported) return;
     await init();
     await _plugin.show(
@@ -73,9 +83,51 @@ class NotificationService {
         body: body,
         notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails('health', 'Анализ здоровья',
-              importance: urgent ? Importance.high : Importance.defaultImportance),
+              importance:
+                  urgent ? Importance.high : Importance.defaultImportance,
+              styleInformation: BigTextStyleInformation(body)),
           iOS: const DarwinNotificationDetails(),
         ));
+  }
+
+  /// Цели дня и подсказки по питанию (канал «Цели и подсказки»).
+  Future<void> showGoal(int id, String title, String body) async {
+    if (!supported) return;
+    await init();
+    await _plugin.show(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: _goalDetails(body));
+  }
+
+  NotificationDetails _goalDetails(String body) => NotificationDetails(
+        android: AndroidNotificationDetails('goals', 'Цели и подсказки',
+            importance: Importance.defaultImportance,
+            styleInformation: BigTextStyleInformation(body)),
+        iOS: const DarwinNotificationDetails(),
+      );
+
+  /// Разовое уведомление на указанное время (не повторяется).
+  Future<void> scheduleOnce(
+      int id, String title, String body, DateTime at) async {
+    if (!supported) return;
+    await init();
+    final when = tz.TZDateTime.from(at, tz.local);
+    if (!when.isAfter(tz.TZDateTime.now(tz.local))) return;
+    await _plugin.zonedSchedule(
+        id: id,
+        title: title,
+        body: body,
+        scheduledDate: when,
+        notificationDetails: _goalDetails(body),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle);
+  }
+
+  Future<void> cancel(int id) async {
+    if (!supported) return;
+    await init();
+    await _plugin.cancel(id: id);
   }
 
   tz.TZDateTime _next(int h, int m) {
@@ -89,7 +141,13 @@ class NotificationService {
   Future<void> reschedule(Map<String, String> settings) async {
     if (!supported) return;
     await init();
-    await _plugin.cancelAll();
+    // Отменяем только напоминания: разовые подсказки добора нормы остаются.
+    for (final r in reminders) {
+      await _plugin.cancel(id: r.id);
+      for (var i = 0; i < 16; i++) {
+        await _plugin.cancel(id: r.id * 100 + i);
+      }
+    }
     for (final r in reminders) {
       final parts = (settings[r.key] ?? '0|${r.defaultTime}').split('|');
       if (parts[0] != '1') continue;

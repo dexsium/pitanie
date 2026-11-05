@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/dates.dart';
+import '../features/coach/goal_service.dart';
+import '../features/dashboard/day_data.dart';
 import '../features/health_analysis/services/health_monitor.dart';
 import '../services/health/plan_service.dart';
 import '../features/activity/activity_page.dart';
@@ -120,6 +123,24 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
       final n = ref.read(notificationsProvider);
       await scanWorkouts(ref.read(dbProvider), (id, title, body) => n.showNow(id, title, body));
     } catch (_) {}
+    await _goalCheck();
+  }
+
+  bool _goalBusy = false;
+
+  /// Цели дня: уведомление о выполненных и пересчёт вечерней подсказки «чем добрать норму».
+  Future<void> _goalCheck() async {
+    if (_goalBusy) return;
+    _goalBusy = true;
+    try {
+      final n = ref.read(notificationsProvider);
+      final db = ref.read(dbProvider);
+      await checkGoals(db, (id, title, body) => n.showGoal(id, title, body));
+      await updateCoach(db, n);
+    } catch (_) {
+    } finally {
+      _goalBusy = false;
+    }
   }
 
   /// Автоприменение корректировки нормы (только если пользователь включил его в настройках).
@@ -156,6 +177,17 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
   Widget build(BuildContext context) {
     final tab = ref.watch(tabProvider);
     // Человек встал на весы, пока приложение открыто: само открываем окно измерения.
+    // Данные сегодняшнего дня изменились (еда, вода, шаги): проверяем цели.
+    ref.listen<AsyncValue<DayData>>(dayDataProvider(dayKey(DateTime.now())),
+        (prev, next) {
+      final d = next.valueOrNull;
+      if (d == null) return;
+      String sig(DayData x) =>
+          '${x.food.length}|${x.eaten.calories.round()}|${x.plainWaterMl.round()}|'
+          '${x.activity.steps.round()}|${x.calorieTarget.round()}';
+      final p = prev?.valueOrNull;
+      if (p == null || sig(p) != sig(d)) _goalCheck();
+    });
     ref.listen<WearableController>(wearableProvider, (prev, next) {
       if (_syncWasBusy && !next.syncBusy) _healthCheck();
       _syncWasBusy = next.syncBusy;

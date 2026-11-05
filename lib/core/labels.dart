@@ -89,6 +89,9 @@ const workoutNames = {
   'ELLIPTICAL': 'Эллипс',
   'ROWING': 'Гребля',
   'HIGH_INTENSITY_INTERVAL_TRAINING': 'HIIT',
+  'WATCH_ACTIVITY': 'Тренировка с часов',
+  'OTHER': 'Другое',
 };
 
-String workoutLabel(String t) => workoutNames[t] ?? t.replaceAll('_', ' ').toLowerCase();
+String workoutLabel(String t) =>
+    workoutNames[t] ?? t.replaceAll('_', ' ').toLowerCase();

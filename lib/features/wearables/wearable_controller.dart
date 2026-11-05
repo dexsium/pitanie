@@ -13,6 +13,7 @@ import '../dashboard/day_data.dart' show kBleSource;
 import 'huami_auth.dart';
 import 'huami_fetch.dart';
 import 'watch_archive.dart';
+import 'watch_workouts.dart';
 import 'watch_settings.dart';
 
 enum WearStatus { off, connecting, connected, authorizing, ready }
@@ -886,16 +887,51 @@ class WearableController extends ChangeNotifier {
   /// Сохраняет блок в архив и пишет в журнал его описание. Ничего не теряется,
   /// даже если разбор в приложении ещё не написан.
   Future<void> _keepRaw(int t, Uint8List data, String? note) async {
+    // Типы 0x05/0x06 отдаются при каждой синхронизации: одинаковый блок второй раз не пишем.
+    if (t == 0x05 || t == 0x06) {
+      if (!await WatchArchive.addIfNew(t, data, note: note)) {
+        addLog(
+            'ТИП 0x${t.toRadixString(16)}: без изменений (${data.length} байт)');
+        if (t == 0x05) await _importWorkout(data);
+        return;
+      }
+    }
     addLog(
         'ТИП 0x${t.toRadixString(16)}: ${data.length} байт${note == null ? '' : ' ($note)'}');
     for (final l in describeRaw(t, data)) {
       addLog('  $l');
     }
     try {
-      await WatchArchive.add(t, data, note: note);
+      if (t != 0x05 && t != 0x06) await WatchArchive.add(t, data, note: note);
     } catch (e) {
       addLog('архив: $e');
     }
+    if (t == 0x05) await _importWorkout(data);
+  }
+
+  /// Тренировка с часов: сводка (0x05) превращается в запись о тренировке. Повторная
+  /// синхронизация обновляет ту же запись по идентификатору, дубликатов не создаёт.
+  Future<void> _importWorkout(Uint8List data) async {
+    final w = parseWatchWorkout(data);
+    if (w == null) {
+      addLog(
+          'тренировка с часов: формат не распознан, данные оставлены в архиве');
+      return;
+    }
+    await db.upsertWorkouts([
+      WorkoutsCompanion.insert(
+        source: kBleSource,
+        sourceName: const Value(_bleName),
+        externalRecordId: w.externalId,
+        workoutType: watchWorkoutType(w.typeCode),
+        startTime: w.start,
+        endTime: w.end,
+        avgHr: Value(w.avgHr.toDouble()),
+        maxHr: Value(w.maxHr.toDouble()),
+      )
+    ]);
+    addLog(
+        'тренировка с часов: ${w.start.toLocal()} · ${w.durationSec ~/ 60} мин · пульс ${w.avgHr}/${w.maxHr}');
   }
 
   /// Читает «одноразовые» потоки при каждой синхронизации, чтобы они не пропадали.

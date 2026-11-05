@@ -43,6 +43,18 @@ class WatchArchive {
     return File('${d.path}/archive.txt');
   }
 
+  static final _last = <int, int>{};
+
+  /// Добавляет блок, только если он отличается от последнего добавленного того же типа.
+  /// Возвращает true, если блок записан.
+  static Future<bool> addIfNew(int type, Uint8List data, {String? note}) async {
+    final h = Object.hashAll(data);
+    if (_last[type] == h) return false;
+    _last[type] = h;
+    await add(type, data, note: note);
+    return true;
+  }
+
   /// Добавляет блок в архив. При превышении размера отбрасывается старая половина.
   static Future<void> add(int type, Uint8List data, {String? note}) async {
     if (data.isEmpty) return;

@@ -81,6 +81,9 @@ Future<int> scanWorkouts(AppDatabase db,
   final seen = _seen(settings);
   final pending = pendingWorkouts(settings);
   final existing = await db.workoutsBetween(from, now);
+  // Тренировка, которую часы записали сами, важнее найденной по пульсу.
+  pending.removeWhere((p) => existing
+      .any((e) => e.startTime.isBefore(p.end) && e.endTime.isAfter(p.start)));
   var added = 0;
   for (final w in found) {
     if (existing.any(

@@ -8,3 +8,6 @@ ios/
 .idea/
 *.iml
 __pycache__/
+
+# Скачанные APK из сборок
+apk_download/

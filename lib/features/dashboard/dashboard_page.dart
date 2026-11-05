@@ -11,6 +11,7 @@ import '../../core/labels.dart';
 import '../../shared/widgets.dart';
 import '../activity/activity_page.dart' show defaultStepsGoal;
 import '../calendar/calendar_page.dart';
+import '../coach/coach_card.dart';
 import '../settings/settings_page.dart';
 import '../water/water_page.dart';
 import '../wearables/wearable_controller.dart';
@@ -493,6 +494,9 @@ class _Body extends ConsumerWidget {
         ]),
       ),
       SizedBox(height: s(22)),
+
+      // Подсказка, чем добрать недостающие калории и БЖУ (только для сегодняшнего дня)
+      CoachCard(d),
 
       // Приёмы пищи
       cardBox(

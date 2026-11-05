@@ -1,3 +1,4 @@
+import '../coach/goal_service.dart';
 import '../reports/report_page.dart';
 import 'dart:io';
 
@@ -169,6 +170,20 @@ class SettingsPage extends ConsumerWidget {
                   await ref.read(notificationsProvider).requestPermission();
                 await reschedule();
               }),
+            _ReminderTile(coachReminder,
+                s[coachReminder.key] ?? '1|${coachReminder.defaultTime}',
+                (v) async {
+              await db.setSetting(coachReminder.key, v);
+              if (v.startsWith('1')) {
+                await ref.read(notificationsProvider).requestPermission();
+              }
+              await updateCoach(db, ref.read(notificationsProvider));
+            }),
+            Text(
+                'Вечером приложение подсказывает, чем добрать недостающие калории и БЖУ, '
+                'а при выполнении целей дня присылает уведомление. Подсказка считается по '
+                'вашему дневнику на момент последнего открытия приложения.',
+                style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
             if (!NotificationService.supported)
               const Text('Уведомления доступны на Android и iOS.',
                   style: TextStyle(fontSize: 12)),
