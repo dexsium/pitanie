@@ -45,7 +45,11 @@ Future<List<FoodSuggestion>> suggestionsFor(
     AppDatabase db, Nutrients remaining, GoalValues goal) async {
   final own = suggestFoods(remaining, goal, await loadCandidates(db));
   if (own.isNotEmpty) return own;
-  return suggestFoods(remaining, goal, builtinFoods);
+  final std = suggestFoods(remaining, goal, builtinFoods);
+  if (std.isNotEmpty) return std;
+  // Калории закрыты, но не хватает белка: предлагаем самый белковый вариант.
+  final pf = suggestProteinFirst(remaining, await loadCandidates(db));
+  return pf.isNotEmpty ? pf : suggestProteinFirst(remaining, builtinFoods);
 }
 
 Set<String> _done(Map<String, String> settings, String today) {
@@ -151,6 +155,8 @@ Future<void> updateCoach(AppDatabase db, NotificationService n) async {
   final body = StringBuffer('До нормы не хватает: ${gapSummary(r)}.');
   if (sug.isNotEmpty) {
     body.write(' Можно съесть: ${suggestionText(sug)}.');
+    final note = overflowNote(r, sug);
+    if (note != null) body.write(' $note');
     if (sug.any((s) => s.food.approximate)) {
       body.write(' Значения продуктов примерные.');
     }

@@ -178,6 +178,40 @@ List<FoodSuggestion> suggestFoods(
   return out;
 }
 
+/// Когда калории уже закрыты, а белка не хватает: самый «белковый» продукт на недостающий белок.
+/// Калории при этом превысятся, об этом сообщает [overflowNote].
+List<FoodSuggestion> suggestProteinFirst(
+    Nutrients remaining, List<FoodCandidate> pool) {
+  if (remaining.proteins < 10) return const [];
+  FoodSuggestion? best;
+  var bestScore = double.infinity;
+  for (final f in pool) {
+    final p100 = f.per100;
+    if (p100.calories <= 0 || p100.proteins * 4 / p100.calories < 0.4) continue;
+    for (final (amount, pieces) in f.options()) {
+      final d = p100 * (amount / 100);
+      if (d.proteins < remaining.proteins * 0.5 ||
+          d.proteins > remaining.proteins * 1.4) {
+        continue;
+      }
+      final score = (d.proteins - remaining.proteins).abs() + d.calories * 0.05;
+      if (score < bestScore) {
+        bestScore = score;
+        best = FoodSuggestion(f, amount, pieces);
+      }
+    }
+  }
+  return best == null ? const [] : [best];
+}
+
+/// Пояснение, если подсказка выходит за остаток калорий.
+String? overflowNote(Nutrients remaining, List<FoodSuggestion> s) {
+  final kcal = s.fold(0.0, (a, x) => a + x.total.calories);
+  final over = kcal - remaining.calories;
+  if (over < 15) return null;
+  return 'Это добавит около ${over.round()} ккал сверх нормы.';
+}
+
 /// Средние справочные значения на 100 г: запасной список для тех, у кого мало своих продуктов.
 const builtinFoods = <FoodCandidate>[
   FoodCandidate('Творог 5 %', Nutrients(121, 17, 5, 1.8), approximate: true),

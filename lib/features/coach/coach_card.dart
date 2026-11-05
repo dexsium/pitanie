@@ -67,6 +67,11 @@ class _CoachCardState extends ConsumerState<CoachCard> {
                           padding: const EdgeInsets.only(top: 2),
                           child: Text('• ${x.label}'),
                         ),
+                      if (overflowNote(r, s) != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(overflowNote(r, s)!),
+                        ),
                       const SizedBox(height: 6),
                       Text(
                           s.any((x) => x.food.approximate)

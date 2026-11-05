@@ -102,6 +102,15 @@ void main() {
       expect(s.single.label, contains('2 шт.'));
     });
 
+    test('калории закрыты, белка не хватает: предлагает белковое с пометкой',
+        () {
+      const r = Nutrients(0, 17, 0, 0);
+      final s = suggestProteinFirst(r, builtinFoods);
+      expect(s, isNotEmpty);
+      expect(s.first.total.proteins, greaterThanOrEqualTo(8.5));
+      expect(overflowNote(r, s), isNotNull);
+    });
+
     test('пустой список продуктов', () {
       expect(suggestFoods(const Nutrients(500, 40, 10, 50), goal, const []),
           isEmpty);
