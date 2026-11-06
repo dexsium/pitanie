@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/dates.dart';
 import '../features/coach/goal_service.dart';
 import '../features/dashboard/day_data.dart';
+import '../features/wearables/watch_notifications_page.dart'
+    show notifEnabled, kNotifGoalsKey, kNotifWorkoutsKey, kNotifHealthKey;
 import '../features/health_analysis/services/health_monitor.dart';
 import '../services/health/plan_service.dart';
 import '../features/activity/activity_page.dart';
@@ -115,13 +117,20 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
   Future<void> _healthCheck() async {
     try {
       final n = ref.read(notificationsProvider);
-      await runHealthMonitor(ref.read(dbProvider),
-          (id, title, body, urgent) => n.showNow(id, title, body, urgent: urgent));
+      final db = ref.read(dbProvider);
+      await runHealthMonitor(db, (id, title, body, urgent) async {
+        if (!notifEnabled(await db.allSettings(), kNotifHealthKey)) return;
+        await n.showNow(id, title, body, urgent: urgent);
+      });
     } catch (_) {}
     // Тренировки по пульсу: новая найденная тренировка приходит уведомлением.
     try {
       final n = ref.read(notificationsProvider);
-      await scanWorkouts(ref.read(dbProvider), (id, title, body) => n.showNow(id, title, body));
+      final db = ref.read(dbProvider);
+      await scanWorkouts(db, (id, title, body) async {
+        if (!notifEnabled(await db.allSettings(), kNotifWorkoutsKey)) return;
+        await n.showNow(id, title, body);
+      });
     } catch (_) {}
     await _goalCheck();
   }
@@ -135,7 +144,10 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
     try {
       final n = ref.read(notificationsProvider);
       final db = ref.read(dbProvider);
-      await checkGoals(db, (id, title, body) => n.showGoal(id, title, body));
+      await checkGoals(db, (id, title, body) async {
+        if (!notifEnabled(await db.allSettings(), kNotifGoalsKey)) return;
+        await n.showGoal(id, title, body);
+      });
       await updateCoach(db, n);
     } catch (_) {
     } finally {

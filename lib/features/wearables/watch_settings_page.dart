@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/widgets.dart';
+import 'watch_notifications_page.dart';
 import 'watch_settings.dart';
 import 'wearable_controller.dart';
 
@@ -52,6 +53,20 @@ class _WatchSettingsPageState extends ConsumerState<WatchSettingsPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Настройки часов')),
       body: ListView(padding: const EdgeInsets.all(16), children: [
+        AppCard(
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.notifications_outlined),
+            title: const Text('Уведомления на часах'),
+            subtitle: const Text('Доступ iOS, инструкция, уведомления приложения'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const WatchNotificationsPage())),
+          ),
+        ),
+        const SizedBox(height: 12),
         if (c.session == null)
           AppCard(
             child: Text(

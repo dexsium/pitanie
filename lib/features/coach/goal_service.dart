@@ -134,7 +134,7 @@ Future<int> _checkWeightGoal(AppDatabase db, Map<String, String> settings,
 Future<void> updateCoach(AppDatabase db, NotificationService n) async {
   final settings = await db.allSettings();
   final t = _coachTime(settings);
-  if (!t.on) {
+  if (!t.on || settings['notif_goals'] == '0') {
     await n.cancel(_kCoachId);
     return;
   }
