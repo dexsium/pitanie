@@ -1,5 +1,6 @@
 // «Уведомления на часах»: что приложение реально может и чего не может на iPhone.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -220,6 +221,30 @@ class _WatchNotificationsPageState
                 },
                 icon: const Icon(Icons.watch_outlined),
                 label: const Text('Отправить тест на часы')),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: () async {
+                  // Только строки про уведомления и сервис 0x001e, без остальных данных часов.
+                  final lines = c.log
+                      .where((l) =>
+                          l.contains('уведомлен') || l.contains('0x001e'))
+                      .toList();
+                  final text = 'Версия приложения: $_ver\n'
+                      'Прошивка часов: ${c.fw ?? '—'}\n'
+                      'Сервис 0x001e: ${switch (c.notifServiceListed) {
+                    true => 'заявлен',
+                    false => 'не заявлен',
+                    null => 'неизвестно',
+                  }}\n'
+                      '${lines.isEmpty ? '(в журнале нет строк про уведомления: сначала нажмите «Отправить тест на часы»)' : lines.join('\n')}';
+                  await Clipboard.setData(ClipboardData(text: text));
+                  if (context.mounted) {
+                    toast(context,
+                        'Скопировано (${lines.length} строк). Вставьте в чат.');
+                  }
+                },
+                icon: const Icon(Icons.copy_all_outlined),
+                label: const Text('Скопировать журнал уведомлений')),
           ]),
         ),
         const SizedBox(height: 12),

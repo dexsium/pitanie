@@ -14,6 +14,16 @@ void main() {
     expect(c.supportsKey, isTrue);
   });
 
+  test('реальный ответ GTR 4 (прошивка 7.6.0.2)', () {
+    // Из журнала часов: 0x001e: 02 05 64 00 01 01 05 00 01 02 03 04 05 01 01
+    final p = Uint8List.fromList(
+        [0x02, 0x05, 0x64, 0x00, 0x01, 0x01, 0x05, 0x00, 1, 2, 3, 4, 5, 1, 1]);
+    final c = parseNotifCaps(p)!;
+    expect(c.version, 5);
+    expect(c.supportsPictures, isTrue);
+    expect(c.supportsKey, isTrue);
+  });
+
   test('оборванные и чужие ответы дают null', () {
     expect(parseNotifCaps(Uint8List.fromList([2, 5, 100])), isNull);
     expect(parseNotifCaps(Uint8List.fromList([3, 5])), isNull);

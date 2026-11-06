@@ -349,6 +349,20 @@ class WearableController extends ChangeNotifier {
       addLog('запрос погоды от часов (${p.length} байт, проигнорирован)');
       return;
     }
+    if (type == notifEndpoint) {
+      addLog('уведомления, ответ часов: '
+          '${p.take(40).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      final caps = parseNotifCaps(p);
+      if (caps != null) {
+        notifCaps = caps;
+        addLog('уведомления: версия сервиса ${caps.version}, '
+            'картинки ${caps.supportsPictures}, ключ ${caps.supportsKey}');
+        final w = _capsWait;
+        if (w != null && !w.isCompleted) w.complete(caps);
+        notifyListeners();
+      }
+      return;
+    }
     if (type == cfgEndpoint) {
       _onCfg(p);
       return;
@@ -885,13 +899,20 @@ class WearableController extends ChangeNotifier {
     }
     try {
       var caps = notifCaps;
+      var guessed = false;
+      addLog('уведомления: сервис 0x001e '
+          '${s.encryptedEndpoints.contains(notifEndpoint) ? 'шифруется' : 'без шифрования'}, '
+          'сервисов у часов: ${s.endpoints.length}');
       if (caps == null) {
         _capsWait = Completer<NotifCaps>();
         await s.send(notifEndpoint, buildNotifCapsRequest());
         try {
           caps = await _capsWait!.future.timeout(const Duration(seconds: 6));
         } on TimeoutException {
-          return 'Часы не ответили на запрос возможностей уведомлений.';
+          // Часы промолчали: отправляем в формате версии 5 (самый новый из известных) и
+          // честно сообщаем, что это предположение. Для проверки это безвредно.
+          caps = const NotifCaps(5, false, false);
+          guessed = true;
         } finally {
           _capsWait = null;
         }
@@ -905,8 +926,12 @@ class WearableController extends ChangeNotifier {
               body: 'Проверка: уведомление отправлено приложением.',
               appName: 'Питание',
               caps: caps));
-      addLog('уведомления: тестовое отправлено (версия ${caps.version})');
-      return null;
+      addLog('уведомления: тестовое отправлено (версия ${caps.version}'
+          '${guessed ? ', предположение: часы не ответили на запрос возможностей' : ''})');
+      return guessed
+          ? 'Часы не ответили на запрос возможностей. Отправлено в формате версии 5 '
+              '(предположение), проверьте экран часов.'
+          : null;
     } catch (e) {
       return 'Не удалось отправить: $e';
     }
