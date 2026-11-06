@@ -80,11 +80,19 @@ class WatchAncs {
     if (id == null || id.isEmpty) {
       return const AncsStatus(AncsState.watchNotFound);
     }
-    try {
-      final r = await _ch.invokeMethod<Map>('status', id);
-      return parseAncsStatus(r);
-    } catch (e) {
-      return AncsStatus(AncsState.unknown, detail: 'ошибка вызова: $e');
+    Object? last;
+    // Нативный канал может зарегистрироваться через пару секунд после запуска: повторяем.
+    for (var i = 0; i < 4; i++) {
+      try {
+        final r = await _ch.invokeMethod<Map>('status', id);
+        return parseAncsStatus(r);
+      } on MissingPluginException catch (e) {
+        last = e;
+        await Future.delayed(const Duration(seconds: 2));
+      } catch (e) {
+        return AncsStatus(AncsState.unknown, detail: 'ошибка вызова: $e');
+      }
     }
+    return AncsStatus(AncsState.unknown, detail: 'ошибка вызова: $last');
   }
 }

@@ -1,6 +1,7 @@
 // «Уведомления на часах»: что приложение реально может и чего не может на iPhone.
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
@@ -27,11 +28,15 @@ class WatchNotificationsPage extends ConsumerStatefulWidget {
 class _WatchNotificationsPageState
     extends ConsumerState<WatchNotificationsPage> {
   AncsStatus? _ancs;
+  String _ver = '';
   bool _busy = false;
 
   @override
   void initState() {
     super.initState();
+    PackageInfo.fromPlatform().then((i) {
+      if (mounted) setState(() => _ver = '${i.version}+${i.buildNumber}');
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _check());
   }
 
@@ -121,6 +126,7 @@ class _WatchNotificationsPageState
             row('Часы', c.savedId == null ? 'не сохранены' : 'сохранены'),
             row('Связь с приложением', c.isConnected ? 'есть' : 'нет'),
             if (c.fw != null) row('Прошивка', c.fw!),
+            if (_ver.isNotEmpty) row('Версия приложения', _ver),
             row('Доступ часов к уведомлениям iOS',
                 _busy ? 'проверка…' : (a?.title ?? '—')),
             if (a?.detail != null)
