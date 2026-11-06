@@ -190,6 +190,42 @@ class _WatchNotificationsPageState
         AppCard(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Прямая отправка на часы (экспериментально)',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+            const SizedBox(height: 8),
+            row(
+                'Сервис уведомлений Zepp OS',
+                switch (c.notifServiceListed) {
+                  true => 'заявлен часами',
+                  false => 'не заявлен',
+                  null => 'неизвестно',
+                }),
+            if (c.notifCaps != null)
+              row('Версия протокола', '${c.notifCaps!.version}'),
+            const SizedBox(height: 6),
+            Text(
+                'Приложение может отправить уведомление на часы само, по их собственному протоколу, '
+                'в обход списка приложений Zepp. Формат взят из открытого проекта Gadgetbridge и на '
+                'вашей прошивке не проверен. Часы не подтверждают показ: успех это только появление '
+                'уведомления на экране часов.',
+                style: TextStyle(fontSize: 12.5, color: muted)),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: () async {
+                  final err = await c.sendWatchTestNotification();
+                  if (context.mounted) {
+                    toast(context,
+                        err ?? 'Отправлено. Посмотрите на экран часов.');
+                  }
+                },
+                icon: const Icon(Icons.watch_outlined),
+                label: const Text('Отправить тест на часы')),
+          ]),
+        ),
+        const SizedBox(height: 12),
+        AppCard(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Уведомления этого приложения',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             const SizedBox(height: 4),

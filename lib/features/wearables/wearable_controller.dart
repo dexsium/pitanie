@@ -14,6 +14,7 @@ import 'huami_auth.dart';
 import 'huami_fetch.dart';
 import 'watch_archive.dart';
 import 'watch_workouts.dart';
+import 'zepp_notifications.dart';
 import 'watch_settings.dart';
 
 enum WearStatus { off, connecting, connected, authorizing, ready }
@@ -49,6 +50,8 @@ class WearableController extends ChangeNotifier {
   bool cfgBusy = false;
   bool finding = false;
   Completer<Uint8List>? _cfgWait;
+  NotifCaps? notifCaps;
+  Completer<NotifCaps>? _capsWait;
   bool hrOn = false;
   String? savedId;
   bool hasKey = false;
@@ -863,6 +866,50 @@ class WearableController extends ChangeNotifier {
       }
     }
     return 'У часов не найдена характеристика времени.';
+  }
+
+  /// Заявили ли часы сервис уведомлений Zepp OS: null, если список сервисов ещё не получен.
+  bool? get notifServiceListed {
+    final s = session;
+    if (s == null || s.endpoints.isEmpty) return null;
+    return s.endpoints.contains(notifEndpoint);
+  }
+
+  /// Тестовое уведомление, отправленное приложением по протоколу Zepp OS. Часы не подтверждают
+  /// показ: считать успехом можно только появление уведомления на экране часов.
+  Future<String?> sendWatchTestNotification() async {
+    final s = session;
+    if (s == null) return 'Часы не подключены или не авторизованы.';
+    if (notifServiceListed == false) {
+      return 'Часы не заявили сервис уведомлений (0x001e).';
+    }
+    try {
+      var caps = notifCaps;
+      if (caps == null) {
+        _capsWait = Completer<NotifCaps>();
+        await s.send(notifEndpoint, buildNotifCapsRequest());
+        try {
+          caps = await _capsWait!.future.timeout(const Duration(seconds: 6));
+        } on TimeoutException {
+          return 'Часы не ответили на запрос возможностей уведомлений.';
+        } finally {
+          _capsWait = null;
+        }
+      }
+      await s.send(
+          notifEndpoint,
+          buildNotification(
+              id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
+              appId: 'com.pitanie.pitanie',
+              title: 'Питание',
+              body: 'Проверка: уведомление отправлено приложением.',
+              appName: 'Питание',
+              caps: caps));
+      addLog('уведомления: тестовое отправлено (версия ${caps.version})');
+      return null;
+    } catch (e) {
+      return 'Не удалось отправить: $e';
+    }
   }
 
   /// «Найти часы»: вибрация и сигнал на часах, пока не остановите.

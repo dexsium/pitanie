@@ -58,7 +58,8 @@ class _WatchSettingsPageState extends ConsumerState<WatchSettingsPage> {
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.notifications_outlined),
             title: const Text('Уведомления на часах'),
-            subtitle: const Text('Доступ iOS, инструкция, уведомления приложения'),
+            subtitle:
+                const Text('Доступ iOS, инструкция, уведомления приложения'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.push(
                 context,

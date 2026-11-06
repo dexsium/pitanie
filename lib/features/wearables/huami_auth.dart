@@ -83,6 +83,9 @@ class HuamiAuthenticator {
 
   /// Эндпоинты, которые часы просят шифровать (из списка сервисов, эндпоинт 0x0000).
   final Set<int> encryptedEndpoints = {};
+
+  /// Все сервисы, которые заявили часы (эндпоинты). Пусто, пока список не получен.
+  final Set<int> endpoints = {};
   Completer<void>? _services;
 
   /// Отправляет команду сервису; шифрование включается по списку сервисов часов.
@@ -219,8 +222,10 @@ class HuamiAuthenticator {
     final n = bd.getUint16(1, Endian.little);
     var o = 3;
     encryptedEndpoints.clear();
+    endpoints.clear();
     for (var i = 0; i < n && o + 3 <= p.length; i++, o += 3) {
       final endpoint = bd.getUint16(o, Endian.little);
+      endpoints.add(endpoint);
       if (p[o + 2] == 1) encryptedEndpoints.add(endpoint);
     }
     if (_services != null && !_services!.isCompleted) _services!.complete();
