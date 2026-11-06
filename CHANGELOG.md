@@ -7,6 +7,9 @@
 
 Номер сборки (+N) CI ставит сам, он растёт с каждым запуском.
 
+## 1.18.5
+- Сборка iPhone: плагину ANCS добавлен Package.swift (Flutter 3.47 собирает плагины через Swift Package Manager), иначе сборка падала с «Module 'watch_ancs' not found». Остальное из 1.18.4 без изменений.
+
 ## 1.18.4
 - iPhone: найдена причина ошибки «No implementation found for method status». Папка ios/ не хранится в git, CI создаёт её заново, поэтому правки Swift в AppDelegate никогда не попадали в сборку. Нативная проверка ANCS перенесена в локальный плагин packages/watch_ancs, который подключается автоматически.
 - В CI добавлена проверка: если в готовой сборке нет канала pitanie/watch_ancs и чтения ancsAuthorized, сборка падает.
