@@ -60,16 +60,6 @@ jobs:
       - name: Подготовка проекта (платформы, Drift, разрешения)
         run: bash tool/prepare.sh
 
-      - name: Диагностика плагина watch_ancs (SwiftPM)
-        continue-on-error: true
-        run: |
-          flutter build ios --release --no-codesign >/dev/null 2>&1 || true
-          ls -la ios/Flutter/ephemeral/Packages 2>&1 | head -20
-          ls -la ios/Flutter/ephemeral/Packages/.packages 2>&1 | head -30
-          cat ios/Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage/Package.swift 2>&1 | head -60
-          grep -n "watch_ancs" ios/Runner/GeneratedPluginRegistrant.m 2>&1 | head
-          ls ios/Pods 2>&1 | head -3
-
       - name: Сертификат и профиль
         env:
           IOS_P12_BASE64: ${{ secrets.IOS_P12_BASE64 }}

@@ -5,6 +5,7 @@ build/
 *.g.dart
 android/
 ios/
+!packages/watch_ancs/ios/
 .idea/
 *.iml
 __pycache__/
