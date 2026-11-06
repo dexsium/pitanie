@@ -130,10 +130,23 @@ class _WatchNotificationsPageState
             row('Доступ часов к уведомлениям iOS',
                 _busy ? 'проверка…' : (a?.title ?? '—')),
             if (a?.detail != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: SelectableText(a!.detail!,
-                    style: TextStyle(fontSize: 11.5, color: muted)),
+              Theme(
+                data: Theme.of(context)
+                    .copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: Text('Техническая информация',
+                      style: TextStyle(fontSize: 12.5, color: muted)),
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: SelectableText(a!.detail!,
+                          style: TextStyle(fontSize: 11.5, color: muted)),
+                    ),
+                  ],
+                ),
               ),
             if (a != null && ancsHint.isNotEmpty) ...[
               const SizedBox(height: 6),

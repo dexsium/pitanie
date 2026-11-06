@@ -1,12 +1,16 @@
 name: pitanie
 description: Дневник питания, воды и физической активности
 publish_to: none
-version: 1.18.3+1
+version: 1.18.4+1
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
 
 dependencies:
+  # Локальный плагин iOS: статус доступа часов к уведомлениям (ANCS). Папка ios/ в git не хранится,
+  # поэтому нативный код лежит в плагине, а не в AppDelegate.
+  watch_ancs:
+    path: packages/watch_ancs
   flutter:
     sdk: flutter
   flutter_localizations:

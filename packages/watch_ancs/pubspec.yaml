@@ -1,0 +1,18 @@
+name: watch_ancs
+description: Чтение статуса доступа часов к системным уведомлениям iOS (ANCS). Только iOS.
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.3.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      ios:
+        pluginClass: WatchAncsPlugin

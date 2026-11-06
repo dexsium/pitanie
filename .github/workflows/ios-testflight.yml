@@ -130,6 +130,12 @@ jobs:
           cp "$IPA" pitanie-signed.ipa
           ls -la pitanie-signed.ipa
 
+      - name: Проверка нативного канала ANCS в сборке
+        run: |
+          APP="build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app"
+          strings "$APP/Runner" | grep -q "pitanie/watch_ancs" || { echo "в сборке нет канала pitanie/watch_ancs"; exit 1; }
+          strings "$APP/Runner" | grep -q "ancsAuthorized" || { echo "в сборке нет чтения ancsAuthorized"; exit 1; }
+
       - name: Проверка права на HealthKit в подписанном приложении
         run: |
           APP="build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app"
