@@ -26,7 +26,10 @@ class AncsStatus {
 
   /// 0 отключено, 1 подключается, 2 подключено, 3 отключается (CBPeripheralState).
   final int? connection;
-  const AncsStatus(this.state, {this.watchName, this.connection});
+
+  /// Техническая причина, если статус определить не удалось (для диагностики).
+  final String? detail;
+  const AncsStatus(this.state, {this.watchName, this.connection, this.detail});
 
   String get title => switch (state) {
         AncsState.authorized => 'Разрешён',
@@ -43,8 +46,12 @@ AncsStatus parseAncsStatus(Map? m) {
   if (m == null) return const AncsStatus(AncsState.unknown);
   final name = (m['name'] as String?)?.trim();
   final conn = m['connection'] as int?;
+  final detail =
+      'ответ iOS: ${m.entries.where((e) => e.key != 'name').map((e) => '${e.key}=${e.value}').join(', ')}';
   AncsStatus s(AncsState st) => AncsStatus(st,
-      watchName: name == null || name.isEmpty ? null : name, connection: conn);
+      watchName: name == null || name.isEmpty ? null : name,
+      connection: conn,
+      detail: detail);
   switch (m['state']) {
     case 'poweredOff':
       return s(AncsState.bluetoothOff);
@@ -76,8 +83,8 @@ class WatchAncs {
     try {
       final r = await _ch.invokeMethod<Map>('status', id);
       return parseAncsStatus(r);
-    } catch (_) {
-      return const AncsStatus(AncsState.unknown);
+    } catch (e) {
+      return AncsStatus(AncsState.unknown, detail: 'ошибка вызова: $e');
     }
   }
 }

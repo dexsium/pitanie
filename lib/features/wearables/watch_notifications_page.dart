@@ -123,6 +123,12 @@ class _WatchNotificationsPageState
             if (c.fw != null) row('Прошивка', c.fw!),
             row('Доступ часов к уведомлениям iOS',
                 _busy ? 'проверка…' : (a?.title ?? '—')),
+            if (a?.detail != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: SelectableText(a!.detail!,
+                    style: TextStyle(fontSize: 11.5, color: muted)),
+              ),
             if (a != null && ancsHint.isNotEmpty) ...[
               const SizedBox(height: 6),
               Text(ancsHint, style: TextStyle(fontSize: 12.5, color: muted)),
