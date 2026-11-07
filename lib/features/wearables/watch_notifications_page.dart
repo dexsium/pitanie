@@ -520,6 +520,37 @@ class _WatchNotificationsPageState
                       },
                 icon: const Icon(Icons.account_tree_outlined),
                 label: const Text('Последовательности (запись + подтверждение)')),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: c.sweeping
+                    ? null
+                    : () async {
+                        final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                                  title: const Text('Все варианты записи'),
+                                  content: const Text(
+                                      'Для сервисов 0x001f (список приложений), 0x000a (настройки '
+                                      'часов) и 0x00a0 (приложения Zepp OS) пробуются десятки '
+                                      'форматов пакета записи флага, около 2000 отправок, '
+                                      '30–40 минут. Пакеты в сервис настроек могут изменить '
+                                      'настройки часов (потом их можно вернуть вручную). '
+                                      'Приложение не сворачивать. Продолжить?'),
+                                  actions: [
+                                    TextButton(
+                                        onPressed: () => Navigator.pop(ctx, false),
+                                        child: const Text('Отмена')),
+                                    FilledButton(
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        child: const Text('Начать')),
+                                  ],
+                                ));
+                        if (ok != true || !context.mounted) return;
+                        final r = await c.megaAll();
+                        if (context.mounted) toast(context, r.split('\n').first);
+                      },
+                icon: const Icon(Icons.all_inclusive),
+                label: const Text('Все варианты записи (долго)')),
             if (c.vibeReport != null && c.vibeReport!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),

@@ -1275,6 +1275,34 @@ class WearableController extends ChangeNotifier {
     }
   }
 
+  /// Все варианты записи подряд для сервисов 0x001f (список приложений), 0x000a (настройки) и
+  /// 0x00a0 (приложения Zepp OS), если часы их заявили. Изменения всегда проверяются по списку
+  /// приложений 0x001f.
+  Future<String> megaAll() async {
+    final s = session;
+    if (s == null) return 'Часы не подключены или не авторизованы.';
+    final out = <String>[];
+    for (final ep in [appFilterEndpoint, cfgEndpoint, 0x00a0]) {
+      if (session == null) {
+        out.add('связь потеряна');
+        break;
+      }
+      final hex = '0x${ep.toRadixString(16).padLeft(4, '0')}';
+      if (!s.endpoints.contains(ep)) {
+        out.add('$hex: часы сервис не заявили');
+        addLog('перебор приложений: сервис $hex не заявлен, пропуск');
+        continue;
+      }
+      final r = await sweepAppFilterOpcodes(mega: true, endpoint: ep);
+      out.add('$hex: $r');
+      if (sweepCancel) break;
+    }
+    final all = out.join('\n');
+    sweepStatus = all;
+    notifyListeners();
+    return all;
+  }
+
   bool sweeping = false;
   bool sweepCancel = false;
   String? sweepStatus;
@@ -1287,15 +1315,20 @@ class WearableController extends ChangeNotifier {
   /// заново. Остановка при первом изменении списка или потере связи; ответы часов
   /// (кроме ожидаемого на 01, который пропущен) пишутся в журнал, перебор продолжается.
   /// Перед перебором сырой список сохраняется в `watch_apps_backup`.
-  Future<String> sweepAppFilterOpcodes({bool fullList = false, bool probe = false}) async {
+  Future<String> sweepAppFilterOpcodes(
+      {bool fullList = false,
+      bool probe = false,
+      bool mega = false,
+      int endpoint = appFilterEndpoint}) async {
     final s = session;
     if (s == null) return 'Часы не подключены или не авторизованы.';
     if (sweeping) return 'Перебор уже идёт.';
     sweeping = true;
     sweepCancel = false;
     final replies = <String>[];
+    final epHex = '0x${endpoint.toRadixString(16).padLeft(4, '0')}';
     probeListener = (t, p) {
-      if (t == appFilterEndpoint && p.isNotEmpty && p[0] != 0x04) {
+      if (t == endpoint && p.isNotEmpty && (endpoint != appFilterEndpoint || p[0] != 0x04)) {
         final h = p.take(40).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ');
         replies.add('код ${_sweepOp.toRadixString(16).padLeft(2, '0')}: $h');
         addLog('перебор приложений: код ${_sweepOp.toRadixString(16).padLeft(2, '0')} '
@@ -1336,13 +1369,22 @@ class WearableController extends ChangeNotifier {
       var cur = base;
       final found = <String>[];
       addLog('перебор приложений: начат, список ${base.apps.length}');
-      for (var op = 0; op <= 0xff; op++) {
+      // В режиме mega проверяются только осмысленные коды: низкие (00–0f), все отвечавшие
+      // (17–1f), 10 и 11 (иконки), с большим числом форматов пакета на каждый.
+      const megaOps = [0x00, 0x02, 0x04, 0x05, 0x06, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
+          0x0e, 0x0f, 0x10, 0x11, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20];
+      final ops = !mega
+          ? [for (var i = 0; i <= 0xff; i++) i]
+          : endpoint == appFilterEndpoint
+              ? megaOps
+              : [for (var i = 0; i <= 0x20; i++) i];
+      for (final op in ops) {
         if (sweepCancel) {
           return done('Остановлено на коде ${op.toRadixString(16).padLeft(2, '0')}. '
               '${found.isEmpty ? 'Изменений не было.' : 'Изменения: ${found.join('; ')}'}');
         }
         // 01 — запрос возможностей, 03 — чтение, 07 — уже изучен (пишет служебные записи).
-        if (op == 0x03 || op == 0x01 || op == 0x07) continue;
+        if (endpoint == appFilterEndpoint && (op == 0x03 || op == 0x01 || op == 0x07)) continue;
         if (session == null) {
           return done('Связь потеряна на коде ${op.toRadixString(16).padLeft(2, '0')}. '
               '${found.isEmpty ? '' : 'Изменения: ${found.join('; ')}'}');
@@ -1351,7 +1393,39 @@ class WearableController extends ChangeNotifier {
         sweepStatus = 'Перебор: код ${op.toRadixString(16).padLeft(2, '0')} из ff';
         notifyListeners();
         final idb = utf8.encode(target);
-        final forms = probe
+        final all = buildAppSetAll(cur.apps, target, true).sublist(1);
+        final forms = mega
+            ? <(String, List<int>)>[
+                ('m01 id 0 1', <int>[op, ...idb, 0, 1]),
+                ('m02 1 0 id 0 1', <int>[op, 1, 0, ...idb, 0, 1]),
+                ('m03 1 id 0 1', <int>[op, 1, ...idb, 0, 1]),
+                ('m04 0 1 id 0 1', <int>[op, 0, 1, ...idb, 0, 1]),
+                ('m05 len id 1', <int>[op, idb.length, ...idb, 1]),
+                ('m06 len id 0 1', <int>[op, idb.length, ...idb, 0, 1]),
+                ('m07 id 1', <int>[op, ...idb, 1]),
+                ('m08 idx8 1', <int>[op, tIdx & 0xff, 1]),
+                ('m09 idx16 1', <int>[op, tIdx & 0xff, tIdx >> 8, 1]),
+                ('m10 idx32 1', <int>[op, tIdx & 0xff, tIdx >> 8, 0, 0, 1]),
+                ('m11 1 idx8', <int>[op, 1, tIdx & 0xff]),
+                ('m12 1 idx16', <int>[op, 1, tIdx & 0xff, tIdx >> 8]),
+                ('m13 1 0 idx8 1', <int>[op, 1, 0, tIdx & 0xff, 1]),
+                ('m14 1 0 len id 1', <int>[op, 1, 0, idb.length, ...idb, 1]),
+                ('m15 1 0 id 1', <int>[op, 1, 0, ...idb, 1]),
+                ('m16 len16 id 0 1', <int>[op, idb.length, 0, ...idb, 0, 1]),
+                ('m17 id 0 1 0', <int>[op, ...idb, 0, 1, 0]),
+                ('m18 1 id 0', <int>[op, 1, ...idb, 0]),
+                ('m19 0 id 0 1', <int>[op, 0, ...idb, 0, 1]),
+                ('m20 1 1 id 0', <int>[op, 1, 1, ...idb, 0]),
+                ('m21 idx8 0 1', <int>[op, tIdx & 0xff, 0, 1]),
+                ('m22 список u16', <int>[op, ...all]),
+                ('m23 список без числа', <int>[op, ...all.sublist(2)]),
+                ('m24 список u8', <int>[op, all[0], ...all.sublist(2)]),
+                ('m25 1 0 список', <int>[op, 1, 0, ...all]),
+                ('m26 код', <int>[op]),
+                ('m27 код 0', <int>[op, 0]),
+                ('m28 код 1', <int>[op, 1]),
+              ]
+            : probe
             // Короткие запросы без данных: какие коды у часов вообще отвечают.
             ? <(String, List<int>)>[
                 ('Z', <int>[op]),
@@ -1373,10 +1447,10 @@ class WearableController extends ChangeNotifier {
         ];
         for (final (form, pkt) in forms) {
           // Код пишется до отправки с секундами: если часы дрогнули, по времени видно, на каком.
-          addLog('перебор приложений: код ${op.toRadixString(16).padLeft(2, '0')}, '
+          addLog('перебор приложений: сервис $epHex, код ${op.toRadixString(16).padLeft(2, '0')}, '
               'форма $form, ${DateTime.now().toIso8601String().substring(11, 19)}');
           try {
-            await s.send(appFilterEndpoint, pkt);
+            await s.send(endpoint, pkt);
           } catch (e) {
             return done('Не удалось отправить код ${op.toRadixString(16)}: $e');
           }
@@ -1388,7 +1462,7 @@ class WearableController extends ChangeNotifier {
           final added = after.difference(before), removed = before.difference(after);
           if (added.isNotEmpty || removed.isNotEmpty || now.apps.length != cur.apps.length) {
             final hex = op.toRadixString(16).padLeft(2, '0');
-            final line = 'код $hex, форма $form: список ${cur.apps.length} → '
+            final line = 'сервис $epHex, код $hex, форма $form: список ${cur.apps.length} → '
                 '${now.apps.length}; появилось: ${added.isEmpty ? 'нет' : added.join(' ')}; '
                 'исчезло: ${removed.isEmpty ? 'нет' : removed.join(' ')}';
             addLog('перебор приложений: изменение, $line');
