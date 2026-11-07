@@ -201,6 +201,47 @@ class _WatchNotificationsPageState
         AppCard(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Звонки по Bluetooth на часах',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+            const SizedBox(height: 4),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Звонки на часах'),
+              subtitle: Text(
+                  c.phoneEnabled == null
+                      ? 'Состояние неизвестно: нажмите «Прочитать состояние»'
+                      : (c.phoneEnabled! ? 'Включено на часах' : 'Выключено на часах'),
+                  style: TextStyle(fontSize: 12, color: muted)),
+              value: c.phoneEnabled ?? false,
+              onChanged: c.session != null && c.phoneEnabled != null
+                  ? (v) async {
+                      final err = await c.setPhoneEnabled(v);
+                      if (context.mounted) {
+                        toast(context, err ?? 'Настройка применена');
+                      }
+                    }
+                  : null,
+            ),
+            Text(
+                'Команда из открытого проекта Gadgetbridge (сервис 0x000b), на прошивке 7.6.0.2 '
+                'не проверялась, поэтому после переключения приложение читает состояние обратно. '
+                'Сопряжение часов для звонков выполняется в «Настройки → Bluetooth» iPhone, '
+                'здесь оно не меняется.',
+                style: TextStyle(fontSize: 12, color: muted)),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: () async {
+                  final err = await c.readPhoneState();
+                  if (context.mounted) toast(context, err ?? 'Состояние прочитано');
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Прочитать состояние')),
+          ]),
+        ),
+        const SizedBox(height: 12),
+        AppCard(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Звонки, сообщения, Telegram, WhatsApp',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             const SizedBox(height: 8),

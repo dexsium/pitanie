@@ -358,6 +358,18 @@ class WearableController extends ChangeNotifier {
       addLog('запрос погоды от часов (${p.length} байт, проигнорирован)');
       return;
     }
+    if (type == phoneEndpoint) {
+      // Сервис «телефон» (Gadgetbridge: ZeppOsPhoneService): 02 возможности, 04 сопряжение,
+      // 07 включено ли, 09 подтверждение записи.
+      addLog('звонки по Bluetooth, ответ часов: '
+          '${p.take(20).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      if (p[0] == 0x02 && p.length >= 2) phoneVersion = p[1];
+      if (p[0] == 0x07 && p.length == 4 && p[1] == 1 && p[2] == 1) {
+        phoneEnabled = p[3] == 1 ? true : (p[3] == 0 ? false : null);
+      }
+      notifyListeners();
+      return;
+    }
     if (type == notifEndpoint) {
       addLog('уведомления, ответ часов: '
           '${p.take(40).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ')}');
@@ -897,6 +909,52 @@ class WearableController extends ChangeNotifier {
     final s = session;
     if (s == null || s.endpoints.isEmpty) return null;
     return s.endpoints.contains(notifEndpoint);
+  }
+
+  /// Сервис «телефон» (звонки по Bluetooth): версия и состояние «включено» на часах.
+  static const phoneEndpoint = 0x000b;
+  int? phoneVersion;
+  bool? phoneEnabled;
+
+  /// Читает состояние звонков по Bluetooth: запрос возможностей `01` и состояния `06`.
+  Future<String?> readPhoneState() async {
+    final s = session;
+    if (s == null) return 'Часы не подключены или не авторизованы.';
+    if (!s.endpoints.contains(phoneEndpoint)) {
+      return 'Часы не заявили сервис звонков (0x000b).';
+    }
+    try {
+      await s.send(phoneEndpoint, const [0x01]);
+      await s.send(phoneEndpoint, const [0x06]);
+      await Future.delayed(const Duration(seconds: 2));
+      return phoneEnabled == null ? 'Часы не сообщили состояние звонков.' : null;
+    } catch (e) {
+      return 'Не удалось прочитать: $e';
+    }
+  }
+
+  /// Включает или выключает звонки по Bluetooth на часах (`08 01 01 xx`, формат из
+  /// Gadgetbridge) и проверяет результат повторным чтением. Сопряжение для звонков
+  /// выполняется в настройках iOS и этой командой не затрагивается.
+  Future<String?> setPhoneEnabled(bool on) async {
+    final s = session;
+    if (s == null) return 'Часы не подключены или не авторизованы.';
+    if (!s.endpoints.contains(phoneEndpoint)) {
+      return 'Часы не заявили сервис звонков (0x000b).';
+    }
+    try {
+      await s.send(phoneEndpoint, [0x08, 0x01, 0x01, on ? 1 : 0]);
+      await Future.delayed(const Duration(seconds: 1));
+      phoneEnabled = null;
+      await s.send(phoneEndpoint, const [0x06]);
+      await Future.delayed(const Duration(seconds: 2));
+      if (phoneEnabled == on) return null;
+      return phoneEnabled == null
+          ? 'Часы не подтвердили состояние. Проверьте на часах.'
+          : 'Часы не применили настройку (сейчас ${phoneEnabled! ? 'включено' : 'выключено'}).';
+    } catch (e) {
+      return 'Не удалось отправить: $e';
+    }
   }
 
   /// Сырой ответ часов на запрос возможностей 0x001e (для исследования протокола).

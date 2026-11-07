@@ -284,9 +284,10 @@ class _ProtocolExplorerPageState extends ConsumerState<ProtocolExplorerPage> {
   /// Опрос неизвестных сервисов: в каждый отправляется один байт 0x01 («запрос»), как в
   /// большинстве сервисов Zepp OS. Выполняется по очереди с разрешения владельца часов.
   /// Ответ любого размера и содержимое пишутся в журнал; сервис 0x0001 маскируется.
-  Future<void> _probeUnknown() async {
+  Future<void> _probeUnknown({List<int>? only, int cmd = 0x01}) async {
     final c = ref.read(wearableProvider);
     final s = c.session;
+    final cmdHex = cmd.toRadixString(16).padLeft(2, '0');
     if (s == null) {
       toast(context, 'Часы не подключены или не авторизованы.');
       return;
@@ -294,9 +295,9 @@ class _ProtocolExplorerPageState extends ConsumerState<ProtocolExplorerPage> {
     final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-              title: const Text('Опросить неизвестные сервисы?'),
-              content: const Text(
-                  'В каждый неопознанный сервис часов будет отправлен один байт 01 '
+              title: Text(only == null ? 'Опросить неизвестные сервисы?' : 'Отправить $cmdHex в сервисы-кандидаты?'),
+              content: Text(
+                  'В ${only == null ? 'каждый неопознанный сервис' : 'выбранные сервисы'} часов будет отправлен один байт $cmdHex '
                   '(запрос). Команды перебора и записи настроек не отправляются, но '
                   'назначение сервисов неизвестно, поэтому полной гарантии, что часы '
                   'не отреагируют на запрос, нет. Продолжить?'),
@@ -310,8 +311,9 @@ class _ProtocolExplorerPageState extends ConsumerState<ProtocolExplorerPage> {
               ],
             ));
     if (ok != true || !mounted) return;
-    final targets = s.endpoints
-        .where((e) => !_knownEndpoints.contains(e))
+    final targets = (only ??
+            s.endpoints.where((e) => !_knownEndpoints.contains(e)).toList())
+        .where(s.endpoints.contains)
         .toList()
       ..sort();
     setState(() {
@@ -329,9 +331,9 @@ class _ProtocolExplorerPageState extends ConsumerState<ProtocolExplorerPage> {
         got.remove(e);
         final sw = Stopwatch()..start();
         try {
-          await c.session!.send(e, const [0x01]);
+          await c.session!.send(e, [cmd]);
         } catch (err) {
-          _add(ProbeResult('Запрос 01', name, ProbeStatus.error,
+          _add(ProbeResult('Запрос $cmdHex', name, ProbeStatus.error,
               ms: sw.elapsedMilliseconds, note: '$err'));
           setState(() => _checked++);
           continue;
@@ -339,17 +341,17 @@ class _ProtocolExplorerPageState extends ConsumerState<ProtocolExplorerPage> {
         await Future.delayed(const Duration(milliseconds: 1500));
         final r = got[e];
         if (r == null || r.isEmpty) {
-          _add(ProbeResult('Запрос 01', name, ProbeStatus.timeout,
+          _add(ProbeResult('Запрос $cmdHex', name, ProbeStatus.timeout,
               ms: sw.elapsedMilliseconds,
               note: 'ответа нет: сервис не отреагировал или команда ему не знакома'));
         } else {
           for (final p in r) {
-            _add(ProbeResult('Запрос 01', name, ProbeStatus.supported,
+            _add(ProbeResult('Запрос $cmdHex', name, ProbeStatus.supported,
                 hex: e == 0x0001 ? '(скрыто)' : hexOf(p),
                 ms: sw.elapsedMilliseconds,
                 note: 'ответ ${p.length} байт'));
           }
-          _unknown.add('сервис $name ответил на 01: '
+          _unknown.add('сервис $name ответил на $cmdHex: '
               '${e == 0x0001 ? '(скрыто)' : hexOf(r.first, max: 24)}');
         }
         setState(() => _checked++);
@@ -468,6 +470,15 @@ class _ProtocolExplorerPageState extends ConsumerState<ProtocolExplorerPage> {
                 label: Text(_probing
                     ? 'Опрос: $_checked из $_total'
                     : 'Опросить неизвестные сервисы (01)')),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: (_running || _probing)
+                    ? null
+                    : () => _probeUnknown(
+                        only: const [0x001f, 0x001c, 0x000c, 0x0046, 0x0012],
+                        cmd: 0x03),
+                icon: const Icon(Icons.manage_search),
+                label: const Text('Запрос 03 в сервисы-кандидаты')),
           ]),
         ),
         const SizedBox(height: 12),
