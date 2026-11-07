@@ -964,7 +964,7 @@ class WearableController extends ChangeNotifier {
   /// лишнюю запись). Формат неизвестен, поэтому в список добавляются четыре тестовые записи с
   /// заведомо новыми идентификаторами `zz.pitanie.*` разными формами пакета; после каждой
   /// список читается заново, а новые записи выписываются в HEX. Удалить их пока нельзя.
-  Future<String> experiment07({bool round2 = false}) async {
+  Future<String> experiment07({int round = 1}) async {
     final s = session;
     if (s == null) return 'Часы не подключены или не авторизованы.';
     if (experimenting) return 'Опыт уже идёт.';
@@ -987,12 +987,25 @@ class WearableController extends ChangeNotifier {
       if (raw != null && (await db.allSettings())['watch_apps_backup'] == null) {
         await db.setSetting('watch_apps_backup', hexOf(raw).replaceAll(' ', ''));
       }
+      List<int> b(String id, int flag) => [0x07, 1, 0, ...utf8.encode(id), 0, flag];
       final forms = <(String, List<int> Function(List<int>))>[
-        if (!round2) ...[
+        if (round == 1) ...[
           ('A: 07 id 00 01', (id) => [0x07, ...id, 0, 1]),
           ('B: 07 01 00 id 00 01', (id) => [0x07, 1, 0, ...id, 0, 1]),
           ('C: 07 01 id 00 01', (id) => [0x07, 1, ...id, 0, 1]),
           ('D: 07 00 01 id 00 01', (id) => [0x07, 0, 1, ...id, 0, 1]),
+        ] else if (round == 3) ...[
+          // Третья серия: вариации формы B, давшей ответ 08 01.
+          ('a: B zz.pitanie.b флаг 1 (повтор)', (_) => b('zz.pitanie.b', 1)),
+          ('b: B «ab» флаг 1', (_) => b('ab', 1)),
+          ('c: B «abcdefgh» флаг 1', (_) => b('abcdefgh', 1)),
+          ('d: B zz.pitanie.b флаг 0', (_) => b('zz.pitanie.b', 0)),
+          ('e: B zz.pitanie.b флаг 2', (_) => b('zz.pitanie.b', 2)),
+          ('f: B два элемента', (_) => [0x07, 2, 0, ...utf8.encode('zz.pitanie.e'), 0, 1, ...utf8.encode('zz.pitanie.f'), 0, 1]),
+          ('g: B zz.pitanie.b без флага', (_) => [0x07, 1, 0, ...utf8.encode('zz.pitanie.b'), 0]),
+          ('h: 07 01 01 zz.pitanie.h 00 01', (_) => [0x07, 1, 1, ...utf8.encode('zz.pitanie.h'), 0, 1]),
+          ('i: B ru.oneme.app → выключить', (_) => b('ru.oneme.app', 0)),
+          ('j: B ru.oneme.app → включить', (_) => b('ru.oneme.app', 1)),
         ] else ...[
           // Вторая серия: правка записи с идентификатором 01, короткие идентификаторы,
           // возможные команды удаления.
