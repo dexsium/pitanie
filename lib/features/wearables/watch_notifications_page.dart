@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../app/app.dart';
 import '../../app/providers.dart';
 import '../../shared/widgets.dart';
+import 'app_meta.dart';
 import 'watch_ancs.dart';
 import 'zepp_notifications.dart';
 import 'wearable_controller.dart';
@@ -33,6 +34,9 @@ class _WatchNotificationsPageState
   AncsStatus? _ancs;
   String _ver = '';
   bool _busy = false;
+  bool _metaBusy = false;
+  String? _metaRaw;
+  Map<String, AppMeta> _meta = {};
 
   @override
   void initState() {
@@ -55,6 +59,68 @@ class _WatchNotificationsPageState
     }
   }
 
+  Widget _appIcon(String id, Color muted) {
+    final url = _meta[id]?.iconUrl;
+    final fallback = CircleAvatar(
+        radius: 18,
+        backgroundColor: muted.withValues(alpha: 0.15),
+        child: Text(appName(id, _meta).characters.first.toUpperCase(),
+            style: TextStyle(color: muted, fontWeight: FontWeight.w700)));
+    if (url == null) return fallback;
+    return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(url,
+            width: 36, height: 36, errorBuilder: (_, __, ___) => fallback));
+  }
+
+  /// Названия и значки из публичного поиска App Store. Наружу уходят только идентификаторы
+  /// приложений из списка часов, результат сохраняется локально.
+  Future<void> _loadMeta(WatchAppList list) async {
+    final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+              title: const Text('Загрузить из App Store?'),
+              content: const Text(
+                  'Приложение отправит идентификаторы приложений из списка часов '
+                  '(например, ph.telegra.Telegraph) в публичный поиск App Store компании Apple, '
+                  'чтобы получить названия и значки. Содержимое уведомлений и ваши данные не '
+                  'отправляются. Системные приложения Apple определяются без сети.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Отмена')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Загрузить')),
+              ],
+            ));
+    if (ok != true || !mounted) return;
+    setState(() => _metaBusy = true);
+    final next = Map<String, AppMeta>.of(_meta);
+    final todo = [
+      for (final a in list.apps)
+        if (!builtinAppNames.containsKey(a.id) && next[a.id]?.iconUrl == null)
+          a.id
+    ];
+    var found = 0;
+    for (var i = 0; i < todo.length; i += 4) {
+      final batch = todo.skip(i).take(4).toList();
+      final res = await Future.wait(batch.map(lookupAppStore));
+      for (var k = 0; k < batch.length; k++) {
+        final m = res[k];
+        if (m != null) {
+          next[batch[k]] = m;
+          found++;
+        }
+      }
+      if (!mounted) return;
+    }
+    await ref.read(dbProvider).setSetting('app_meta', encodeAppMeta(next));
+    if (!mounted) return;
+    setState(() => _metaBusy = false);
+    toast(context, 'Найдено в App Store: $found из ${todo.length}');
+  }
+
   Future<void> _test() async {
     final n = ref.read(notificationsProvider);
     await n.requestPermission();
@@ -74,6 +140,10 @@ class _WatchNotificationsPageState
     final c = ref.watch(wearableProvider);
     final s = ref.watch(settingsProvider).valueOrNull ?? {};
     final db = ref.read(dbProvider);
+    if (s['app_meta'] != _metaRaw) {
+      _metaRaw = s['app_meta'];
+      _meta = decodeAppMeta(_metaRaw);
+    }
     final cs = Theme.of(context).colorScheme;
     final muted = cs.onSurfaceVariant;
     final a = _ancs;
@@ -264,6 +334,15 @@ class _WatchNotificationsPageState
                 icon: const Icon(Icons.refresh),
                 label: const Text('Прочитать список с часов')),
             if (c.watchApps != null) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                  onPressed: _metaBusy ? null : () => _loadMeta(c.watchApps!),
+                  icon: const Icon(Icons.image_search),
+                  label: Text(_metaBusy
+                      ? 'Загрузка названий и значков…'
+                      : 'Загрузить названия и значки (App Store)')),
+            ],
+            if (c.watchApps != null) ...[
               const SizedBox(height: 4),
               Text(
                   'Заявлено часами: ${c.watchApps!.declared}, разобрано: ${c.watchApps!.apps.length}'
@@ -273,10 +352,10 @@ class _WatchNotificationsPageState
                 SwitchListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  title: Text(appDisplayName(a.id)),
-                  subtitle: appDisplayName(a.id) == a.id
-                      ? null
-                      : Text(a.id, style: TextStyle(fontSize: 11, color: muted)),
+                  secondary: _appIcon(a.id, muted),
+                  title: Text(appName(a.id, _meta)),
+                  subtitle:
+                      Text(a.id, style: TextStyle(fontSize: 11, color: muted)),
                   value: a.enabled,
                   onChanged: (v) async {
                     final ok = await showDialog<bool>(
@@ -284,7 +363,7 @@ class _WatchNotificationsPageState
                         builder: (ctx) => AlertDialog(
                               title: const Text('Экспериментальная запись'),
                               content: Text(
-                                  'Команда записи для «${appDisplayName(a.id)}» неизвестна. '
+                                  'Команда записи для «${appName(a.id, _meta)}» неизвестна. '
                                   'Приложение сохранит копию списка и попробует две гипотезы, '
                                   'проверяя результат. Есть риск, что часы изменят список. '
                                   'Продолжить?'),
