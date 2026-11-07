@@ -401,6 +401,36 @@ class _WatchNotificationsPageState
                 label: Text(c.experimenting
                     ? 'Опыт идёт…'
                     : 'Опыты с кодом 07 (формат записи)')),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: c.experimenting
+                    ? null
+                    : () async {
+                        final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                                  title: const Text('Опыты с кодом 07, серия 2'),
+                                  content: const Text(
+                                      'Будет изменён флаг служебной записи «01», добавлено '
+                                      'несколько коротких тестовых записей и проверены коды '
+                                      '06 и 08 (возможное удаление). Настоящие приложения не '
+                                      'затрагиваются. Копия исходного списка сохранится. '
+                                      'Продолжить?'),
+                                  actions: [
+                                    TextButton(
+                                        onPressed: () => Navigator.pop(ctx, false),
+                                        child: const Text('Отмена')),
+                                    FilledButton(
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        child: const Text('Начать')),
+                                  ],
+                                ));
+                        if (ok != true || !context.mounted) return;
+                        final r = await c.experiment07(round2: true);
+                        if (context.mounted) toast(context, r.split('\n').first);
+                      },
+                icon: const Icon(Icons.science_outlined),
+                label: const Text('Опыты с кодом 07, серия 2')),
             if (c.experimentReport != null && c.experimentReport!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
