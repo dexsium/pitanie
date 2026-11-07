@@ -551,6 +551,16 @@ class _WatchNotificationsPageState
                       },
                 icon: const Icon(Icons.all_inclusive),
                 label: const Text('Все варианты записи (долго)')),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: c.sweeping
+                    ? null
+                    : () async {
+                        final r = await c.experiment05();
+                        if (context.mounted) toast(context, r.split('\n').first);
+                      },
+                icon: const Icon(Icons.edit_note),
+                label: const Text('Опыты с кодом 05 (запись)')),
             if (c.vibeReport != null && c.vibeReport!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
