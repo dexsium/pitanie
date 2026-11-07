@@ -78,7 +78,7 @@ class WearableController extends ChangeNotifier {
     final t = DateTime.now();
     log.insert(0,
         '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')} $line');
-    if (log.length > 400) log.removeLast();
+    if (log.length > 1500) log.removeLast();
   }
 
   /// Вызывается при запуске приложения и при возврате в него.
@@ -363,8 +363,14 @@ class WearableController extends ChangeNotifier {
       if (l != null) {
         watchApps = l;
         watchAppsRaw = Uint8List.fromList(p);
-        addLog('приложения на часах: ${p.length} байт, заявлено ${l.declared}, '
-            'разобрано ${l.apps.length}, ${l.consistent ? 'структура сошлась' : 'структура НЕ сошлась'}');
+        // Одинаковые строки подряд не пишем: перебор читает список сотни раз и вытеснял
+        // из журнала (400 строк) всё полезное.
+        final line = 'приложения на часах: ${p.length} байт, заявлено ${l.declared}, '
+            'разобрано ${l.apps.length}, ${l.consistent ? 'структура сошлась' : 'структура НЕ сошлась'}';
+        if (line != _lastAppsLog) {
+          _lastAppsLog = line;
+          addLog(line);
+        }
         final w = _appsWait;
         if (w != null && !w.isCompleted) w.complete();
       } else {
@@ -958,6 +964,7 @@ class WearableController extends ChangeNotifier {
     }
   }
 
+  String? _lastAppsLog;
   WatchAppList? _prevApps;
 
   /// Что изменилось в списке с прошлого чтения (после переключения в Zepp и т.п.).
@@ -1133,6 +1140,7 @@ class WearableController extends ChangeNotifier {
     };
     String done(String r) {
       sweepStatus = r;
+      addLog('перебор приложений: итог — $r');
       return r;
     }
 
@@ -1158,6 +1166,7 @@ class WearableController extends ChangeNotifier {
         }
       }
       if (target == null) return done('Нет выключенного приложения для проверки.');
+      final tIdx = base.apps.indexWhere((x) => x.id == target);
       String keyOf(WatchApp x) => '${x.idHex}|${x.enabled ? 1 : 0}';
       Set<String> keysOf(WatchAppList l) => {for (final x in l.apps) keyOf(x)};
       var cur = base;
@@ -1181,7 +1190,14 @@ class WearableController extends ChangeNotifier {
         for (final (form, pkt) in [
           ('A', <int>[op, ...idb, 0, 1]),
           ('B', <int>[op, 1, 0, ...idb, 0, 1]),
+          ('C', <int>[op, idb.length, ...idb, 1]),
+          ('D', <int>[op, tIdx & 0xff, 1]),
+          ('E', <int>[op, tIdx & 0xff, tIdx >> 8, 1]),
+          ('F', <int>[op, ...idb, 1]),
         ]) {
+          // Код пишется до отправки с секундами: если часы дрогнули, по времени видно, на каком.
+          addLog('перебор приложений: код ${op.toRadixString(16).padLeft(2, '0')}, '
+              'форма $form, ${DateTime.now().toIso8601String().substring(11, 19)}');
           try {
             await s.send(appFilterEndpoint, pkt);
           } catch (e) {
