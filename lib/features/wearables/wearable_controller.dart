@@ -1173,6 +1173,108 @@ class WearableController extends ChangeNotifier {
     return experimentReport!;
   }
 
+  /// ЭКСПЕРИМЕНТ: опрос коротких запросов показал, что часы отвечают `01` на 09, 19, 1b, 1d, 1f
+  /// (и на 17 с аргументом) без данных. Возможно, запись списка идёт «транзакцией»: команда
+  /// записи и отдельная команда подтверждения. Пробуются все сочетания записи (05 весь список,
+  /// 05 A/B, 07 B для выключенного приложения) с кодом-кандидатом до и после записи. После
+  /// каждого сочетания список читается заново; изменения пишутся в журнал. Использует те же
+  /// флаги, что перебор (`sweeping`). Копия исходного списка сохраняется.
+  Future<String> probeSequences() async {
+    final s = session;
+    if (s == null) return 'Часы не подключены или не авторизованы.';
+    if (sweeping) return 'Перебор уже идёт.';
+    sweeping = true;
+    sweepCancel = false;
+    final replies = <String>[];
+    probeListener = (t, p) {
+      if (t == appFilterEndpoint && p.isNotEmpty && p[0] != 0x04) {
+        replies.add(p.take(16).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' '));
+      }
+    };
+    String done(String r) {
+      sweepStatus = r;
+      addLog('последовательности: итог — $r');
+      return r;
+    }
+
+    try {
+      await readWatchApps();
+      final base = watchApps;
+      if (base == null) return done('Не удалось прочитать список перед пробой.');
+      final raw = watchAppsRaw;
+      if (raw != null) {
+        await db.setSetting('watch_apps_backup',
+            raw.map((x) => x.toRadixString(16).padLeft(2, '0')).join());
+      }
+      const keep = {'com.apple.mobilephone', 'com.apple.MobileSMS', 'com.apple.mobilemail'};
+      String? target;
+      for (final a in base.apps) {
+        if (!a.enabled && !keep.contains(a.id)) {
+          target = a.id;
+          break;
+        }
+      }
+      if (target == null) return done('Нет выключенного приложения для проверки.');
+      final idb = utf8.encode(target);
+      String keyOf(WatchApp x) => '${x.idHex}|${x.enabled ? 1 : 0}';
+      var cur = base;
+      final found = <String>[];
+      final writes = <(String, List<int>)>[
+        ('05 весь список', buildAppSetAll(base.apps, target, true)),
+        ('05 A', [0x05, ...idb, 0, 1]),
+        ('05 B', [0x05, 1, 0, ...idb, 0, 1]),
+        ('07 B', [0x07, 1, 0, ...idb, 0, 1]),
+      ];
+      const commits = [0x09, 0x0b, 0x17, 0x19, 0x1b, 0x1d, 0x1f];
+      var n = 0;
+      for (final c in commits) {
+        final cp = <int>[c, if (c == 0x17 || c == 0x1b || c == 0x1f) 1];
+        for (final (wname, w) in writes) {
+          for (final before in [true, false]) {
+            if (sweepCancel) return done('Остановлено. Изменения: ${found.join('; ')}');
+            if (session == null) return done('Связь потеряна. Изменения: ${found.join('; ')}');
+            n++;
+            final hex = c.toRadixString(16).padLeft(2, '0');
+            final name = before ? '$hex → $wname' : '$wname → $hex';
+            sweepStatus = 'Последовательности: $n из ${commits.length * writes.length * 2}';
+            notifyListeners();
+            replies.clear();
+            addLog('последовательности: $name, ${DateTime.now().toIso8601String().substring(11, 19)}');
+            try {
+              for (final pkt in before ? [cp, w] : [w, cp]) {
+                await s.send(appFilterEndpoint, pkt);
+                await Future.delayed(const Duration(milliseconds: 250));
+              }
+            } catch (e) {
+              return done('Не удалось отправить ($name): $e');
+            }
+            await Future.delayed(const Duration(milliseconds: 300));
+            await readWatchApps();
+            final now = watchApps;
+            if (now == null) continue;
+            final before0 = {for (final x in cur.apps) keyOf(x)};
+            final after0 = {for (final x in now.apps) keyOf(x)};
+            final added = after0.difference(before0), removed = before0.difference(after0);
+            if (added.isNotEmpty || removed.isNotEmpty || now.apps.length != cur.apps.length) {
+              final line = '$name: список ${cur.apps.length} → ${now.apps.length}; '
+                  'появилось ${added.isEmpty ? 'нет' : added.join(' ')}; '
+                  'исчезло ${removed.isEmpty ? 'нет' : removed.join(' ')}';
+              addLog('последовательности: изменение, $line');
+              found.add(line);
+              cur = now;
+            }
+          }
+        }
+      }
+      return done('Проверено $n сочетаний. '
+          '${found.isEmpty ? 'Список не менялся.' : 'Изменения: ${found.join('; ')}'}');
+    } finally {
+      probeListener = null;
+      sweeping = false;
+      notifyListeners();
+    }
+  }
+
   bool sweeping = false;
   bool sweepCancel = false;
   String? sweepStatus;

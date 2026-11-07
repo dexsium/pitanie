@@ -510,6 +510,16 @@ class _WatchNotificationsPageState
                       },
                 icon: const Icon(Icons.radar),
                 label: const Text('Опрос кодов (короткие запросы)')),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: c.sweeping
+                    ? null
+                    : () async {
+                        final r = await c.probeSequences();
+                        if (context.mounted) toast(context, r.split('\n').first);
+                      },
+                icon: const Icon(Icons.account_tree_outlined),
+                label: const Text('Последовательности (запись + подтверждение)')),
             if (c.vibeReport != null && c.vibeReport!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
