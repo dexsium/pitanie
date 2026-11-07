@@ -966,7 +966,8 @@ class WearableController extends ChangeNotifier {
   /// (код 0x03 — чтение, пропускается). Для проверки берётся первое выключенное приложение,
   /// не входящее в основные (Телефон, Сообщения, Почта), и ему шлётся «включить» в двух
   /// форматах (A: `код id\0 флаг`, B: `код 01 00 id\0 флаг`). После каждой пробы список читается
-  /// заново. Остановка при первом изменении списка, ответе часов или потере связи.
+  /// заново. Остановка при первом изменении списка или потере связи; ответы часов
+  /// (кроме ожидаемого на 01, который пропущен) пишутся в журнал, перебор продолжается.
   /// Перед перебором сырой список сохраняется в `watch_apps_backup`.
   Future<String> sweepAppFilterOpcodes() async {
     final s = session;
@@ -1023,7 +1024,8 @@ class WearableController extends ChangeNotifier {
           return done('Остановлено на коде ${op.toRadixString(16).padLeft(2, '0')}. '
               '${replies.isEmpty ? 'Часы не отвечали.' : 'Ответы: ${replies.join('; ')}'}');
         }
-        if (op == 0x03) continue;
+        // 01 — запрос возможностей (ответ 02 ожидаем), 03 — чтение списка: пропускаем.
+        if (op == 0x03 || op == 0x01) continue;
         if (session == null) {
           return done('Связь потеряна на коде ${op.toRadixString(16).padLeft(2, '0')}.');
         }
@@ -1061,10 +1063,6 @@ class WearableController extends ChangeNotifier {
                 'изменил список (было ${base.apps.length}, стало ${now.apps.length}, '
                 'флаг ${stateOf(now)}). Копия списка сохранена.');
           }
-        }
-        if (replies.isNotEmpty) {
-          return done('Часы ответили на код ${op.toRadixString(16).padLeft(2, '0')} '
-              '(список не изменился): ${replies.join('; ')}');
         }
       }
       return done('Коды 00–ff перебраны, список не изменился. '
