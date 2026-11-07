@@ -993,6 +993,68 @@ class WearableController extends ChangeNotifier {
     addLog('приложения на часах: изменения с прошлого чтения: $watchAppsDiff');
   }
 
+  bool probingVibe = false;
+  String? vibeReport;
+
+  /// ЭКСПЕРИМЕНТ: во время перебора часы завибрировали на коде 0x17 сервиса 0x001f. Пакеты
+  /// с этим кодом шлются по одному с паузой 3 с, каждый пишется в журнал с секундами, чтобы
+  /// по вибрации найти, какая именно форма её вызывает. Список приложений не меняется.
+  Future<String> probeVibrateCode() async {
+    final s = session;
+    if (s == null) return 'Часы не подключены или не авторизованы.';
+    if (probingVibe) return 'Проба уже идёт.';
+    probingVibe = true;
+    final replies = <String>[];
+    probeListener = (t, p) {
+      if (t == appFilterEndpoint && p.isNotEmpty && p[0] != 0x04) {
+        replies.add(p.take(16).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' '));
+      }
+    };
+    final id = utf8.encode('zz.pitanie.vibe');
+    final steps = <(String, List<int>)>[
+      ('17', [0x17]),
+      ('17 00', [0x17, 0]),
+      ('17 01', [0x17, 1]),
+      ('17 00 00', [0x17, 0, 0]),
+      ('17 01 00', [0x17, 1, 0]),
+      ('17 01 01', [0x17, 1, 1]),
+      ('A: 17 id 00 01', [0x17, ...id, 0, 1]),
+      ('B: 17 01 00 id 00 01', [0x17, 1, 0, ...id, 0, 1]),
+      ('C: 17 длина id 01', [0x17, id.length, ...id, 1]),
+      ('F: 17 id 01', [0x17, ...id, 1]),
+    ];
+    final out = StringBuffer();
+    try {
+      for (final (name, pkt) in steps) {
+        if (session == null) {
+          out.writeln('Связь потеряна.');
+          break;
+        }
+        replies.clear();
+        final t = DateTime.now().toIso8601String().substring(11, 19);
+        addLog('проба 0x17: $name, отправлено в $t');
+        try {
+          await s.send(appFilterEndpoint, pkt);
+        } catch (e) {
+          out.writeln('$name: не отправлено ($e)');
+          continue;
+        }
+        await Future.delayed(const Duration(seconds: 3));
+        final line = '$t  $name  ответ: ${replies.isEmpty ? 'нет' : replies.join(', ')}';
+        addLog('проба 0x17: $line');
+        out.writeln(line);
+        vibeReport = out.toString();
+        notifyListeners();
+      }
+    } finally {
+      probeListener = null;
+      probingVibe = false;
+      vibeReport = out.toString();
+      notifyListeners();
+    }
+    return vibeReport!;
+  }
+
   bool experimenting = false;
   String? experimentReport;
 
@@ -1123,7 +1185,7 @@ class WearableController extends ChangeNotifier {
   /// заново. Остановка при первом изменении списка или потере связи; ответы часов
   /// (кроме ожидаемого на 01, который пропущен) пишутся в журнал, перебор продолжается.
   /// Перед перебором сырой список сохраняется в `watch_apps_backup`.
-  Future<String> sweepAppFilterOpcodes() async {
+  Future<String> sweepAppFilterOpcodes({bool fullList = false}) async {
     final s = session;
     if (s == null) return 'Часы не подключены или не авторизованы.';
     if (sweeping) return 'Перебор уже идёт.';
@@ -1187,14 +1249,20 @@ class WearableController extends ChangeNotifier {
         sweepStatus = 'Перебор: код ${op.toRadixString(16).padLeft(2, '0')} из ff';
         notifyListeners();
         final idb = utf8.encode(target);
-        for (final (form, pkt) in [
+        final forms = fullList
+            // Весь список в формате ответа часов, у цели флаг 1: `код число(u16) пары`.
+            ? <(String, List<int>)>[
+                ('L', <int>[op, ...buildAppSetAll(cur.apps, target, true).sublist(1)]),
+              ]
+            : <(String, List<int>)>[
           ('A', <int>[op, ...idb, 0, 1]),
           ('B', <int>[op, 1, 0, ...idb, 0, 1]),
           ('C', <int>[op, idb.length, ...idb, 1]),
           ('D', <int>[op, tIdx & 0xff, 1]),
           ('E', <int>[op, tIdx & 0xff, tIdx >> 8, 1]),
           ('F', <int>[op, ...idb, 1]),
-        ]) {
+        ];
+        for (final (form, pkt) in forms) {
           // Код пишется до отправки с секундами: если часы дрогнули, по времени видно, на каком.
           addLog('перебор приложений: код ${op.toRadixString(16).padLeft(2, '0')}, '
               'форма $form, ${DateTime.now().toIso8601String().substring(11, 19)}');

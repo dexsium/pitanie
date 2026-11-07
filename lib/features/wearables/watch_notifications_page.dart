@@ -460,6 +460,52 @@ class _WatchNotificationsPageState
                       },
                 icon: const Icon(Icons.science_outlined),
                 label: const Text('Опыты с кодом 07, серия 3')),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: c.probingVibe
+                    ? null
+                    : () async {
+                        final r = await c.probeVibrateCode();
+                        if (context.mounted) toast(context, r.split('\n').first);
+                      },
+                icon: const Icon(Icons.vibration),
+                label: Text(c.probingVibe ? 'Проба идёт…' : 'Проба кода 17 (вибрация часов)')),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: c.sweeping
+                    ? null
+                    : () async {
+                        final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                                  title: const Text('Перезапись всего списка'),
+                                  content: const Text(
+                                      'Для каждого кода 00–ff на часы уходит весь список '
+                                      'приложений (около 1,6 КБ) с одним включённым '
+                                      'выключенным приложением. Копия исходного списка '
+                                      'сохранится в приложении. Займёт несколько минут, '
+                                      'приложение не сворачивать. Продолжить?'),
+                                  actions: [
+                                    TextButton(
+                                        onPressed: () => Navigator.pop(ctx, false),
+                                        child: const Text('Отмена')),
+                                    FilledButton(
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        child: const Text('Начать')),
+                                  ],
+                                ));
+                        if (ok != true || !context.mounted) return;
+                        final r = await c.sweepAppFilterOpcodes(fullList: true);
+                        if (context.mounted) toast(context, r);
+                      },
+                icon: const Icon(Icons.playlist_add_check),
+                label: const Text('Перезапись всего списка (перебор кодов)')),
+            if (c.vibeReport != null && c.vibeReport!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: SelectableText(c.vibeReport!,
+                    style: TextStyle(fontSize: 11.5, color: muted)),
+              ),
             if (c.experimentReport != null && c.experimentReport!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
