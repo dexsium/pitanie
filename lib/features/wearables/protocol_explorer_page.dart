@@ -272,6 +272,99 @@ class _ProtocolExplorerPageState extends ConsumerState<ProtocolExplorerPage> {
     }
   }
 
+  /// Сервисы, назначение которых известно из Gadgetbridge: их не трогаем.
+  static const _knownEndpoints = {
+    0x0000, 0x0001, 0x0003, 0x0006, 0x0007, 0x0009, 0x000a, 0x000b, 0x000d,
+    0x000f, 0x0011, 0x0013, 0x0014, 0x0015, 0x001a, 0x001b, 0x001e, 0x0023,
+    0x0026, 0x0038, 0x003a, 0x003c, 0x003f, 0x0042, 0x00a0,
+  };
+
+  bool _probing = false;
+
+  /// Опрос неизвестных сервисов: в каждый отправляется один байт 0x01 («запрос»), как в
+  /// большинстве сервисов Zepp OS. Выполняется по очереди с разрешения владельца часов.
+  /// Ответ любого размера и содержимое пишутся в журнал; сервис 0x0001 маскируется.
+  Future<void> _probeUnknown() async {
+    final c = ref.read(wearableProvider);
+    final s = c.session;
+    if (s == null) {
+      toast(context, 'Часы не подключены или не авторизованы.');
+      return;
+    }
+    final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+              title: const Text('Опросить неизвестные сервисы?'),
+              content: const Text(
+                  'В каждый неопознанный сервис часов будет отправлен один байт 01 '
+                  '(запрос). Команды перебора и записи настроек не отправляются, но '
+                  'назначение сервисов неизвестно, поэтому полной гарантии, что часы '
+                  'не отреагируют на запрос, нет. Продолжить?'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Отмена')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Опросить')),
+              ],
+            ));
+    if (ok != true || !mounted) return;
+    final targets = s.endpoints
+        .where((e) => !_knownEndpoints.contains(e))
+        .toList()
+      ..sort();
+    setState(() {
+      _probing = true;
+      _cancel = false;
+      _checked = 0;
+      _total = targets.length;
+    });
+    final got = <int, List<Uint8List>>{};
+    c.probeListener = (t, p) => got.putIfAbsent(t, () => []).add(p);
+    try {
+      for (final e in targets) {
+        if (_cancel || !c.isConnected || c.session == null) break;
+        final name = '0x${e.toRadixString(16).padLeft(4, '0')}';
+        got.remove(e);
+        final sw = Stopwatch()..start();
+        try {
+          await c.session!.send(e, const [0x01]);
+        } catch (err) {
+          _add(ProbeResult('Запрос 01', name, ProbeStatus.error,
+              ms: sw.elapsedMilliseconds, note: '$err'));
+          setState(() => _checked++);
+          continue;
+        }
+        await Future.delayed(const Duration(milliseconds: 1500));
+        final r = got[e];
+        if (r == null || r.isEmpty) {
+          _add(ProbeResult('Запрос 01', name, ProbeStatus.timeout,
+              ms: sw.elapsedMilliseconds,
+              note: 'ответа нет: сервис не отреагировал или команда ему не знакома'));
+        } else {
+          for (final p in r) {
+            _add(ProbeResult('Запрос 01', name, ProbeStatus.supported,
+                hex: e == 0x0001 ? '(скрыто)' : hexOf(p),
+                ms: sw.elapsedMilliseconds,
+                note: 'ответ ${p.length} байт'));
+          }
+          _unknown.add('сервис $name ответил на 01: '
+              '${e == 0x0001 ? '(скрыто)' : hexOf(r.first, max: 24)}');
+        }
+        setState(() => _checked++);
+      }
+    } finally {
+      c.probeListener = null;
+      if (mounted) {
+        setState(() {
+          _probing = false;
+          _done = true;
+        });
+      }
+    }
+  }
+
   String _report() {
     final c = ref.read(wearableProvider);
     final b = StringBuffer()
@@ -353,7 +446,9 @@ class _ProtocolExplorerPageState extends ConsumerState<ProtocolExplorerPage> {
               ),
               const SizedBox(width: 8),
               OutlinedButton(
-                  onPressed: _running ? () => setState(() => _cancel = true) : null,
+                  onPressed: (_running || _probing)
+                      ? () => setState(() => _cancel = true)
+                      : null,
                   child: const Text('Остановить')),
             ]),
             if (_running || _done) ...[
@@ -366,6 +461,13 @@ class _ProtocolExplorerPageState extends ConsumerState<ProtocolExplorerPage> {
               Text('Проверено: $_checked из $_total, операций: ${_res.length}',
                   style: TextStyle(fontSize: 12, color: muted)),
             ],
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+                onPressed: (_running || _probing) ? null : _probeUnknown,
+                icon: const Icon(Icons.network_check),
+                label: Text(_probing
+                    ? 'Опрос: $_checked из $_total'
+                    : 'Опросить неизвестные сервисы (01)')),
           ]),
         ),
         const SizedBox(height: 12),

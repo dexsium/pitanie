@@ -346,7 +346,11 @@ class WearableController extends ChangeNotifier {
     await syncHistory();
   }
 
+  /// Исследование протокола: получает все входящие пакеты сервисов Zepp OS.
+  void Function(int type, Uint8List p)? probeListener;
+
   void _onZepp(int type, Uint8List p) {
+    probeListener?.call(type, p);
     if (p.isEmpty) return;
     if (type == 0x0001) {
       // Часы просят телефон сходить за погодой: в запросе токен аккаунта Zepp и координаты,
