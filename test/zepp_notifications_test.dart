@@ -71,4 +71,25 @@ void main() {
     expect(body.length, lessThanOrEqualTo(512));
     expect(() => utf8.decode(body), returnsNormally);
   });
+
+  test('список приложений 0x001f: реальное начало ответа GTR 4', () {
+    final ids = ['ru.oneme.app', 'ru.app.gift.mate.prod', 'com.apple.mobilemail'];
+    final b = <int>[0x04, ids.length, 0];
+    for (final id in ids) {
+      b..addAll(utf8.encode(id))..add(0)..add(1);
+    }
+    final l = parseWatchApps(Uint8List.fromList(b))!;
+    expect(l.consistent, isTrue);
+    expect(l.apps.map((a) => a.id), ids);
+    expect(l.apps.every((a) => a.enabled), isTrue);
+    // число записей не совпало — структура не считается сошедшейся
+    b[1] = 9;
+    expect(parseWatchApps(Uint8List.fromList(b))!.consistent, isFalse);
+    expect(parseWatchApps(Uint8List.fromList([2, 0, 0])), isNull);
+  });
+
+  test('гипотезы записи приложения собираются предсказуемо', () {
+    expect(buildAppSetA('a', false), [5, 0x61, 0, 0]);
+    expect(buildAppSetB('a', true), [5, 1, 0, 0x61, 0, 1]);
+  });
 }

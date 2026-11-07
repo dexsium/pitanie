@@ -8,6 +8,7 @@ import '../../app/app.dart';
 import '../../app/providers.dart';
 import '../../shared/widgets.dart';
 import 'watch_ancs.dart';
+import 'zepp_notifications.dart';
 import 'wearable_controller.dart';
 
 /// Настройки, которыми приложение управляет само: слать ли свои уведомления.
@@ -201,12 +202,12 @@ class _WatchNotificationsPageState
         AppCard(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Звонки по Bluetooth на часах',
+            const Text('Разговор по часам (Bluetooth-гарнитура)',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             const SizedBox(height: 4),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Звонки на часах'),
+              title: const Text('Разговор через часы'),
               subtitle: Text(
                   c.phoneEnabled == null
                       ? 'Состояние неизвестно: нажмите «Прочитать состояние»'
@@ -223,10 +224,11 @@ class _WatchNotificationsPageState
                   : null,
             ),
             Text(
-                'Команда из открытого проекта Gadgetbridge (сервис 0x000b), на прошивке 7.6.0.2 '
-                'не проверялась, поэтому после переключения приложение читает состояние обратно. '
-                'Сопряжение часов для звонков выполняется в «Настройки → Bluetooth» iPhone, '
-                'здесь оно не меняется.',
+                'Это функция «говорить по часам» (микрофон и динамик часов как гарнитура), '
+                'а не оповещение о входящем звонке. Состояние переключается и подтверждается чтением, '
+                'но проверка показала: включение само по себе звонок на часы не приводит. '
+                'Оповещение о звонке часы получают от iPhone по ANCS, а сопряжение для разговора '
+                'выполняется в «Настройки → Bluetooth» iPhone.',
                 style: TextStyle(fontSize: 12, color: muted)),
             const SizedBox(height: 8),
             OutlinedButton.icon(
@@ -236,6 +238,71 @@ class _WatchNotificationsPageState
                 },
                 icon: const Icon(Icons.refresh),
                 label: const Text('Прочитать состояние')),
+          ]),
+        ),
+        const SizedBox(height: 12),
+        AppCard(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Приложения на часах',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+            const SizedBox(height: 4),
+            Text(
+                'Список читается с самих часов (сервис 0x001f): это приложения iPhone, '
+                'уведомления которых часы уже видели. Чтение подтверждено на вашей прошивке. '
+                'Запись переключателя экспериментальная: команда записи неизвестна, '
+                'приложение пробует две гипотезы и проверяет результат чтением обратно.',
+                style: TextStyle(fontSize: 12, color: muted)),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: () async {
+                  final err = await c.readWatchApps();
+                  if (context.mounted) {
+                    toast(context, err ?? 'Список прочитан: ${c.watchApps?.apps.length}');
+                  }
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Прочитать список с часов')),
+            if (c.watchApps != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                  'Заявлено часами: ${c.watchApps!.declared}, разобрано: ${c.watchApps!.apps.length}'
+                  '${c.watchApps!.consistent ? '' : ' (структура не сошлась)'}',
+                  style: TextStyle(fontSize: 12, color: muted)),
+              for (final a in c.watchApps!.apps)
+                SwitchListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(appDisplayName(a.id)),
+                  subtitle: appDisplayName(a.id) == a.id
+                      ? null
+                      : Text(a.id, style: TextStyle(fontSize: 11, color: muted)),
+                  value: a.enabled,
+                  onChanged: (v) async {
+                    final ok = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                              title: const Text('Экспериментальная запись'),
+                              content: Text(
+                                  'Команда записи для «${appDisplayName(a.id)}» неизвестна. '
+                                  'Приложение сохранит копию списка и попробует две гипотезы, '
+                                  'проверяя результат. Есть риск, что часы изменят список. '
+                                  'Продолжить?'),
+                              actions: [
+                                TextButton(
+                                    onPressed: () => Navigator.pop(ctx, false),
+                                    child: const Text('Отмена')),
+                                FilledButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    child: const Text('Продолжить')),
+                              ],
+                            ));
+                    if (ok != true || !context.mounted) return;
+                    final r = await c.trySetWatchApp(a.id, v);
+                    if (context.mounted) toast(context, r);
+                  },
+                ),
+            ],
           ]),
         ),
         const SizedBox(height: 12),

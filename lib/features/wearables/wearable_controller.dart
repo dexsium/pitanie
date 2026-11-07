@@ -358,6 +358,22 @@ class WearableController extends ChangeNotifier {
       addLog('запрос погоды от часов (${p.length} байт, проигнорирован)');
       return;
     }
+    if (type == appFilterEndpoint) {
+      final l = parseWatchApps(p);
+      if (l != null) {
+        watchApps = l;
+        watchAppsRaw = Uint8List.fromList(p);
+        addLog('приложения на часах: ${p.length} байт, заявлено ${l.declared}, '
+            'разобрано ${l.apps.length}, ${l.consistent ? 'структура сошлась' : 'структура НЕ сошлась'}');
+        final w = _appsWait;
+        if (w != null && !w.isCompleted) w.complete();
+      } else {
+        addLog('приложения на часах, ответ: '
+            '${p.take(20).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ')}');
+      }
+      notifyListeners();
+      return;
+    }
     if (type == phoneEndpoint) {
       // Сервис «телефон» (Gadgetbridge: ZeppOsPhoneService): 02 возможности, 04 сопряжение,
       // 07 включено ли, 09 подтверждение записи.
@@ -909,6 +925,82 @@ class WearableController extends ChangeNotifier {
     final s = session;
     if (s == null || s.endpoints.isEmpty) return null;
     return s.endpoints.contains(notifEndpoint);
+  }
+
+  /// Список приложений, о которых знают часы (сервис 0x001f), и его сырой ответ.
+  WatchAppList? watchApps;
+  Uint8List? watchAppsRaw;
+  Completer<void>? _appsWait;
+
+  /// Читает список приложений с часов (`03` в сервис 0x001f). Ничего не меняет.
+  Future<String?> readWatchApps() async {
+    final s = session;
+    if (s == null) return 'Часы не подключены или не авторизованы.';
+    if (!s.endpoints.contains(appFilterEndpoint)) {
+      return 'Часы не заявили сервис списка приложений (0x001f).';
+    }
+    try {
+      _appsWait = Completer<void>();
+      await s.send(appFilterEndpoint, const [0x03]);
+      await _appsWait!.future.timeout(const Duration(seconds: 6));
+      final l = watchApps;
+      if (l == null) return 'Часы прислали ответ, но список не разобран.';
+      return l.consistent
+          ? null
+          : 'Список разобран не полностью (заявлено ${l.declared}, разобрано ${l.apps.length}).';
+    } on TimeoutException {
+      return 'Часы не прислали список.';
+    } catch (e) {
+      return 'Не удалось прочитать: $e';
+    } finally {
+      _appsWait = null;
+    }
+  }
+
+  /// ЭКСПЕРИМЕНТ: команда записи флага приложения неизвестна, пробуются две гипотезы
+  /// по очереди, после каждой список читается заново. Перед записью сырой список
+  /// сохраняется в настройках (`watch_apps_backup`). Возвращает итог для пользователя.
+  Future<String> trySetWatchApp(String id, bool on) async {
+    final s = session;
+    if (s == null) return 'Часы не подключены или не авторизованы.';
+    final before = await readWatchApps();
+    final base = watchApps;
+    if (base == null) return 'Не удалось прочитать список перед записью: ${before ?? ''}';
+    final raw = watchAppsRaw;
+    if (raw != null) {
+      await db.setSetting('watch_apps_backup',
+          raw.map((x) => x.toRadixString(16).padLeft(2, '0')).join());
+    }
+    bool? stateOf(WatchAppList l) {
+      for (final a in l.apps) {
+        if (a.id == id) return a.enabled;
+      }
+      return null;
+    }
+
+    for (final (name, pkt) in [
+      ('A', buildAppSetA(id, on)),
+      ('B', buildAppSetB(id, on)),
+    ]) {
+      try {
+        await s.send(appFilterEndpoint, pkt);
+      } catch (e) {
+        return 'Не удалось отправить гипотезу $name: $e';
+      }
+      await Future.delayed(const Duration(seconds: 2));
+      await readWatchApps();
+      final now = watchApps;
+      addLog('запись приложения, гипотеза $name: список '
+          '${now?.apps.length ?? '?'} из ${base.apps.length}, флаг ${now == null ? '?' : stateOf(now)}');
+      if (now != null && now.apps.length < base.apps.length) {
+        return 'Гипотеза $name изменила список: было ${base.apps.length}, стало ${now.apps.length}. '
+            'Копия списка сохранена. Не повторяйте запись.';
+      }
+      if (now != null && stateOf(now) == on) {
+        return 'Применено (гипотеза $name): часы подтвердили новое состояние.';
+      }
+    }
+    return 'Ни одна гипотеза записи не изменила состояние. Часы список не приняли.';
   }
 
   /// Сервис «телефон» (звонки по Bluetooth): версия и состояние «включено» на часах.

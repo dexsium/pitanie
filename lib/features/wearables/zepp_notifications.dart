@@ -83,3 +83,61 @@ Uint8List buildNotification({
   if (caps.supportsKey) b.addByte(0); // пустой ключ
   return b.toBytes();
 }
+
+/// Сервис 0x001f: список приложений iPhone, о которых знают часы (идентификаторы ANCS) и флаг
+/// «разрешено». Формат ответа на запрос `03` разобран по реальному ответу GTR 4 (прошивка
+/// 7.6.0.2): `04`, число приложений (u16, little-endian), затем пары `идентификатор\0 флаг`.
+/// Значение флага (1 = разрешено) подтверждено сопоставлением со списком в Zepp не полностью.
+const appFilterEndpoint = 0x001f;
+
+class WatchApp {
+  final String id;
+  final bool enabled;
+  const WatchApp(this.id, this.enabled);
+}
+
+class WatchAppList {
+  final List<WatchApp> apps;
+  final int declared;
+  final bool consistent;
+  const WatchAppList(this.apps, this.declared, this.consistent);
+}
+
+/// null, если это не ответ списка. `consistent` = число разобранных записей совпало с
+/// заявленным и в конце нет лишних байт.
+WatchAppList? parseWatchApps(Uint8List p) {
+  if (p.length < 3 || p[0] != 0x04) return null;
+  final declared = p[1] | (p[2] << 8);
+  final apps = <WatchApp>[];
+  var o = 3;
+  var clean = true;
+  while (o < p.length) {
+    final e = p.indexOf(0, o);
+    if (e < 0 || e + 1 >= p.length) {
+      clean = false;
+      break;
+    }
+    apps.add(WatchApp(utf8.decode(p.sublist(o, e), allowMalformed: true), p[e + 1] != 0));
+    o = e + 2;
+  }
+  return WatchAppList(apps, declared, clean && apps.length == declared);
+}
+
+/// Гипотеза A записи (источника нет): `05 идентификатор\0 флаг`.
+Uint8List buildAppSetA(String id, bool on) =>
+    Uint8List.fromList([0x05, ...utf8.encode(id), 0, on ? 1 : 0]);
+
+/// Гипотеза B записи (источника нет): `05 число(u16) идентификатор\0 флаг`.
+Uint8List buildAppSetB(String id, bool on) =>
+    Uint8List.fromList([0x05, 1, 0, ...utf8.encode(id), 0, on ? 1 : 0]);
+
+/// Названия известных идентификаторов; для остальных показывается сам идентификатор.
+String appDisplayName(String id) => switch (id) {
+      'ru.oneme.app' => 'MAX',
+      'ru.app.gift.mate.prod' => 'GiftMate',
+      'com.apple.mobilemail' => 'Почта',
+      'ph.telegra.Telegraph' => 'Telegram',
+      'net.whatsapp.WhatsApp' => 'WhatsApp',
+      'com.apple.MobileSMS' => 'Сообщения',
+      _ => id,
+    };
