@@ -1607,11 +1607,21 @@ class WearableController extends ChangeNotifier {
       return null;
     }
 
-    for (final (name, pkt) in [
-      ('A', buildAppSetA(id, on)),
-      ('B', buildAppSetB(id, on)),
-      ('C', buildAppSetAll(base.apps, id, on)),
-    ]) {
+    // Рабочие формы найдены опытами 1.19.18–1.19.19 для ru.oneme.app: заголовок `05 флаг x`,
+    // затем `id\0 01` и (для включения) вторая запись соседнего приложения.
+    final idb = utf8.encode(id);
+    final other = base.apps.firstWhere((a) => a.id != id && a.printable,
+        orElse: () => const WatchApp('x', false));
+    final id2 = utf8.encode(other.id);
+    for (final (name, pkt) in on
+        ? <(String, List<int>)>[
+            ('вкл 05 01 00', [0x05, 1, 0, ...idb, 0, 1, ...id2, 0, 1]),
+            ('вкл 05 01 01', [0x05, 1, 1, ...idb, 0, 1, ...id2, 0, 1]),
+          ]
+        : <(String, List<int>)>[
+            ('выкл 05 00 00', [0x05, 0, 0, ...idb, 0, 1]),
+            ('выкл 05 00 01 00', [0x05, 0, 1, 0, ...idb, 0, 1]),
+          ]) {
       try {
         addLog('запись приложения $id → ${on ? 'включить' : 'выключить'}: '
             'гипотеза $name, отправлено ${pkt.length} байт');
@@ -1624,15 +1634,16 @@ class WearableController extends ChangeNotifier {
       final now = watchApps;
       addLog('запись приложения $id, гипотеза $name: список '
           '${now?.apps.length ?? '?'} из ${base.apps.length}, флаг ${now == null ? '?' : stateOf(now)}');
-      if (now != null && now.apps.length < base.apps.length) {
-        return 'Гипотеза $name изменила список: было ${base.apps.length}, стало ${now.apps.length}. '
-            'Копия списка сохранена. Не повторяйте запись.';
+      if (now != null && now.apps.length != base.apps.length) {
+        return 'Запись «$name» изменила размер списка: было ${base.apps.length}, '
+            'стало ${now.apps.length}. Копия списка сохранена. Не повторяйте запись.';
       }
       if (now != null && stateOf(now) == on) {
-        return 'Применено (гипотеза $name): часы подтвердили новое состояние.';
+        return 'Применено ($name): часы подтвердили новое состояние.';
       }
     }
-    return 'Ни одна гипотеза записи не изменила состояние. Часы список не приняли.';
+    return 'Ни одна форма записи не изменила состояние этого приложения. '
+        'Формат подобран по ru.oneme.app и для других приложений может не подойти.';
   }
 
   /// Сервис «телефон» (звонки по Bluetooth): версия и состояние «включено» на часах.
