@@ -369,6 +369,44 @@ class _WatchNotificationsPageState
                 label: Text(c.sweeping
                     ? 'Остановить перебор'
                     : 'Перебор кодов записи (эксперимент)')),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: c.experimenting
+                    ? null
+                    : () async {
+                        final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                                  title: const Text('Опыты с кодом 07'),
+                                  content: const Text(
+                                      'В список приложений на часах будут добавлены до четырёх '
+                                      'тестовых записей (zz.pitanie.a, b, c, d) разными формами '
+                                      'пакета. Удалить их пока нельзя: команда удаления '
+                                      'неизвестна. Записи служебные и на уведомления не влияют. '
+                                      'Копия исходного списка сохранится. Продолжить?'),
+                                  actions: [
+                                    TextButton(
+                                        onPressed: () => Navigator.pop(ctx, false),
+                                        child: const Text('Отмена')),
+                                    FilledButton(
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        child: const Text('Начать')),
+                                  ],
+                                ));
+                        if (ok != true || !context.mounted) return;
+                        final r = await c.experiment07();
+                        if (context.mounted) toast(context, r.split('\n').first);
+                      },
+                icon: const Icon(Icons.science_outlined),
+                label: Text(c.experimenting
+                    ? 'Опыт идёт…'
+                    : 'Опыты с кодом 07 (формат записи)')),
+            if (c.experimentReport != null && c.experimentReport!.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: SelectableText(c.experimentReport!,
+                    style: TextStyle(fontSize: 11.5, color: muted)),
+              ),
             if (c.sweepStatus != null)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
@@ -394,10 +432,14 @@ class _WatchNotificationsPageState
                 SwitchListTile(
                   dense: true,
                   contentPadding: EdgeInsets.zero,
-                  secondary: _appIcon(a.id, muted),
-                  title: Text(appName(a.id, _meta)),
-                  subtitle:
-                      Text(a.id, style: TextStyle(fontSize: 11, color: muted)),
+                  secondary: a.printable
+                      ? _appIcon(a.id, muted)
+                      : const Icon(Icons.help_outline),
+                  title: Text(a.printable
+                      ? appName(a.id, _meta)
+                      : 'Нестандартная запись'),
+                  subtitle: Text(a.printable ? a.id : 'HEX: ${a.idHex}',
+                      style: TextStyle(fontSize: 11, color: muted)),
                   value: a.enabled,
                   onChanged: (v) async {
                     final ok = await showDialog<bool>(
@@ -497,7 +539,8 @@ class _WatchNotificationsPageState
                           l.contains('0x001e') ||
                           l.contains('приложения на часах') ||
                           l.contains('запись приложения') ||
-                          l.contains('перебор приложений'))
+                          l.contains('перебор приложений') ||
+                          l.contains('опыт 07'))
                       .toList();
                   final text = 'Версия приложения: $_ver\n'
                       'Прошивка часов: ${c.fw ?? '—'}\n'

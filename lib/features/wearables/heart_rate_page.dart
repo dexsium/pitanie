@@ -9,6 +9,7 @@ import '../../app/theme.dart';
 import '../../core/dates.dart';
 import '../../database/database.dart';
 import '../dashboard/day_data.dart' show kBleSource, sourceLabel;
+import 'heart_zones_page.dart';
 import 'wearable_page.dart';
 
 /// Размеры экрана заданы в пикселях макета (ширина 852) и масштабируются по ширине устройства.
@@ -168,6 +169,17 @@ class _HeartRatePageState extends ConsumerState<HeartRatePage> {
                       ),
                       SizedBox(width: s(22)),
                       Text('Пульс', style: t(42, w: FontWeight.w800)),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const HeartZonesPage())),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: s(20)),
+                          child: Icon(Icons.tune, size: s(44), color: accent),
+                        ),
+                      ),
                     ]),
                   ),
                   SizedBox(height: s(12)),

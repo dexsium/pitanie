@@ -98,6 +98,17 @@ void main() {
     expect(back.apps[1].enabled, isTrue);
   });
 
+  test('запись с непечатным идентификатором сохраняет сырые байты', () {
+    // как 72-я запись после кода 07: три байта, id из одного байта 0x01
+    final b = <int>[0x04, 2, 0, 0x61, 0, 1, 0x01, 0, 0x61];
+    final l = parseWatchApps(Uint8List.fromList(b))!;
+    expect(l.consistent, isTrue);
+    expect(l.apps[0].printable, isTrue);
+    expect(l.apps[1].printable, isFalse);
+    expect(l.apps[1].idHex, '01');
+    expect(l.apps[1].enabled, isTrue);
+  });
+
   test('гипотезы записи приложения собираются предсказуемо', () {
     expect(buildAppSetA('a', false), [5, 0x61, 0, 0]);
     expect(buildAppSetB('a', true), [5, 1, 0, 0x61, 0, 1]);

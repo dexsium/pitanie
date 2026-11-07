@@ -957,6 +957,94 @@ class WearableController extends ChangeNotifier {
     }
   }
 
+  bool experimenting = false;
+  String? experimentReport;
+
+  /// ЭКСПЕРИМЕНТ с кодом 07 (в переборе он вызвал ответ часов `08 01` и добавил в список
+  /// лишнюю запись). Формат неизвестен, поэтому в список добавляются четыре тестовые записи с
+  /// заведомо новыми идентификаторами `zz.pitanie.*` разными формами пакета; после каждой
+  /// список читается заново, а новые записи выписываются в HEX. Удалить их пока нельзя.
+  Future<String> experiment07() async {
+    final s = session;
+    if (s == null) return 'Часы не подключены или не авторизованы.';
+    if (experimenting) return 'Опыт уже идёт.';
+    experimenting = true;
+    final replies = <String>[];
+    probeListener = (t, p) {
+      if (t == appFilterEndpoint && p.isNotEmpty && p[0] != 0x04) {
+        replies.add(p.take(16).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' '));
+      }
+    };
+    String hexOf(List<int> b) =>
+        b.map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ');
+    String key(WatchApp a) => '${a.idHex}|${a.enabled ? 1 : 0}';
+    final out = StringBuffer();
+    try {
+      await readWatchApps();
+      var base = watchApps;
+      if (base == null) return 'Не удалось прочитать список перед опытом.';
+      final raw = watchAppsRaw;
+      if (raw != null && (await db.allSettings())['watch_apps_backup'] == null) {
+        await db.setSetting('watch_apps_backup', hexOf(raw).replaceAll(' ', ''));
+      }
+      final forms = <(String, List<int> Function(List<int>))>[
+        ('A: 07 id 00 01', (id) => [0x07, ...id, 0, 1]),
+        ('B: 07 01 00 id 00 01', (id) => [0x07, 1, 0, ...id, 0, 1]),
+        ('C: 07 01 id 00 01', (id) => [0x07, 1, ...id, 0, 1]),
+        ('D: 07 00 01 id 00 01', (id) => [0x07, 0, 1, ...id, 0, 1]),
+      ];
+      for (var i = 0; i < forms.length; i++) {
+        if (session == null) {
+          out.writeln('Связь потеряна.');
+          break;
+        }
+        final id = utf8.encode('zz.pitanie.${String.fromCharCode(0x61 + i)}');
+        final (name, build) = forms[i];
+        final pkt = build(id);
+        replies.clear();
+        addLog('опыт 07: форма $name, ${pkt.length} байт');
+        try {
+          await s.send(appFilterEndpoint, pkt);
+        } catch (e) {
+          out.writeln('Форма $name: не отправлено ($e)');
+          continue;
+        }
+        await Future.delayed(const Duration(milliseconds: 900));
+        await readWatchApps();
+        final now = watchApps;
+        if (now == null) {
+          out.writeln('Форма $name: список не прочитан.');
+          continue;
+        }
+        final before = <String, int>{};
+        for (final a in base!.apps) {
+          before[key(a)] = (before[key(a)] ?? 0) + 1;
+        }
+        final added = <WatchApp>[];
+        for (final a in now.apps) {
+          final k = key(a);
+          if ((before[k] ?? 0) > 0) {
+            before[k] = before[k]! - 1;
+          } else {
+            added.add(a);
+          }
+        }
+        final line = 'Форма $name: ответ ${replies.isEmpty ? 'нет' : replies.join(', ')}; '
+            'список ${base.apps.length} → ${now.apps.length}; '
+            'новые записи: ${added.isEmpty ? 'нет' : added.map((a) => '[${a.idHex} | флаг ${a.enabled ? 1 : 0}]').join(' ')}';
+        addLog('опыт 07: $line');
+        out.writeln(line);
+        base = now;
+      }
+    } finally {
+      probeListener = null;
+      experimenting = false;
+      experimentReport = out.toString();
+      notifyListeners();
+    }
+    return experimentReport!;
+  }
+
   bool sweeping = false;
   bool sweepCancel = false;
   String? sweepStatus;

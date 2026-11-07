@@ -93,7 +93,17 @@ const appFilterEndpoint = 0x001f;
 class WatchApp {
   final String id;
   final bool enabled;
-  const WatchApp(this.id, this.enabled);
+
+  /// Сырые байты идентификатора (для записей с непечатными символами).
+  final List<int> idBytes;
+  const WatchApp(this.id, this.enabled, [this.idBytes = const []]);
+
+  /// Идентификатор состоит только из печатных ASCII-символов.
+  bool get printable =>
+      id.isNotEmpty && id.codeUnits.every((c) => c >= 0x20 && c < 0x7f);
+
+  String get idHex =>
+      idBytes.map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ');
 }
 
 class WatchAppList {
@@ -117,7 +127,8 @@ WatchAppList? parseWatchApps(Uint8List p) {
       clean = false;
       break;
     }
-    apps.add(WatchApp(utf8.decode(p.sublist(o, e), allowMalformed: true), p[e + 1] != 0));
+    final bytes = p.sublist(o, e);
+    apps.add(WatchApp(utf8.decode(bytes, allowMalformed: true), p[e + 1] != 0, bytes));
     o = e + 2;
   }
   return WatchAppList(apps, declared, clean && apps.length == declared);
