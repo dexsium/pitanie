@@ -1185,7 +1185,7 @@ class WearableController extends ChangeNotifier {
   /// заново. Остановка при первом изменении списка или потере связи; ответы часов
   /// (кроме ожидаемого на 01, который пропущен) пишутся в журнал, перебор продолжается.
   /// Перед перебором сырой список сохраняется в `watch_apps_backup`.
-  Future<String> sweepAppFilterOpcodes({bool fullList = false}) async {
+  Future<String> sweepAppFilterOpcodes({bool fullList = false, bool probe = false}) async {
     final s = session;
     if (s == null) return 'Часы не подключены или не авторизованы.';
     if (sweeping) return 'Перебор уже идёт.';
@@ -1194,7 +1194,7 @@ class WearableController extends ChangeNotifier {
     final replies = <String>[];
     probeListener = (t, p) {
       if (t == appFilterEndpoint && p.isNotEmpty && p[0] != 0x04) {
-        final h = p.take(16).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ');
+        final h = p.take(40).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ');
         replies.add('код ${_sweepOp.toRadixString(16).padLeft(2, '0')}: $h');
         addLog('перебор приложений: код ${_sweepOp.toRadixString(16).padLeft(2, '0')} '
             '→ ответ $h');
@@ -1249,7 +1249,14 @@ class WearableController extends ChangeNotifier {
         sweepStatus = 'Перебор: код ${op.toRadixString(16).padLeft(2, '0')} из ff';
         notifyListeners();
         final idb = utf8.encode(target);
-        final forms = fullList
+        final forms = probe
+            // Короткие запросы без данных: какие коды у часов вообще отвечают.
+            ? <(String, List<int>)>[
+                ('Z', <int>[op]),
+                ('Y', <int>[op, 0]),
+                ('X', <int>[op, 1]),
+              ]
+            : fullList
             // Весь список в формате ответа часов, у цели флаг 1: `код число(u16) пары`.
             ? <(String, List<int>)>[
                 ('L', <int>[op, ...buildAppSetAll(cur.apps, target, true).sublist(1)]),
@@ -1289,7 +1296,8 @@ class WearableController extends ChangeNotifier {
         }
       }
       return done('Коды 00–ff перебраны (07 пропущен). '
-          '${found.isEmpty ? 'Список не менялся.' : 'Изменения: ${found.join('; ')}'}');
+          '${found.isEmpty ? 'Список не менялся.' : 'Изменения: ${found.join('; ')}'}'
+          '${replies.isEmpty ? '' : ' Ответы: ${replies.join('; ')}'}');
     } finally {
       probeListener = null;
       sweeping = false;

@@ -500,6 +500,16 @@ class _WatchNotificationsPageState
                       },
                 icon: const Icon(Icons.playlist_add_check),
                 label: const Text('Перезапись всего списка (перебор кодов)')),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: c.sweeping
+                    ? null
+                    : () async {
+                        final r = await c.sweepAppFilterOpcodes(probe: true);
+                        if (context.mounted) toast(context, r.split('\n').first);
+                      },
+                icon: const Icon(Icons.radar),
+                label: const Text('Опрос кодов (короткие запросы)')),
             if (c.vibeReport != null && c.vibeReport!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
