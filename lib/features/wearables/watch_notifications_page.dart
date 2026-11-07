@@ -561,6 +561,16 @@ class _WatchNotificationsPageState
                       },
                 icon: const Icon(Icons.edit_note),
                 label: const Text('Опыты с кодом 05 (запись)')),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: c.sweeping
+                    ? null
+                    : () async {
+                        final r = await c.experiment05b();
+                        if (context.mounted) toast(context, r.split('\n').first);
+                      },
+                icon: const Icon(Icons.rule),
+                label: const Text('Опыт 05b (включить два приложения)')),
             if (c.vibeReport != null && c.vibeReport!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),

@@ -1408,6 +1408,87 @@ class WearableController extends ChangeNotifier {
     }
   }
 
+  /// ЭКСПЕРИМЕНТ: запись `05 01 00 id 00 01` включает приложение, но выключает все остальные
+  /// (журнал 1.19.20), а пакет с двумя записями (`05 02 00 …`) часы не принимают (1.19.21).
+  /// Значит, первые два байта после 05, видимо, не счётчик. Для первых двух подходящих
+  /// приложений A и B: перед каждой пробой A включается известной формой (остальные при этом
+  /// выключаются), затем шлётся `05 b0 b1 B 00 01` для b0 = 0..7, b1 = 0..3. Фиксируется, кто
+  /// включён после пробы; цель — найти форму, включающую B без выключения A.
+  Future<String> experiment05b() async {
+    final s = session;
+    if (s == null) return 'Часы не подключены или не авторизованы.';
+    if (sweeping) return 'Перебор уже идёт.';
+    sweeping = true;
+    sweepCancel = false;
+    final replies = <String>[];
+    probeListener = (t, p) {
+      if (t == appFilterEndpoint && p.isNotEmpty && p[0] != 0x04) {
+        replies.add(p.take(8).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' '));
+      }
+    };
+    String done(String r) {
+      sweepStatus = r;
+      addLog('опыт 05b: итог — $r');
+      return r;
+    }
+
+    try {
+      await readWatchApps();
+      final base = watchApps;
+      if (base == null) return done('Не удалось прочитать список перед опытом.');
+      final raw = watchAppsRaw;
+      if (raw != null) {
+        await db.setSetting('watch_apps_backup_05b',
+            raw.map((x) => x.toRadixString(16).padLeft(2, '0')).join());
+      }
+      const keep = {'com.apple.mobilephone', 'com.apple.MobileSMS', 'com.apple.mobilemail'};
+      final cand = [
+        for (final a in base.apps)
+          if (a.printable && !keep.contains(a.id)) a.id
+      ];
+      if (cand.length < 2) return done('Нет двух подходящих приложений.');
+      final a = cand[0], b = cand[1];
+      final ab = utf8.encode(a), bb = utf8.encode(b);
+      Set<String> onSet(WatchAppList l) =>
+          {for (final x in l.apps) if (x.enabled && x.printable) x.id};
+      addLog('опыт 05b: A=$a, B=$b');
+      final hits = <String>[];
+      var n = 0;
+      for (var b0 = 0; b0 <= 7; b0++) {
+        for (var b1 = 0; b1 <= 3; b1++) {
+          if (sweepCancel) return done('Остановлено. ${hits.join('; ')}');
+          if (session == null) return done('Связь потеряна. ${hits.join('; ')}');
+          n++;
+          sweepStatus = 'Опыт 05b: $n из 32';
+          notifyListeners();
+          // Сброс: A включён, остальные выключены (известная форма).
+          await s.send(appFilterEndpoint, [0x05, 1, 0, ...ab, 0, 1]);
+          await Future.delayed(const Duration(milliseconds: 350));
+          replies.clear();
+          final hexb = '${b0.toRadixString(16).padLeft(2, '0')} ${b1.toRadixString(16).padLeft(2, '0')}';
+          addLog('опыт 05b: 05 $hexb B, ${DateTime.now().toIso8601String().substring(11, 19)}');
+          await s.send(appFilterEndpoint, [0x05, b0, b1, ...bb, 0, 1]);
+          await Future.delayed(const Duration(milliseconds: 400));
+          await readWatchApps();
+          final now = watchApps;
+          if (now == null) continue;
+          final on = onSet(now);
+          final line = '05 $hexb: ответ ${replies.isEmpty ? 'нет' : replies.join(',')}; '
+              'A ${on.contains(a) ? 'вкл' : 'выкл'}, B ${on.contains(b) ? 'вкл' : 'выкл'}, '
+              'всего включено ${on.length}';
+          addLog('опыт 05b: $line');
+          if (on.contains(b) && on.contains(a)) hits.add('ОБА: $line');
+          else if (on.contains(b)) hits.add('только B: $line');
+        }
+      }
+      return done('Проверено $n форм. ${hits.isEmpty ? 'B не включился ни в одной форме.' : hits.join('; ')}');
+    } finally {
+      probeListener = null;
+      sweeping = false;
+      notifyListeners();
+    }
+  }
+
   bool sweeping = false;
   bool sweepCancel = false;
   String? sweepStatus;

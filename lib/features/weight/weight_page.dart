@@ -5,6 +5,8 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/nutrition/goal_eta.dart';
+import '../../core/nutrition/nutrition_calculation_models.dart' show WeightPoint;
 import '../../core/nutrition/weight_trend_analyzer.dart';
 import '../../app/providers.dart';
 import '../../core/dates.dart';
@@ -35,6 +37,16 @@ const _monthShort = [
 ];
 
 String _dm(DateTime d) => '${d.day} ${_monthShort[d.month - 1]}';
+
+String _dmy(DateTime d, DateTime now) =>
+    d.year == now.year ? _dm(d) : '${_dm(d)} ${d.year}';
+
+/// «через N дн./нед./мес.» для оценки срока.
+String etaSpan(int days) {
+  if (days < 14) return '$days дн.';
+  if (days < 90) return '≈ ${(days / 7).round()} нед.';
+  return '≈ ${(days / 30.4).round()} мес.';
+}
 
 class WeightPage extends ConsumerStatefulWidget {
   const WeightPage({super.key});
@@ -418,6 +430,63 @@ class _WeightPageState extends ConsumerState<WeightPage> {
             miniCard(Icons.trending_up,
                 ws.length < 2 ? '—' : d(ws.last.weightKg - ws.first.weightKg), 'Всего'),
           ]),
+          SizedBox(height: s(24)),
+          // Расчёт достижения целевого веса: пересчитывается при каждом изменении замеров.
+          Builder(builder: (context) {
+            final eta = estimateGoalEta(
+                [for (final w in ws) WeightPoint(w.measuredAt, w.weightKg)], target, now);
+            final ok = eta.status == GoalEtaStatus.ok;
+            final reached = eta.status == GoalEtaStatus.reached;
+            String headline;
+            String detail;
+            switch (eta.status) {
+              case GoalEtaStatus.noTarget:
+                headline = 'Срок достижения цели';
+                detail = 'Задайте целевой вес, и здесь появится расчёт срока.';
+              case GoalEtaStatus.ok:
+                headline = '${etaSpan(eta.days!)} · ${_dmy(eta.date!, now)}';
+                detail = 'Осталось ${fmt1(eta.remainingKg!.abs())} кг, '
+                    'темп ${d(eta.kgPerWeek)} в неделю.'
+                    '${eta.approximate ? ' Оценка приблизительная: наблюдений пока мало.' : ''}'
+                    ' Расчёт предполагает, что темп сохранится.';
+              case GoalEtaStatus.reached:
+                headline = 'Цель достигнута';
+                detail = 'Текущий вес ${fmt1(eta.currentKg!)} кг, цель ${fmt1(target!)} кг.';
+              case GoalEtaStatus.noData:
+              case GoalEtaStatus.tooFewData:
+              case GoalEtaStatus.notApproaching:
+                headline = 'Срок пока не оценить';
+                detail = eta.message;
+            }
+            return cardBox(
+              radius: 40,
+              onTap: target == null ? editTarget : null,
+              padding: EdgeInsets.symmetric(vertical: s(26), horizontal: s(30)),
+              child: Row(children: [
+                Container(
+                    width: s(84),
+                    height: s(84),
+                    decoration:
+                        BoxDecoration(color: tint, borderRadius: BorderRadius.circular(s(28))),
+                    child: Icon(reached ? Icons.flag : Icons.flag_outlined,
+                        size: s(46), color: accent)),
+                SizedBox(width: s(26)),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('До цели', style: t(24, c: muted)),
+                    SizedBox(height: s(4)),
+                    FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(headline,
+                            style: t(ok ? 38 : 32, w: FontWeight.w800, c: ok ? accent : null))),
+                    SizedBox(height: s(6)),
+                    Text(detail, style: t(23, c: muted)),
+                  ]),
+                ),
+              ]),
+            );
+          }),
           SizedBox(height: s(24)),
           Row(children: [
             periodCard(d(wk), 'За неделю'),
