@@ -1607,43 +1607,53 @@ class WearableController extends ChangeNotifier {
       return null;
     }
 
-    // Рабочие формы найдены опытами 1.19.18–1.19.19 для ru.oneme.app: заголовок `05 флаг x`,
-    // затем `id\0 01` и (для включения) вторая запись соседнего приложения.
-    final idb = utf8.encode(id);
-    final other = base.apps.firstWhere((a) => a.id != id && a.printable,
-        orElse: () => const WatchApp('x', false));
-    final id2 = utf8.encode(other.id);
-    for (final (name, pkt) in on
-        ? <(String, List<int>)>[
-            ('вкл 05 01 00', [0x05, 1, 0, ...idb, 0, 1, ...id2, 0, 1]),
-            ('вкл 05 01 01', [0x05, 1, 1, ...idb, 0, 1, ...id2, 0, 1]),
-          ]
-        : <(String, List<int>)>[
-            ('выкл 05 00 00', [0x05, 0, 0, ...idb, 0, 1]),
-            ('выкл 05 00 01 00', [0x05, 0, 1, 0, ...idb, 0, 1]),
-          ]) {
-      try {
-        addLog('запись приложения $id → ${on ? 'включить' : 'выключить'}: '
-            'гипотеза $name, отправлено ${pkt.length} байт');
-        await s.send(appFilterEndpoint, pkt);
-      } catch (e) {
-        return 'Не удалось отправить гипотезу $name: $e';
-      }
-      await Future.delayed(const Duration(seconds: 2));
-      await readWatchApps();
-      final now = watchApps;
-      addLog('запись приложения $id, гипотеза $name: список '
-          '${now?.apps.length ?? '?'} из ${base.apps.length}, флаг ${now == null ? '?' : stateOf(now)}');
-      if (now != null && now.apps.length != base.apps.length) {
-        return 'Запись «$name» изменила размер списка: было ${base.apps.length}, '
-            'стало ${now.apps.length}. Копия списка сохранена. Не повторяйте запись.';
-      }
-      if (now != null && stateOf(now) == on) {
-        return 'Применено ($name): часы подтвердили новое состояние.';
-      }
+    // Опыт 1.19.20 показал, что `05 count(u16) (id\0 01)*` ЗАМЕНЯЕТ весь набор включённых
+    // приложений тем, что в пакете: остальные выключаются. Поэтому шлём полный набор
+    // включённых приложений с учётом нового состояния выбранного.
+    final enabled = <String>[
+      for (final a in base.apps)
+        if (a.enabled && a.printable) a.id
+    ];
+    if (on) {
+      if (!enabled.contains(id)) enabled.add(id);
+    } else {
+      enabled.remove(id);
     }
-    return 'Ни одна форма записи не изменила состояние этого приложения. '
-        'Формат подобран по ru.oneme.app и для других приложений может не подойти.';
+    final n = enabled.length;
+    final pkt = <int>[0x05, n & 0xff, (n >> 8) & 0xff];
+    for (final e in enabled) {
+      pkt..addAll(utf8.encode(e))..addAll([0, 1]);
+    }
+    const name = 'полный набор включённых';
+    try {
+      addLog('запись приложения $id → ${on ? 'включить' : 'выключить'}: '
+          '$name ($n шт.), отправлено ${pkt.length} байт');
+      await s.send(appFilterEndpoint, pkt);
+    } catch (e) {
+      return 'Не удалось отправить запись: $e';
+    }
+    await Future.delayed(const Duration(seconds: 2));
+    await readWatchApps();
+    final now = watchApps;
+    addLog('запись приложения $id: список ${now?.apps.length ?? '?'} из ${base.apps.length}, '
+        'флаг ${now == null ? '?' : stateOf(now)}');
+    if (now == null) return 'Часы не прислали список после записи.';
+    if (now.apps.length != base.apps.length) {
+      return 'Запись изменила размер списка: было ${base.apps.length}, стало '
+          '${now.apps.length}. Копия списка сохранена. Не повторяйте запись.';
+    }
+    final after = <String>{
+      for (final a in now.apps)
+        if (a.enabled && a.printable) a.id
+    };
+    if (stateOf(now) == on && after.length == enabled.length && after.containsAll(enabled)) {
+      return 'Применено: часы подтвердили новый набор включённых приложений (${after.length}).';
+    }
+    if (stateOf(now) == on) {
+      return 'Приложение переключилось, но набор включённых отличается от ожидаемого '
+          '(ожидалось ${enabled.length}, у часов ${after.length}).';
+    }
+    return 'Часы запись не применили. Формат подобран по ru.oneme.app, и здесь он не подошёл.';
   }
 
   /// Сервис «телефон» (звонки по Bluetooth): версия и состояние «включено» на часах.
