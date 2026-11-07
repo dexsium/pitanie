@@ -487,6 +487,12 @@ class _WatchNotificationsPageState
                   'Заявлено часами: ${c.watchApps!.declared}, разобрано: ${c.watchApps!.apps.length}'
                   '${c.watchApps!.consistent ? '' : ' (структура не сошлась)'}',
                   style: TextStyle(fontSize: 12, color: muted)),
+              if (c.watchAppsDiff != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: SelectableText('Изменения с прошлого чтения: ${c.watchAppsDiff}',
+                      style: TextStyle(fontSize: 12, color: muted)),
+                ),
               for (final a in c.watchApps!.apps)
                 SwitchListTile(
                   dense: true,

@@ -945,6 +945,7 @@ class WearableController extends ChangeNotifier {
       await _appsWait!.future.timeout(const Duration(seconds: 6));
       final l = watchApps;
       if (l == null) return 'Часы прислали ответ, но список не разобран.';
+      _noteAppsDiff(l);
       return l.consistent
           ? null
           : 'Список разобран не полностью (заявлено ${l.declared}, разобрано ${l.apps.length}).';
@@ -955,6 +956,34 @@ class WearableController extends ChangeNotifier {
     } finally {
       _appsWait = null;
     }
+  }
+
+  WatchAppList? _prevApps;
+
+  /// Что изменилось в списке с прошлого чтения (после переключения в Zepp и т.п.).
+  String? watchAppsDiff;
+
+  void _noteAppsDiff(WatchAppList l) {
+    final p = _prevApps;
+    _prevApps = l;
+    if (p == null) return;
+    String k(WatchApp x) => x.printable ? x.id : '[${x.idHex}]';
+    final old = {for (final x in p.apps) k(x): x.enabled};
+    final nw = {for (final x in l.apps) k(x): x.enabled};
+    final out = <String>[];
+    for (final e in nw.entries) {
+      if (!old.containsKey(e.key)) {
+        out.add('добавлено ${e.key} (${e.value ? 'вкл' : 'выкл'})');
+      } else if (old[e.key] != e.value) {
+        out.add('${e.key}: ${old[e.key]! ? 'вкл' : 'выкл'} → ${e.value ? 'вкл' : 'выкл'}');
+      }
+    }
+    for (final key in old.keys) {
+      if (!nw.containsKey(key)) out.add('удалено $key');
+    }
+    if (out.isEmpty) return;
+    watchAppsDiff = out.join('; ');
+    addLog('приложения на часах: изменения с прошлого чтения: $watchAppsDiff');
   }
 
   bool experimenting = false;
@@ -1129,23 +1158,21 @@ class WearableController extends ChangeNotifier {
         }
       }
       if (target == null) return done('Нет выключенного приложения для проверки.');
-      bool? stateOf(WatchAppList l) {
-        for (final a in l.apps) {
-          if (a.id == target) return a.enabled;
-        }
-        return null;
-      }
-
+      String keyOf(WatchApp x) => '${x.idHex}|${x.enabled ? 1 : 0}';
+      Set<String> keysOf(WatchAppList l) => {for (final x in l.apps) keyOf(x)};
+      var cur = base;
+      final found = <String>[];
       addLog('перебор приложений: начат, список ${base.apps.length}');
       for (var op = 0; op <= 0xff; op++) {
         if (sweepCancel) {
           return done('Остановлено на коде ${op.toRadixString(16).padLeft(2, '0')}. '
-              '${replies.isEmpty ? 'Часы не отвечали.' : 'Ответы: ${replies.join('; ')}'}');
+              '${found.isEmpty ? 'Изменений не было.' : 'Изменения: ${found.join('; ')}'}');
         }
-        // 01 — запрос возможностей (ответ 02 ожидаем), 03 — чтение списка: пропускаем.
-        if (op == 0x03 || op == 0x01) continue;
+        // 01 — запрос возможностей, 03 — чтение, 07 — уже изучен (пишет служебные записи).
+        if (op == 0x03 || op == 0x01 || op == 0x07) continue;
         if (session == null) {
-          return done('Связь потеряна на коде ${op.toRadixString(16).padLeft(2, '0')}.');
+          return done('Связь потеряна на коде ${op.toRadixString(16).padLeft(2, '0')}. '
+              '${found.isEmpty ? '' : 'Изменения: ${found.join('; ')}'}');
         }
         _sweepOp = op;
         sweepStatus = 'Перебор: код ${op.toRadixString(16).padLeft(2, '0')} из ff';
@@ -1163,28 +1190,22 @@ class WearableController extends ChangeNotifier {
           await Future.delayed(const Duration(milliseconds: 300));
           await readWatchApps();
           final now = watchApps;
-          if (now != null &&
-              (now.apps.length != base.apps.length || stateOf(now) != false)) {
-            addLog('перебор приложений: изменение на коде '
-                '${op.toRadixString(16).padLeft(2, '0')}, форма $form: список '
-                '${now.apps.length} из ${base.apps.length}, флаг ${stateOf(now)}');
-            if (now.apps.length == base.apps.length) {
-              // Возвращаем флаг тем же кодом и формой.
-              final back = form == 'A'
-                  ? <int>[op, ...idb, 0, 0]
-                  : <int>[op, 1, 0, ...idb, 0, 0];
-              try {
-                await s.send(appFilterEndpoint, back);
-              } catch (_) {}
-            }
-            return done('Найдено: код ${op.toRadixString(16).padLeft(2, '0')}, форма $form '
-                'изменил список (было ${base.apps.length}, стало ${now.apps.length}, '
-                'флаг ${stateOf(now)}). Копия списка сохранена.');
+          if (now == null) continue;
+          final before = keysOf(cur), after = keysOf(now);
+          final added = after.difference(before), removed = before.difference(after);
+          if (added.isNotEmpty || removed.isNotEmpty || now.apps.length != cur.apps.length) {
+            final hex = op.toRadixString(16).padLeft(2, '0');
+            final line = 'код $hex, форма $form: список ${cur.apps.length} → '
+                '${now.apps.length}; появилось: ${added.isEmpty ? 'нет' : added.join(' ')}; '
+                'исчезло: ${removed.isEmpty ? 'нет' : removed.join(' ')}';
+            addLog('перебор приложений: изменение, $line');
+            found.add(line);
+            cur = now;
           }
         }
       }
-      return done('Коды 00–ff перебраны, список не изменился. '
-          '${replies.isEmpty ? 'Часы ни разу не ответили.' : 'Ответы: ${replies.join('; ')}'}');
+      return done('Коды 00–ff перебраны (07 пропущен). '
+          '${found.isEmpty ? 'Список не менялся.' : 'Изменения: ${found.join('; ')}'}');
     } finally {
       probeListener = null;
       sweeping = false;
