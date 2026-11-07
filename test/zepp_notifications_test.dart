@@ -88,6 +88,16 @@ void main() {
     expect(parseWatchApps(Uint8List.fromList([2, 0, 0])), isNull);
   });
 
+  test('гипотеза C: весь список с изменённым флагом', () {
+    final p = buildAppSetAll(
+        const [WatchApp('a', true), WatchApp('b', false)], 'b', true);
+    expect(p, [5, 2, 0, 0x61, 0, 1, 0x62, 0, 1]);
+    // собранный пакет читается тем же разбором, что и ответ часов (кроме кода команды)
+    final back = parseWatchApps(Uint8List.fromList([4, ...p.sublist(1)]))!;
+    expect(back.consistent, isTrue);
+    expect(back.apps[1].enabled, isTrue);
+  });
+
   test('гипотезы записи приложения собираются предсказуемо', () {
     expect(buildAppSetA('a', false), [5, 0x61, 0, 0]);
     expect(buildAppSetB('a', true), [5, 1, 0, 0x61, 0, 1]);

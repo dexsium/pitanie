@@ -451,7 +451,10 @@ class _WatchNotificationsPageState
                   // Только строки про уведомления и сервис 0x001e, без остальных данных часов.
                   final lines = c.log
                       .where((l) =>
-                          l.contains('уведомлен') || l.contains('0x001e'))
+                          l.contains('уведомлен') ||
+                          l.contains('0x001e') ||
+                          l.contains('приложения на часах') ||
+                          l.contains('запись приложения'))
                       .toList();
                   final text = 'Версия приложения: $_ver\n'
                       'Прошивка часов: ${c.fw ?? '—'}\n'

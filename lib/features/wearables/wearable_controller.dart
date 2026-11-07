@@ -981,8 +981,11 @@ class WearableController extends ChangeNotifier {
     for (final (name, pkt) in [
       ('A', buildAppSetA(id, on)),
       ('B', buildAppSetB(id, on)),
+      ('C', buildAppSetAll(base.apps, id, on)),
     ]) {
       try {
+        addLog('запись приложения $id → ${on ? 'включить' : 'выключить'}: '
+            'гипотеза $name, отправлено ${pkt.length} байт');
         await s.send(appFilterEndpoint, pkt);
       } catch (e) {
         return 'Не удалось отправить гипотезу $name: $e';
@@ -990,7 +993,7 @@ class WearableController extends ChangeNotifier {
       await Future.delayed(const Duration(seconds: 2));
       await readWatchApps();
       final now = watchApps;
-      addLog('запись приложения, гипотеза $name: список '
+      addLog('запись приложения $id, гипотеза $name: список '
           '${now?.apps.length ?? '?'} из ${base.apps.length}, флаг ${now == null ? '?' : stateOf(now)}');
       if (now != null && now.apps.length < base.apps.length) {
         return 'Гипотеза $name изменила список: было ${base.apps.length}, стало ${now.apps.length}. '

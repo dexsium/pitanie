@@ -131,6 +131,19 @@ Uint8List buildAppSetA(String id, bool on) =>
 Uint8List buildAppSetB(String id, bool on) =>
     Uint8List.fromList([0x05, 1, 0, ...utf8.encode(id), 0, on ? 1 : 0]);
 
+/// Гипотеза C записи (источника нет): тот же формат, что у ответа `04`, но с командой `05`:
+/// `05 число(u16)` и весь список с изменённым флагом одного приложения.
+Uint8List buildAppSetAll(List<WatchApp> apps, String id, bool on) {
+  final b = <int>[0x05, apps.length & 0xff, (apps.length >> 8) & 0xff];
+  for (final a in apps) {
+    b
+      ..addAll(utf8.encode(a.id))
+      ..add(0)
+      ..add((a.id == id ? on : a.enabled) ? 1 : 0);
+  }
+  return Uint8List.fromList(b);
+}
+
 /// Названия известных идентификаторов; для остальных показывается сам идентификатор.
 String appDisplayName(String id) => switch (id) {
       'ru.oneme.app' => 'MAX',
