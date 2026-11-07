@@ -957,6 +957,125 @@ class WearableController extends ChangeNotifier {
     }
   }
 
+  bool sweeping = false;
+  bool sweepCancel = false;
+  String? sweepStatus;
+  int _sweepOp = 0;
+
+  /// ЭКСПЕРИМЕНТ: перебор кодов команды для записи флага в сервис 0x001f, от 0x00 до 0xff
+  /// (код 0x03 — чтение, пропускается). Для проверки берётся первое выключенное приложение,
+  /// не входящее в основные (Телефон, Сообщения, Почта), и ему шлётся «включить» в двух
+  /// форматах (A: `код id\0 флаг`, B: `код 01 00 id\0 флаг`). После каждой пробы список читается
+  /// заново. Остановка при первом изменении списка, ответе часов или потере связи.
+  /// Перед перебором сырой список сохраняется в `watch_apps_backup`.
+  Future<String> sweepAppFilterOpcodes() async {
+    final s = session;
+    if (s == null) return 'Часы не подключены или не авторизованы.';
+    if (sweeping) return 'Перебор уже идёт.';
+    sweeping = true;
+    sweepCancel = false;
+    final replies = <String>[];
+    probeListener = (t, p) {
+      if (t == appFilterEndpoint && p.isNotEmpty && p[0] != 0x04) {
+        final h = p.take(16).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' ');
+        replies.add('код ${_sweepOp.toRadixString(16).padLeft(2, '0')}: $h');
+        addLog('перебор приложений: код ${_sweepOp.toRadixString(16).padLeft(2, '0')} '
+            '→ ответ $h');
+      }
+    };
+    String done(String r) {
+      sweepStatus = r;
+      return r;
+    }
+
+    try {
+      await readWatchApps();
+      final base = watchApps;
+      if (base == null) return done('Не удалось прочитать список перед перебором.');
+      final raw = watchAppsRaw;
+      if (raw != null) {
+        await db.setSetting('watch_apps_backup',
+            raw.map((x) => x.toRadixString(16).padLeft(2, '0')).join());
+      }
+      const keep = {
+        'com.apple.mobilephone',
+        'com.apple.MobileSMS',
+        'com.apple.mobilemail',
+      };
+      String? target;
+      for (final a in base.apps) {
+        if (!a.enabled && !keep.contains(a.id)) {
+          target = a.id;
+          break;
+        }
+      }
+      if (target == null) return done('Нет выключенного приложения для проверки.');
+      bool? stateOf(WatchAppList l) {
+        for (final a in l.apps) {
+          if (a.id == target) return a.enabled;
+        }
+        return null;
+      }
+
+      addLog('перебор приложений: начат, список ${base.apps.length}');
+      for (var op = 0; op <= 0xff; op++) {
+        if (sweepCancel) {
+          return done('Остановлено на коде ${op.toRadixString(16).padLeft(2, '0')}. '
+              '${replies.isEmpty ? 'Часы не отвечали.' : 'Ответы: ${replies.join('; ')}'}');
+        }
+        if (op == 0x03) continue;
+        if (session == null) {
+          return done('Связь потеряна на коде ${op.toRadixString(16).padLeft(2, '0')}.');
+        }
+        _sweepOp = op;
+        sweepStatus = 'Перебор: код ${op.toRadixString(16).padLeft(2, '0')} из ff';
+        notifyListeners();
+        final idb = utf8.encode(target);
+        for (final (form, pkt) in [
+          ('A', <int>[op, ...idb, 0, 1]),
+          ('B', <int>[op, 1, 0, ...idb, 0, 1]),
+        ]) {
+          try {
+            await s.send(appFilterEndpoint, pkt);
+          } catch (e) {
+            return done('Не удалось отправить код ${op.toRadixString(16)}: $e');
+          }
+          await Future.delayed(const Duration(milliseconds: 300));
+          await readWatchApps();
+          final now = watchApps;
+          if (now != null &&
+              (now.apps.length != base.apps.length || stateOf(now) != false)) {
+            addLog('перебор приложений: изменение на коде '
+                '${op.toRadixString(16).padLeft(2, '0')}, форма $form: список '
+                '${now.apps.length} из ${base.apps.length}, флаг ${stateOf(now)}');
+            if (now.apps.length == base.apps.length) {
+              // Возвращаем флаг тем же кодом и формой.
+              final back = form == 'A'
+                  ? <int>[op, ...idb, 0, 0]
+                  : <int>[op, 1, 0, ...idb, 0, 0];
+              try {
+                await s.send(appFilterEndpoint, back);
+              } catch (_) {}
+            }
+            return done('Найдено: код ${op.toRadixString(16).padLeft(2, '0')}, форма $form '
+                'изменил список (было ${base.apps.length}, стало ${now.apps.length}, '
+                'флаг ${stateOf(now)}). Копия списка сохранена.');
+          }
+        }
+        if (replies.isNotEmpty) {
+          return done('Часы ответили на код ${op.toRadixString(16).padLeft(2, '0')} '
+              '(список не изменился): ${replies.join('; ')}');
+        }
+      }
+      return done('Коды 00–ff перебраны, список не изменился. '
+          '${replies.isEmpty ? 'Часы ни разу не ответили.' : 'Ответы: ${replies.join('; ')}'}');
+    } finally {
+      probeListener = null;
+      sweeping = false;
+      notifyListeners();
+    }
+  }
+
   /// ЭКСПЕРИМЕНТ: команда записи флага приложения неизвестна, пробуются две гипотезы
   /// по очереди, после каждой список читается заново. Перед записью сырой список
   /// сохраняется в настройках (`watch_apps_backup`). Возвращает итог для пользователя.

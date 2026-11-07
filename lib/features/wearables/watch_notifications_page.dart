@@ -333,6 +333,47 @@ class _WatchNotificationsPageState
                 },
                 icon: const Icon(Icons.refresh),
                 label: const Text('Прочитать список с часов')),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: c.sweeping
+                    ? () => c.sweepCancel = true
+                    : () async {
+                        final ok = await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                                  title: const Text('Перебор кодов записи'),
+                                  content: const Text(
+                                      'Приложение по очереди (коды 00–ff, кроме 03) отправит в '
+                                      'сервис списка приложений пробную запись для одного '
+                                      'неважного выключенного приложения и после каждой пробы '
+                                      'будет читать список. Остановится при первом изменении, '
+                                      'ответе часов или потере связи. Копия списка сохранится. '
+                                      'Назначение кодов неизвестно, полной гарантии '
+                                      'безопасности нет. Перебор занимает несколько минут: '
+                                      'держите экран включённым. Продолжить?'),
+                                  actions: [
+                                    TextButton(
+                                        onPressed: () => Navigator.pop(ctx, false),
+                                        child: const Text('Отмена')),
+                                    FilledButton(
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        child: const Text('Начать')),
+                                  ],
+                                ));
+                        if (ok != true || !context.mounted) return;
+                        final r = await c.sweepAppFilterOpcodes();
+                        if (context.mounted) toast(context, r);
+                      },
+                icon: Icon(c.sweeping ? Icons.stop : Icons.manage_search),
+                label: Text(c.sweeping
+                    ? 'Остановить перебор'
+                    : 'Перебор кодов записи (эксперимент)')),
+            if (c.sweepStatus != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(c.sweepStatus!,
+                    style: TextStyle(fontSize: 12, color: muted)),
+              ),
             if (c.watchApps != null) ...[
               const SizedBox(height: 8),
               OutlinedButton.icon(
@@ -454,7 +495,8 @@ class _WatchNotificationsPageState
                           l.contains('уведомлен') ||
                           l.contains('0x001e') ||
                           l.contains('приложения на часах') ||
-                          l.contains('запись приложения'))
+                          l.contains('запись приложения') ||
+                          l.contains('перебор приложений'))
                       .toList();
                   final text = 'Версия приложения: $_ver\n'
                       'Прошивка часов: ${c.fw ?? '—'}\n'
