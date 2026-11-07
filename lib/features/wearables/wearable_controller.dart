@@ -137,11 +137,17 @@ class WearableController extends ChangeNotifier {
     if (!ok) addLog('автоподключение не удалось: ${message ?? ''}');
     if (ok) {
       await authorize();
-    } else if (_retries < 3 && !_userOff) {
-      _retries++;
-      _retryTimer?.cancel();
-      _retryTimer = Timer(Duration(seconds: 20 * _retries), autoConnect);
+    } else if (!_userOff) {
+      _scheduleRetry();
     }
+  }
+
+  /// Повтор подключения без лимита: пауза растёт до минуты и дальше не увеличивается.
+  void _scheduleRetry() {
+    _retries++;
+    final secs = (10 * _retries).clamp(10, 60);
+    _retryTimer?.cancel();
+    _retryTimer = Timer(Duration(seconds: secs), autoConnect);
   }
 
   Future<bool> connect(BluetoothDevice d) async {
@@ -222,10 +228,9 @@ class WearableController extends ChangeNotifier {
       status = WearStatus.off;
       message = 'Связь с часами потеряна';
     });
-    if (!_userOff && _retries < 3) {
-      _retries++;
-      _retryTimer?.cancel();
-      _retryTimer = Timer(Duration(seconds: 20 * _retries), autoConnect);
+    if (!_userOff) {
+      _retries = 0;
+      _scheduleRetry();
     }
   }
 
@@ -355,6 +360,7 @@ class WearableController extends ChangeNotifier {
       final caps = parseNotifCaps(p);
       if (caps != null) {
         notifCaps = caps;
+        notifCapsRaw = Uint8List.fromList(p);
         addLog('уведомления: версия сервиса ${caps.version}, '
             'картинки ${caps.supportsPictures}, ключ ${caps.supportsKey}');
         final w = _capsWait;
@@ -887,6 +893,26 @@ class WearableController extends ChangeNotifier {
     final s = session;
     if (s == null || s.endpoints.isEmpty) return null;
     return s.endpoints.contains(notifEndpoint);
+  }
+
+  /// Сырой ответ часов на запрос возможностей 0x001e (для исследования протокола).
+  Uint8List? notifCapsRaw;
+
+  /// Исследование: отправляет только документированный запрос возможностей `01` в сервис 0x001e
+  /// и ждёт ответ. null — часы не ответили за время ожидания. Ничего не меняет на часах.
+  Future<NotifCaps?> probeNotifCaps(
+      {Duration timeout = const Duration(seconds: 6)}) async {
+    final s = session;
+    if (s == null) return null;
+    _capsWait = Completer<NotifCaps>();
+    try {
+      await s.send(notifEndpoint, buildNotifCapsRequest());
+      return await _capsWait!.future.timeout(timeout);
+    } on TimeoutException {
+      return null;
+    } finally {
+      _capsWait = null;
+    }
   }
 
   /// Тестовое уведомление, отправленное приложением по протоколу Zepp OS. Часы не подтверждают

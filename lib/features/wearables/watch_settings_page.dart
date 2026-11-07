@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../shared/widgets.dart';
+import 'protocol_explorer_page.dart';
 import 'watch_notifications_page.dart';
 import 'watch_settings.dart';
 import 'wearable_controller.dart';
@@ -65,6 +66,20 @@ class _WatchSettingsPageState extends ConsumerState<WatchSettingsPage> {
                 context,
                 MaterialPageRoute(
                     builder: (_) => const WatchNotificationsPage())),
+          ),
+        ),
+        const SizedBox(height: 12),
+        AppCard(
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.travel_explore_outlined),
+            title: const Text('Исследование протокола'),
+            subtitle: const Text('Сервисы часов, ответы, неизвестные поля'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const ProtocolExplorerPage())),
           ),
         ),
         const SizedBox(height: 12),

@@ -6,7 +6,7 @@ import '../core/dates.dart';
 import '../features/coach/goal_service.dart';
 import '../features/dashboard/day_data.dart';
 import '../features/wearables/watch_notifications_page.dart'
-    show notifEnabled, kNotifGoalsKey, kNotifWorkoutsKey, kNotifHealthKey;
+    show notifEnabled, kNotifGoalsKey, kNotifWorkoutsKey, kNotifHealthKey, kNotifLinkKey;
 import '../features/health_analysis/services/health_monitor.dart';
 import '../services/health/plan_service.dart';
 import '../features/activity/activity_page.dart';
@@ -104,13 +104,32 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _linkNotice();
+    }
     if (state == AppLifecycleState.resumed) {
+      ref.read(notificationsProvider).cancel(8).catchError((_) {});
       _sync();
       ref.read(wearableProvider).start();
       ref.read(scaleProvider).start();
       _autoPlan();
       _healthCheck();
     }
+  }
+
+  /// При сворачивании: предупреждение, что смахивание приложения оборвёт связь с часами.
+  Future<void> _linkNotice() async {
+    try {
+      if (!ref.read(wearableProvider).isConnected) return;
+      final s = await ref.read(dbProvider).allSettings();
+      if (!notifEnabled(s, kNotifLinkKey)) return;
+      await ref.read(notificationsProvider).showNow(
+          8,
+          'Связь с часами работает',
+          'Приложение держит связь с часами, пока оно свёрнуто. Не смахивайте его из списка '
+              'открытых приложений: иначе связь оборвётся, и часы не будут получать данные, '
+              'пока вы не откроете приложение снова.');
+    } catch (_) {}
   }
 
   /// Анализ здоровья: после синхронизации часов, при запуске и возврате в приложение.

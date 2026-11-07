@@ -14,6 +14,7 @@ import 'wearable_controller.dart';
 const kNotifGoalsKey = 'notif_goals';
 const kNotifWorkoutsKey = 'notif_workouts';
 const kNotifHealthKey = 'notif_health';
+const kNotifLinkKey = 'notif_link';
 
 bool notifEnabled(Map<String, String> settings, String key) =>
     settings[key] != '0';
@@ -164,6 +165,42 @@ class _WatchNotificationsPageState
         AppCard(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Диагностика уведомлений',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+            const SizedBox(height: 8),
+            row('Часы подключены по BLE', c.isConnected ? 'да' : 'нет'),
+            row(
+                'Авторизация часов',
+                c.session != null
+                    ? 'выполнена'
+                    : (c.isConnected ? 'не выполнена' : 'не удалось проверить')),
+            row(
+                'Доступ часов к уведомлениям iOS',
+                switch (a?.state) {
+                  AncsState.authorized => 'разрешён',
+                  AncsState.denied => 'запрещён',
+                  null => 'не удалось проверить',
+                  _ => 'не удалось проверить',
+                }),
+            row(
+                'Сервис уведомлений часов (0x001e)',
+                switch (c.notifServiceListed) {
+                  true => 'подтверждён',
+                  false => 'не заявлен',
+                  null => 'не удалось проверить',
+                }),
+            row('Ответ часов на запрос возможностей',
+                c.notifCaps != null ? 'получен' : 'не получен'),
+            row('Фильтр приложений на часах',
+                'не поддерживается: команда неизвестна'),
+            row('Подтверждение показа часами', 'недоступно: доставку нельзя проверить программно'),
+            if (c.message != null) row('Последняя ошибка', c.message!),
+          ]),
+        ),
+        const SizedBox(height: 12),
+        AppCard(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Звонки, сообщения, Telegram, WhatsApp',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             const SizedBox(height: 8),
@@ -262,6 +299,9 @@ class _WatchNotificationsPageState
                 kNotifWorkoutsKey),
             sw('Анализ здоровья', 'Отклонения пульса, SpO₂, сна и другие',
                 kNotifHealthKey),
+            sw('Предупреждение о связи с часами',
+                'При сворачивании: не закрывайте приложение, иначе связь оборвётся',
+                kNotifLinkKey),
             Text(
                 'Напоминания о еде и воде включаются в «Настройки → Уведомления». '
                 'На часах эти уведомления показываются так же, как остальные, если iOS их передаёт.',
