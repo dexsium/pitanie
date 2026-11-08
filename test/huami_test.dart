@@ -8,8 +8,31 @@ import 'package:pitanie/features/wearables/huami_fetch.dart';
 Uint8List _hex(String s) => Uint8List.fromList(
     [for (var i = 0; i < s.length; i += 2) int.parse(s.substring(i, i + 2), radix: 16)]);
 
+ActivitySample _s(int m, int kind) =>
+    ActivitySample(DateTime(2026, 11, 8, 1).add(Duration(minutes: m)), kind, 0, 0, 0, 0, 0, 0);
+
 void main() {
   historyTests();
+  test('диагностика фаз: одна ночь из 30 минут сна даёт строку', () {
+    final s = [for (var i = 0; i < 30; i++) _s(i, 120)];
+    final d = sleepStageDiagnostics(s);
+    expect(d.length, 1);
+    expect(d.first, contains('30 мин'));
+  });
+  test('минуты внутри ночи других видов считаются сном, снятые часы и зарядка нет', () {
+    final s = [
+      _s(0, 120),
+      _s(1, 80),
+      _s(2, 112),
+      _s(3, 115),
+      _s(4, 118),
+      _s(5, 120),
+      // пауза больше часа: другой эпизод, не заполняется
+      for (var i = 6; i < 80; i++) _s(i, 80),
+      _s(80, 120),
+    ];
+    expect(sleepGapIndices(s), {1, 2});
+  });
   test('CRC32 стандартный тестовый вектор', () {
     expect(crc32(Uint8List.fromList('123456789'.codeUnits)), 0xCBF43926);
   });

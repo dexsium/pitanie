@@ -532,11 +532,11 @@ class WearableController extends ChangeNotifier {
     var vitals = '';
     String? err;
     try {
-      // Версия 3: диагностика видов записей сна; один раз перечитываем последние 3 дня.
+      // Версия 4: минуты внутри ночи других видов считаются сном; один раз перечитываем 3 дня.
       final threeDays =
           now.subtract(const Duration(days: 3)).millisecondsSinceEpoch;
       var since = DateTime.fromMillisecondsSinceEpoch(
-          settings['ble_hist_v'] == '3'
+          settings['ble_hist_v'] == '4'
               ? int.tryParse(settings['ble_last_activity'] ?? '') ?? threeDays
               : threeDays);
       for (var round = 0; round < 5; round++) {
@@ -568,7 +568,11 @@ class WearableController extends ChangeNotifier {
           lastSleepIdx = i;
         }
         final recs = <ActivityRecordsCompanion>[];
-        for (final x in samples) {
+        final gapSleep = sleepGapIndices(samples);
+        for (final line in sleepStageDiagnostics(samples)) {
+          addLog('сон, фазы: $line');
+        }
+        for (final (idx, x) in samples.indexed) {
           final end = x.time.add(const Duration(minutes: 1));
           final minute = x.time.millisecondsSinceEpoch ~/ 60000;
           if (x.steps > 0) {
@@ -584,7 +588,7 @@ class WearableController extends ChangeNotifier {
                 tzOffsetMin: Value(tzMin),
                 sourceName: const Value(_bleName)));
           }
-          if (x.isSleep) {
+          if (x.isSleep || gapSleep.contains(idx)) {
             sleepMin++;
             for (final t in [
               'sleep',
@@ -624,7 +628,7 @@ class WearableController extends ChangeNotifier {
         final last = samples.last.time.add(const Duration(minutes: 1));
         await db.setSetting(
             'ble_last_activity', '${last.millisecondsSinceEpoch}');
-        await db.setSetting('ble_hist_v', '3');
+        await db.setSetting('ble_hist_v', '4');
         if (!last.isBefore(now) || samples.length < 2) break;
         since = last.toLocal();
       }

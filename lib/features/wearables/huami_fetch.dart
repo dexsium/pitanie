@@ -206,6 +206,71 @@ class ActivitySample {
   bool get hasHeartRate => heartRate >= 30 && heartRate <= 230;
 }
 
+/// Индексы минут внутри ночи, которые часы записали не видом 120 («сон»), а другим: так часы
+/// пишут части ночи (в журнале 1.19.30 внутри ночи встретились виды 80, 88, 104, 112). Часы
+/// при этом показывают их как сон без пробуждений, поэтому такие минуты считаются сном.
+/// Минуты «часы сняты» (115) и «зарядка» (118) сном не считаются. Паузы длиннее часа
+/// (дневной сон, другой эпизод) не заполняются.
+Set<int> sleepGapIndices(List<ActivitySample> samples) {
+  final out = <int>{};
+  var last = -1;
+  for (var i = 0; i < samples.length; i++) {
+    if (!samples[i].isSleep) continue;
+    if (last >= 0 && i - last > 1 && i - last <= 61) {
+      for (var j = last + 1; j < i; j++) {
+        final k = samples[j].kind;
+        if (k != 115 && k != 118) out.add(j);
+      }
+    }
+    last = i;
+  }
+  return out;
+}
+
+/// Диагностика фаз сна: по каждой ночи (непрерывный ряд минут сна с учётом [sleepGapIndices])
+/// считает, сколько минут получается при разных порогах «глубокого» и «быстрого» сна, и
+/// даёт гистограмму значений по 10. Нужна, чтобы подобрать пороги по данным часов.
+List<String> sleepStageDiagnostics(List<ActivitySample> samples) {
+  final gap = sleepGapIndices(samples);
+  final out = <String>[];
+  var i = 0;
+  while (i < samples.length) {
+    if (!(samples[i].isSleep || gap.contains(i))) {
+      i++;
+      continue;
+    }
+    var j = i;
+    while (j < samples.length && (samples[j].isSleep || gap.contains(j))) {
+      j++;
+    }
+    final n = j - i;
+    if (n >= 20) {
+      final deep = [for (var k = i; k < j; k++) samples[k].deepSleep & 127];
+      final rem = [for (var k = i; k < j; k++) samples[k].remSleep & 127];
+      int above(List<int> v, int th) => v.where((x) => x > th).length;
+      String hist(List<int> v) {
+        final b = List.filled(13, 0);
+        for (final x in v) {
+          b[(x ~/ 10).clamp(0, 12)]++;
+        }
+        return b.join(',');
+      }
+
+      final s = samples[i].time;
+      String hm(DateTime d) =>
+          '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+      out.add('ночь ${s.day}.${s.month} ${hm(s)}-${hm(samples[j - 1].time)}, $n мин; '
+          'глубокий выше порога 20/30/42/50/60: '
+          '${[for (final th in [20, 30, 42, 50, 60]) above(deep, th)].join('/')}; '
+          'REM выше порога 40/55/65/75/90: '
+          '${[for (final th in [40, 55, 65, 75, 90]) above(rem, th)].join('/')}; '
+          'гистограмма глубокий(по 10): ${hist(deep)}; REM: ${hist(rem)}');
+    }
+    i = j;
+  }
+  return out;
+}
+
 /// Минутные записи активности, 8 байт: вид, интенсивность, шаги, пульс, ?, сон, глубокий сон, REM.
 List<ActivitySample>? parseActivity(Uint8List bytes, DateTime start) {
   if (bytes.length % 8 != 0) return null;
