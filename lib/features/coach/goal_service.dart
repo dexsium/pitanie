@@ -42,14 +42,18 @@ Future<List<FoodCandidate>> loadCandidates(AppDatabase db) async {
 
 /// Подсказки для остатка: сначала из продуктов пользователя, если не нашлось — из запасного списка.
 Future<List<FoodSuggestion>> suggestionsFor(
-    AppDatabase db, Nutrients remaining, GoalValues goal) async {
-  final own = suggestFoods(remaining, goal, await loadCandidates(db));
+    AppDatabase db, Nutrients remaining, GoalValues goal,
+    {Set<String> exclude = const {}}) async {
+  List<FoodCandidate> pool(List<FoodCandidate> l) =>
+      [for (final c in l) if (!exclude.contains(c.name)) c];
+  final mine = pool(await loadCandidates(db));
+  final own = suggestFoods(remaining, goal, mine);
   if (own.isNotEmpty) return own;
-  final std = suggestFoods(remaining, goal, builtinFoods);
+  final std = suggestFoods(remaining, goal, pool(builtinFoods));
   if (std.isNotEmpty) return std;
   // Калории закрыты, но не хватает белка: предлагаем самый белковый вариант.
-  final pf = suggestProteinFirst(remaining, await loadCandidates(db));
-  return pf.isNotEmpty ? pf : suggestProteinFirst(remaining, builtinFoods);
+  final pf = suggestProteinFirst(remaining, mine);
+  return pf.isNotEmpty ? pf : suggestProteinFirst(remaining, pool(builtinFoods));
 }
 
 Set<String> _done(Map<String, String> settings, String today) {
