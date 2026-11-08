@@ -591,6 +591,16 @@ class _WatchNotificationsPageState
                       },
                 icon: const Icon(Icons.short_text),
                 label: const Text('Опыт 05d (короткие id; сбросит тумблеры)')),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: c.sweeping
+                    ? null
+                    : () async {
+                        final r = await c.experiment05e();
+                        if (context.mounted) toast(context, r.split('\n').first);
+                      },
+                icon: const Icon(Icons.grid_on),
+                label: const Text('Опыт 05e (широкая матрица; сбросит тумблеры)')),
             if (c.vibeReport != null && c.vibeReport!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
