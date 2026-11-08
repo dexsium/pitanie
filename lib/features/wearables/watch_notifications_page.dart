@@ -571,6 +571,16 @@ class _WatchNotificationsPageState
                       },
                 icon: const Icon(Icons.rule),
                 label: const Text('Опыт 05b (включить два приложения)')),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+                onPressed: c.sweeping
+                    ? null
+                    : () async {
+                        final r = await c.experiment05c();
+                        if (context.mounted) toast(context, r.split('\n').first);
+                      },
+                icon: const Icon(Icons.rule_folder_outlined),
+                label: const Text('Опыт 05c (сбросит тумблеры; потом включить в Zepp)')),
             if (c.vibeReport != null && c.vibeReport!.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
@@ -722,7 +732,7 @@ class _WatchNotificationsPageState
                           l.contains('приложения на часах') ||
                           l.contains('запись приложения') ||
                           l.contains('перебор приложений') ||
-                          l.contains('опыт 07'))
+                          l.contains('опыт 0'))
                       .toList();
                   final text = 'Версия приложения: $_ver\n'
                       'Прошивка часов: ${c.fw ?? '—'}\n'

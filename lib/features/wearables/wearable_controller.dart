@@ -1489,6 +1489,147 @@ class WearableController extends ChangeNotifier {
     }
   }
 
+  /// ЭКСПЕРИМЕНТ: другие формы записи «включить B, не выключая A» (структуры пакетов и пары
+  /// пакетов подряд). Перед каждой пробой A включается известной формой; затем по списку
+  /// читается, кто включён. Ответы часов и итог пишутся в журнал со словом «опыт 05c».
+  Future<String> experiment05c() async {
+    final s = session;
+    if (s == null) return 'Часы не подключены или не авторизованы.';
+    if (sweeping) return 'Перебор уже идёт.';
+    sweeping = true;
+    sweepCancel = false;
+    final replies = <String>[];
+    probeListener = (t, p) {
+      if (t == appFilterEndpoint && p.isNotEmpty && p[0] != 0x04) {
+        replies.add(p.take(8).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' '));
+      }
+    };
+    String done(String r) {
+      sweepStatus = r;
+      addLog('опыт 05c: итог — $r');
+      return r;
+    }
+
+    try {
+      await readWatchApps();
+      final base = watchApps;
+      if (base == null) return done('Не удалось прочитать список перед опытом.');
+      final raw = watchAppsRaw;
+      if (raw != null) {
+        await db.setSetting('watch_apps_backup_05c',
+            raw.map((x) => x.toRadixString(16).padLeft(2, '0')).join());
+      }
+      const keep = {'com.apple.mobilephone', 'com.apple.MobileSMS', 'com.apple.mobilemail'};
+      final cand = [
+        for (final a in base.apps)
+          if (a.printable && !keep.contains(a.id)) a.id
+      ];
+      if (cand.length < 2) return done('Нет двух подходящих приложений.');
+      final a = cand[0], b = cand[1];
+      final ab = utf8.encode(a), bb = utf8.encode(b);
+      Set<String> onSet(WatchAppList l) =>
+          {for (final x in l.apps) if (x.enabled && x.printable) x.id};
+      addLog('опыт 05c: A=$a, B=$b');
+      // Каждая проба — список пакетов, отправляемых подряд.
+      final forms = <String, List<List<int>>>{
+        'c01 две записи подряд в одном пакете, счётчик 1': [
+          [0x05, 1, 0, ...ab, 0, 1, ...bb, 0, 1]
+        ],
+        'c02 два пакета 05 01 00 (A, B)': [
+          [0x05, 1, 0, ...ab, 0, 1],
+          [0x05, 1, 0, ...bb, 0, 1]
+        ],
+        'c03 два пакета 05 01 01 (A, B)': [
+          [0x05, 1, 1, ...ab, 0, 1],
+          [0x05, 1, 1, ...bb, 0, 1]
+        ],
+        'c04 пакет 05 01 00 A + пакет 05 01 01 B': [
+          [0x05, 1, 0, ...ab, 0, 1],
+          [0x05, 1, 1, ...bb, 0, 1]
+        ],
+        'c05 пакет 05 01 01 A + пакет 05 01 00 B': [
+          [0x05, 1, 1, ...ab, 0, 1],
+          [0x05, 1, 0, ...bb, 0, 1]
+        ],
+        'c06 05 02 A B (без 00)': [
+          [0x05, 2, ...ab, 0, 1, ...bb, 0, 1]
+        ],
+        'c07 05 A B (без счётчика)': [
+          [0x05, ...ab, 0, 1, ...bb, 0, 1]
+        ],
+        'c08 05 01 00 B флаг 2': [
+          [0x05, 1, 0, ...bb, 0, 2]
+        ],
+        'c09 05 01 00 B флаг 3': [
+          [0x05, 1, 0, ...bb, 0, 3]
+        ],
+        'c10 05 01 00 B флаг 0x81': [
+          [0x05, 1, 0, ...bb, 0, 0x81]
+        ],
+        'c11 05 01 00 len B флаг 1': [
+          [0x05, 1, 0, bb.length, ...bb, 1]
+        ],
+        'c12 05 01 00 B (без флага)': [
+          [0x05, 1, 0, ...bb, 0]
+        ],
+        'c13 05 01 00 B флаг 1 и 05 01 00 A флаг 1 (B, затем A)': [
+          [0x05, 1, 0, ...bb, 0, 1],
+          [0x05, 1, 0, ...ab, 0, 1]
+        ],
+        'c14 05 03 00 A B (счётчик 3)': [
+          [0x05, 3, 0, ...ab, 0, 1, ...bb, 0, 1]
+        ],
+        'c15 05 02 00 A флаг1 B флаг1 с ведущим 00': [
+          [0x05, 2, 0, 0, ...ab, 0, 1, 0, ...bb, 0, 1]
+        ],
+        'c16 05 01 00 A+B через запятую': [
+          [0x05, 1, 0, ...ab, 0x2c, ...bb, 0, 1]
+        ],
+        'c17 05 01 00 B флаг 1 с 09 перед (09 и 05)': [
+          [0x09, 1, 0, ...bb, 0, 1],
+          [0x05, 1, 0, ...bb, 0, 1]
+        ],
+        'c18 0b 01 00 B потом 05 01 00 B': [
+          [0x0b, 1, 0, ...bb, 0, 1],
+          [0x05, 1, 0, ...bb, 0, 1]
+        ],
+      };
+      final hits = <String>[];
+      var n = 0;
+      for (final e in forms.entries) {
+        if (sweepCancel) return done('Остановлено. ${hits.join('; ')}');
+        if (session == null) return done('Связь потеряна. ${hits.join('; ')}');
+        n++;
+        sweepStatus = 'Опыт 05c: $n из ${forms.length}';
+        notifyListeners();
+        await s.send(appFilterEndpoint, [0x05, 1, 0, ...ab, 0, 1]);
+        await Future.delayed(const Duration(milliseconds: 350));
+        replies.clear();
+        addLog('опыт 05c: ${e.key}, ${DateTime.now().toIso8601String().substring(11, 19)}');
+        for (final pkt in e.value) {
+          await s.send(appFilterEndpoint, pkt);
+          await Future.delayed(const Duration(milliseconds: 300));
+        }
+        await Future.delayed(const Duration(milliseconds: 200));
+        await readWatchApps();
+        final now = watchApps;
+        if (now == null) continue;
+        final on = onSet(now);
+        final line = '${e.key}: ответ ${replies.isEmpty ? 'нет' : replies.join(',')}; '
+            'A ${on.contains(a) ? 'вкл' : 'выкл'}, B ${on.contains(b) ? 'вкл' : 'выкл'}, '
+            'всего включено ${on.length}';
+        addLog('опыт 05c: $line');
+        if (on.contains(b) && on.contains(a)) hits.add('ОБА: $line');
+        else if (on.contains(b)) hits.add('только B: $line');
+      }
+      return done('Проверено $n форм. ${hits.isEmpty ? 'B не включился ни в одной форме.' : hits.join('; ')}');
+    } finally {
+      probeListener = null;
+      sweeping = false;
+      notifyListeners();
+    }
+  }
+
   bool sweeping = false;
   bool sweepCancel = false;
   String? sweepStatus;
