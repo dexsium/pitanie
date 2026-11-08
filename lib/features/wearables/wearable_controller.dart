@@ -19,7 +19,7 @@ import 'watch_settings.dart';
 
 enum WearStatus { off, connecting, connected, authorizing, ready }
 
-const _bleName = 'Amazfit GTR 4 (Bluetooth)';
+const _bleName = 'Умные часы (Bluetooth)';
 const _uChunkWrite = '00000016-0000-3512-2118-0009af100700';
 const _uChunkRead = '00000017-0000-3512-2118-0009af100700';
 const _uFetchCtl = '00000004-0000-3512-2118-0009af100700';
@@ -54,6 +54,12 @@ class WearableController extends ChangeNotifier {
   Completer<NotifCaps>? _capsWait;
   bool hrOn = false;
   String? savedId;
+
+  /// Имя подключённых часов (как их назвал Bluetooth при подключении), сохраняется в настройках.
+  String? savedName;
+
+  /// Название для экранов: имя часов или нейтральное, пока часы не подключались.
+  String get deviceName => (savedName ?? '').isNotEmpty ? savedName! : 'Умные часы';
   bool hasKey = false;
   final log = <String>[];
 
@@ -90,6 +96,7 @@ class WearableController extends ChangeNotifier {
       } catch (_) {}
       final m = await db.allSettings();
       savedId = (m['wearable_id'] ?? '').isEmpty ? null : m['wearable_id'];
+      savedName = (m['wearable_name'] ?? '').isEmpty ? null : m['wearable_name'];
       hasKey = await AuthKeyStore.exists();
       await loadSpo2();
       notifyListeners();
@@ -195,6 +202,11 @@ class WearableController extends ChangeNotifier {
         savedId = d.remoteId.str;
       });
       await db.setSetting('wearable_id', d.remoteId.str);
+      final bleName = d.platformName.trim();
+      if (bleName.isNotEmpty) {
+        savedName = bleName;
+        await db.setSetting('wearable_name', bleName);
+      }
       _connSub?.cancel();
       _connSub = d.connectionState.listen((s) {
         if (s == BluetoothConnectionState.disconnected && device != null)
@@ -257,7 +269,11 @@ class WearableController extends ChangeNotifier {
   Future<void> forget() async {
     await disconnect();
     await db.setSetting('wearable_id', '');
-    _set(() => savedId = null);
+    await db.setSetting('wearable_name', '');
+    _set(() {
+      savedId = null;
+      savedName = null;
+    });
   }
 
   Future<void> authorize() async {
@@ -532,11 +548,15 @@ class WearableController extends ChangeNotifier {
     var vitals = '';
     String? err;
     try {
-      // Версия 4: минуты внутри ночи других видов считаются сном; один раз перечитываем 3 дня.
+      // Версия 5: новые пороги фаз сна; старые записи фаз за 3 дня удаляются и перечитываются.
+      if (settings['ble_hist_v'] != '5') {
+        await db.deleteBleSleepStages(
+            DateTime.now().subtract(const Duration(days: 3)));
+      }
       final threeDays =
           now.subtract(const Duration(days: 3)).millisecondsSinceEpoch;
       var since = DateTime.fromMillisecondsSinceEpoch(
-          settings['ble_hist_v'] == '4'
+          settings['ble_hist_v'] == '5'
               ? int.tryParse(settings['ble_last_activity'] ?? '') ?? threeDays
               : threeDays);
       for (var round = 0; round < 5; round++) {
@@ -628,7 +648,7 @@ class WearableController extends ChangeNotifier {
         final last = samples.last.time.add(const Duration(minutes: 1));
         await db.setSetting(
             'ble_last_activity', '${last.millisecondsSinceEpoch}');
-        await db.setSetting('ble_hist_v', '4');
+        await db.setSetting('ble_hist_v', '5');
         if (!last.isBefore(now) || samples.length < 2) break;
         since = last.toLocal();
       }

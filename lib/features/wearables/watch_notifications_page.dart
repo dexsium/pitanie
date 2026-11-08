@@ -173,7 +173,7 @@ class _WatchNotificationsPageState
         'iOS разрешил часам читать системные уведомления iPhone. Какие именно приложения '
             'показываются, решают настройки уведомлений iOS и сами часы.',
       AncsState.denied =>
-        'Включите «Настройки → Bluetooth → Amazfit GTR 4 (значок i) → Делиться системными '
+        'Включите «Настройки → Bluetooth → ваши часы (значок i) → Делиться системными '
             'уведомлениями».',
       AncsState.watchNotFound =>
         'iOS не знает эти часы. Они должны быть сопряжены в «Настройки → Bluetooth», '
@@ -707,7 +707,7 @@ class _WatchNotificationsPageState
                 style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             Text(
-                '1. Общий доступ: «Настройки → Bluetooth → Amazfit GTR 4 → i → Делиться системными '
+                '1. Общий доступ: «Настройки → Bluetooth → ваши часы → i → Делиться системными '
                 'уведомлениями».\n'
                 '2. Нужное приложение: «Настройки → Уведомления → приложение», оно должно показывать '
                 'уведомления.\n'

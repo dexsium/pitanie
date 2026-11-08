@@ -258,7 +258,7 @@ class _MainSourceCard extends ConsumerWidget {
     final current = settings[kMainSourceKey] ?? 'ble';
     final found = (report?['sources'] as Map?)?.cast<String, dynamic>() ?? {};
     final options = <String, String>{
-      'ble': 'Amazfit GTR 4 (Bluetooth)',
+      'ble': 'Умные часы (Bluetooth)',
       'auto': 'Автоматически (источник с большим объёмом за день)',
       for (final e in found.entries)
         if (e.key != kBleSource) e.key: '${e.value}',

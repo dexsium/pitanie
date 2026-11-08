@@ -435,8 +435,8 @@ class _WearablePageState extends ConsumerState<WearablePage> {
         Expanded(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Amazfit GTR 4',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+            Text(c.deviceName,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
             const SizedBox(height: 2),
             Row(children: [
               Icon(Icons.circle,

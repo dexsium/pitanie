@@ -800,6 +800,16 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
+  /// Удаляет сохранённые фазы сна с часов (глубокий, быстрый, лёгкий) начиная с [since]:
+  /// после смены порогов они записываются заново.
+  Future<void> deleteBleSleepStages(DateTime since) =>
+      (delete(activityRecords)
+            ..where((t) =>
+                t.source.equals('amazfit_ble') &
+                t.type.isIn(['sleepDeep', 'sleepRem', 'sleepLight']) &
+                t.startTime.isBiggerOrEqualValue(since)))
+          .go();
+
   Future<void> upsertWorkouts(List<WorkoutsCompanion> list) async {
     await batch((b) {
       for (final c in list) {

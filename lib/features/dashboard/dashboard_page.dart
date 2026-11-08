@@ -182,7 +182,7 @@ class WatchStatusChip extends ConsumerWidget {
                           child: FittedBox(
                             fit: BoxFit.scaleDown,
                             alignment: Alignment.centerLeft,
-                            child: Text('Amazfit GTR 4', style: t(30, w: FontWeight.w800)),
+                            child: Text(c.deviceName, style: t(30, w: FontWeight.w800)),
                           ),
                         ),
                         if (c.battery != null && c.status != WearStatus.off)

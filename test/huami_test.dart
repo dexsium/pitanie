@@ -118,12 +118,12 @@ void historyTests() {
       expect(parseActivity(Uint8List(7), start), isNull);
     });
 
-    test('сон: вид 120, фаза по порогам Gadgetbridge (оценка)', () {
+    test('сон: вид 120, фаза по порогам (оценка, калибровка по одной ночи)', () {
       final start = DateTime.utc(2026, 11, 3, 23, 0);
       final bytes = Uint8List.fromList([
         120, 0, 0, 60, 0, 30, 10, 5, // лёгкий
-        120, 0, 0, 55, 0, 30, 50, 5, // глубокий (deep > 42)
-        120, 0, 0, 52, 0, 30, 10, 70, // REM (rem > 55)
+        120, 0, 0, 55, 0, 30, 60, 5, // глубокий (deep > 50)
+        120, 0, 0, 52, 0, 30, 10, 70, // REM (rem > 40)
         115, 0, 0, 0, 0, 0, 0, 0, // часы сняты
       ]);
       final s = parseActivity(bytes, start)!;

@@ -180,7 +180,7 @@ Future<Uint8List> buildReportPdf(ReportStats r,
         ['Максимальный пульс', _n(r.maxHr, unit: 'уд/мин')],
       ]),
       note(
-          'HRV и индекс восстановления в отчёт не включены: часы Amazfit GTR 4 '
+          'HRV и индекс восстановления в отчёт не включены: часы '
           'пока не отдают подтверждённых значений HRV, индекс не рассчитывается.'),
       pw.SizedBox(height: 8),
       chart('Средний пульс по дням', [for (final d in days) d.act.avgHr],

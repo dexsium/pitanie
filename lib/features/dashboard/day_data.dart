@@ -19,7 +19,7 @@ String? mainSourceOf(Map<String, String> settings) {
   return v;
 }
 
-String sourceLabel(String? s) => s == kBleSource ? 'Amazfit GTR 4 (Bluetooth)' : (s ?? '');
+String sourceLabel(String? s) => s == kBleSource ? 'Умные часы (Bluetooth)' : (s ?? '');
 
 class ActivityDay {
   final double steps, distanceKm, activeKcal, totalKcal, workoutMinutes, sleepMinutes;

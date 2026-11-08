@@ -184,6 +184,12 @@ class HuamiFetcher {
 
 enum SleepStage { light, deep, rem }
 
+/// Пороги фаз сна. Исходные у Gadgetbridge: REM > 55, глубокий > 42. Подобраны по ночи
+/// 2026-11-08 (ваши часы: глубокий 1:23, REM 1:32 из 7:04): при порогах 50 и 40 в той ночи
+/// получается около 88 и 89 минут. Это калибровка по одной ночи, а не точное значение.
+const kRemThreshold = 40;
+const kDeepThreshold = 50;
+
 class ActivitySample {
   final DateTime time;
   final int kind, intensity, steps, heartRate, sleep, deepSleep, remSleep;
@@ -197,8 +203,8 @@ class ActivitySample {
   /// опытным путём и дают приблизительную разбивку, а не точное значение с часов.
   SleepStage get stage {
     final rem = remSleep & 127, deep = deepSleep & 127;
-    if (rem > 55) return SleepStage.rem;
-    if (deep > 42) return SleepStage.deep;
+    if (rem > kRemThreshold) return SleepStage.rem;
+    if (deep > kDeepThreshold) return SleepStage.deep;
     return SleepStage.light;
   }
 

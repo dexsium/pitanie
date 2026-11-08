@@ -71,7 +71,7 @@ void main() {
           theme: buildTheme(Brightness.light), home: const Scaffold(body: WatchStatusChip())),
     ));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Amazfit GTR 4'), findsOneWidget);
+    expect(find.text('Умные часы'), findsOneWidget);
     expect(find.text('76%'), findsOneWidget);
     expect(find.text('Подключены'), findsOneWidget);
     expect(find.textContaining('78'), findsOneWidget);
