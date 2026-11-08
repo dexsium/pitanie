@@ -1826,6 +1826,117 @@ class WearableController extends ChangeNotifier {
     }
   }
 
+  /// ЭКСПЕРИМЕНТ 05f: проверка гипотезы «число после `05` = число записей минус одна».
+  /// Берутся 4 приложения (X, Y, Z и W). Перед каждой пробой включается только W известной
+  /// рабочей формой. Затем перебираются пакеты из 2, 3 и 4 записей с разными заголовками и
+  /// комбинациями флагов, а также пакеты с числом 0. После пробы список читается заново;
+  /// успехом считается состояние, когда включено больше одного приложения из X, Y, Z, W.
+  Future<String> experiment05f() async {
+    final s = session;
+    if (s == null) return 'Часы не подключены или не авторизованы.';
+    if (sweeping) return 'Перебор уже идёт.';
+    sweeping = true;
+    sweepCancel = false;
+    final replies = <String>[];
+    probeListener = (t, p) {
+      if (t == appFilterEndpoint && p.isNotEmpty && p[0] != 0x04) {
+        replies.add(p.take(4).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' '));
+      }
+    };
+    String done(String r) {
+      sweepStatus = r;
+      addLog('опыт 05f: итог — $r');
+      return r;
+    }
+
+    try {
+      await readWatchApps();
+      final base = watchApps;
+      if (base == null) return done('Не удалось прочитать список перед опытом.');
+      final raw = watchAppsRaw;
+      if (raw != null) {
+        await db.setSetting('watch_apps_backup_05f',
+            raw.map((x) => x.toRadixString(16).padLeft(2, '0')).join());
+      }
+      final all = [
+        for (final a in base.apps)
+          if (a.printable && a.id.length >= 8 && a.id.length <= 24 && !a.id.startsWith('com.apple.'))
+            a.id
+      ];
+      if (all.length < 4) return done('Мало подходящих приложений.');
+      final ids = [for (var i = 0; i < 4; i++) all[(i * (all.length - 1) / 3).round()]];
+      final names = ['X', 'Y', 'Z', 'W'];
+      final bytes = [for (final i in ids) utf8.encode(i)];
+      addLog('опыт 05f: X=${ids[0]}, Y=${ids[1]}, Z=${ids[2]}, W=${ids[3]}');
+      List<int> rec(int i, int flag) => [...bytes[i], 0, flag];
+      List<int> pkt(int b1, int b2, List<(int, int)> rs, {List<int> tail = const []}) =>
+          [0x05, b1, b2, for (final r in rs) ...rec(r.$1, r.$2), ...tail];
+      final probes = <String, List<int>>{};
+      // 2 записи (число 1): флаги.
+      const fl2 = [(1, 1), (1, 0), (0, 1), (1, 2), (2, 1), (2, 2), (1, 3), (3, 3), (0, 0), (1, 0x80)];
+      for (final f in fl2) {
+        probes['2з 05 01 00 X=${f.$1} Y=${f.$2}'] = pkt(1, 0, [(0, f.$1), (1, f.$2)]);
+      }
+      probes['2з 05 01 01 X=1 Y=1'] = pkt(1, 1, [(0, 1), (1, 1)]);
+      probes['2з 05 01 02 X=1 Y=1'] = pkt(1, 2, [(0, 1), (1, 1)]);
+      probes['2з 05 00 00 X=1 Y=1 (число 0)'] = pkt(0, 0, [(0, 1), (1, 1)]);
+      probes['2з 05 01 00 Y=1 X=1 (порядок)'] = pkt(1, 0, [(1, 1), (0, 1)]);
+      // 3 записи (число 2).
+      const fl3 = [(1, 1, 1), (1, 0, 0), (1, 1, 0), (0, 1, 1), (2, 2, 2), (1, 2, 3)];
+      for (final f in fl3) {
+        probes['3з 05 02 00 ${f.$1}${f.$2}${f.$3}'] =
+            pkt(2, 0, [(0, f.$1), (1, f.$2), (2, f.$3)]);
+      }
+      probes['3з 05 02 01 111'] = pkt(2, 1, [(0, 1), (1, 1), (2, 1)]);
+      probes['3з 05 02 00 111 +00'] = pkt(2, 0, [(0, 1), (1, 1), (2, 1)], tail: [0]);
+      probes['3з 05 02 00 W,X,Y 111'] = pkt(2, 0, [(3, 1), (0, 1), (1, 1)]);
+      // 4 записи (число 3).
+      probes['4з 05 03 00 1111'] = pkt(3, 0, [(0, 1), (1, 1), (2, 1), (3, 1)]);
+      probes['4з 05 03 00 1100'] = pkt(3, 0, [(0, 1), (1, 1), (2, 0), (3, 0)]);
+      probes['4з 05 03 00 2222'] = pkt(3, 0, [(0, 2), (1, 2), (2, 2), (3, 2)]);
+      // Прежние рабочие и близкие к ним формы с числом 1 и разными хвостами.
+      probes['1з+хвост 05 01 00 X 1, хвост 00'] = pkt(1, 0, [(0, 1)], tail: [0]);
+      probes['1з+хвост 05 01 00 X 1, хвост 00 00'] = pkt(1, 0, [(0, 1)], tail: [0, 0]);
+      probes['1з+хвост 05 01 00 X 1, хвост 00 01'] = pkt(1, 0, [(0, 1)], tail: [0, 1]);
+      probes['1з+хвост 05 01 00 X 1, хвост 01'] = pkt(1, 0, [(0, 1)], tail: [1]);
+      probes['1з 05 00 00 X 1'] = pkt(0, 0, [(0, 1)]);
+      probes['1з 05 00 00 X 0'] = pkt(0, 0, [(0, 0)]);
+      probes['1з 05 00 00 X 2'] = pkt(0, 0, [(0, 2)]);
+      probes['1з 05 00 01 X 1'] = pkt(0, 1, [(0, 1)]);
+      Set<String> onIds(WatchAppList l) =>
+          {for (final x in l.apps) if (x.enabled && x.printable) x.id};
+      final hits = <String>[];
+      var n = 0;
+      for (final e in probes.entries) {
+        if (sweepCancel) return done('Остановлено. ${hits.join('; ')}');
+        if (session == null) return done('Связь потеряна. ${hits.join('; ')}');
+        n++;
+        sweepStatus = 'Опыт 05f: $n из ${probes.length}';
+        notifyListeners();
+        // Сброс: включён только W (форма с хвостом 00, принимается).
+        await s.send(appFilterEndpoint, pkt(1, 0, [(3, 1)], tail: [0]));
+        await Future.delayed(const Duration(milliseconds: 350));
+        replies.clear();
+        await s.send(appFilterEndpoint, e.value);
+        await Future.delayed(const Duration(milliseconds: 400));
+        await readWatchApps();
+        final now = watchApps;
+        if (now == null) continue;
+        final on = onIds(now);
+        final who = [for (var i = 0; i < 4; i++) if (on.contains(ids[i])) names[i]].join('');
+        final line = '${e.key} (${e.value.length} байт): ответ ${replies.isEmpty ? 'нет' : replies.join(',')}; '
+            'включены: ${who.isEmpty ? 'никто из X,Y,Z,W' : who}, всего ${on.length}';
+        addLog('опыт 05f: $line');
+        if (on.length >= 2) hits.add(line);
+      }
+      return done('Проверено $n проб. ${hits.isEmpty ? 'Больше одного включённого нигде нет.' : hits.join('; ')}');
+    } finally {
+      probeListener = null;
+      sweeping = false;
+      notifyListeners();
+    }
+  }
+
   bool sweeping = false;
   bool sweepCancel = false;
   String? sweepStatus;
