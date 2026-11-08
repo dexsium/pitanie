@@ -1630,6 +1630,85 @@ class WearableController extends ChangeNotifier {
     }
   }
 
+  /// ЭКСПЕРИМЕНТ 05d: проверка, число после `05` — счётчик записей или нет, на коротких
+  /// идентификаторах (пакет короткий, ограничения длины не мешают). Включённые id сравниваются
+  /// по всему списку, включая служебные записи. Реальные приложения не трогаются, кроме
+  /// последней пробы с двумя длинными id и счётчиком 2.
+  Future<String> experiment05d() async {
+    final s = session;
+    if (s == null) return 'Часы не подключены или не авторизованы.';
+    if (sweeping) return 'Перебор уже идёт.';
+    sweeping = true;
+    sweepCancel = false;
+    final replies = <String>[];
+    probeListener = (t, p) {
+      if (t == appFilterEndpoint && p.isNotEmpty && p[0] != 0x04) {
+        replies.add(p.take(8).map((x) => x.toRadixString(16).padLeft(2, '0')).join(' '));
+      }
+    };
+    String done(String r) {
+      sweepStatus = r;
+      addLog('опыт 05d: итог — $r');
+      return r;
+    }
+
+    String hx(List<int> b) => b.map((x) => x.toRadixString(16).padLeft(2, '0')).join();
+    try {
+      await readWatchApps();
+      final base = watchApps;
+      if (base == null) return done('Не удалось прочитать список перед опытом.');
+      final raw = watchAppsRaw;
+      if (raw != null) await db.setSetting('watch_apps_backup_05d', hx(raw));
+      Set<String> onAll(WatchAppList l) =>
+          {for (final x in l.apps) if (x.enabled) hx(utf8.encode(x.id))};
+      const I = [0x49];
+      final cand = [
+        for (final a in base.apps)
+          if (a.printable && a.id.length > 12 && !a.id.startsWith('com.apple.')) a.id
+      ];
+      final forms = <String, List<int>>{
+        'd01 05 02 00: id 01 и 02': [0x05, 2, 0, 1, 0, 1, 2, 0, 1],
+        'd02 05 02 00: id I и 01': [0x05, 2, 0, ...I, 0, 1, 1, 0, 1],
+        'd03 05 02 00: id 01, 02 и I (счётчик 2)': [0x05, 2, 0, 1, 0, 1, 2, 0, 1, ...I, 0, 1],
+        'd04 05 03 00: id 01, 02 и I': [0x05, 3, 0, 1, 0, 1, 2, 0, 1, ...I, 0, 1],
+        'd05 05 02 01: id I и 01': [0x05, 2, 1, ...I, 0, 1, 1, 0, 1],
+        'd06 05 01 00: id 01 (контроль)': [0x05, 1, 0, 1, 0, 1],
+        if (cand.length >= 2)
+          'd07 05 02 00: два длинных id': [
+            0x05, 2, 0, ...utf8.encode(cand[0]), 0, 1, ...utf8.encode(cand[1]), 0, 1
+          ],
+      };
+      var n = 0;
+      final hits = <String>[];
+      for (final e in forms.entries) {
+        if (sweepCancel) return done('Остановлено. ${hits.join('; ')}');
+        if (session == null) return done('Связь потеряна. ${hits.join('; ')}');
+        n++;
+        sweepStatus = 'Опыт 05d: $n из ${forms.length}';
+        notifyListeners();
+        await s.send(appFilterEndpoint, [0x05, 1, 0, ...I, 0, 1]);
+        await Future.delayed(const Duration(milliseconds: 350));
+        replies.clear();
+        addLog('опыт 05d: ${e.key}, пакет ${e.value.length} байт: ${hx(e.value.take(12).toList())}…');
+        await s.send(appFilterEndpoint, e.value);
+        await Future.delayed(const Duration(milliseconds: 450));
+        await readWatchApps();
+        final now = watchApps;
+        if (now == null) continue;
+        final on = onAll(now);
+        final line = '${e.key}: ответ ${replies.isEmpty ? 'нет' : replies.join(',')}; '
+            'включено ${on.length}: ${on.take(6).join(' ')}';
+        addLog('опыт 05d: $line');
+        if (on.length >= 2) hits.add(line);
+      }
+      return done('Проверено $n форм. ${hits.isEmpty ? 'Больше одного включённого нигде нет.' : hits.join('; ')}');
+    } finally {
+      probeListener = null;
+      sweeping = false;
+      notifyListeners();
+    }
+  }
+
   bool sweeping = false;
   bool sweepCancel = false;
   String? sweepStatus;
