@@ -1,7 +1,7 @@
 name: pitanie
 description: Дневник питания, воды и физической активности
 publish_to: none
-version: 1.19.29+1
+version: 1.19.30+1
 
 environment:
   sdk: ">=3.4.0 <4.0.0"

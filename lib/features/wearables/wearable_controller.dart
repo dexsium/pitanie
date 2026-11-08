@@ -528,14 +528,15 @@ class WearableController extends ChangeNotifier {
     final now = DateTime.now();
     final tzMin = now.timeZoneOffset.inMinutes;
     var stepMin = 0, hrN = 0, spoN = 0, sleepMin = 0;
+    final kindAll = <int, int>{}, kindInNight = <int, int>{};
     var vitals = '';
     String? err;
     try {
-      // Версия 2 разбора истории добавила сон: один раз перечитываем последние 3 дня.
+      // Версия 3: диагностика видов записей сна; один раз перечитываем последние 3 дня.
       final threeDays =
           now.subtract(const Duration(days: 3)).millisecondsSinceEpoch;
       var since = DateTime.fromMillisecondsSinceEpoch(
-          settings['ble_hist_v'] == '2'
+          settings['ble_hist_v'] == '3'
               ? int.tryParse(settings['ble_last_activity'] ?? '') ?? threeDays
               : threeDays);
       for (var round = 0; round < 5; round++) {
@@ -551,6 +552,20 @@ class WearableController extends ChangeNotifier {
           err =
               'Неожиданный формат данных активности (${res.data.length} байт).';
           break;
+        }
+        // Диагностика сна: какие виды записей лежат внутри ночи между минутами сна (вид 120).
+        for (final x in samples) {
+          kindAll[x.kind] = (kindAll[x.kind] ?? 0) + 1;
+        }
+        var lastSleepIdx = -1;
+        for (var i = 0; i < samples.length; i++) {
+          if (!samples[i].isSleep) continue;
+          if (lastSleepIdx >= 0 && i - lastSleepIdx > 1 && i - lastSleepIdx <= 61) {
+            for (var j = lastSleepIdx + 1; j < i; j++) {
+              kindInNight[samples[j].kind] = (kindInNight[samples[j].kind] ?? 0) + 1;
+            }
+          }
+          lastSleepIdx = i;
         }
         final recs = <ActivityRecordsCompanion>[];
         for (final x in samples) {
@@ -609,10 +624,16 @@ class WearableController extends ChangeNotifier {
         final last = samples.last.time.add(const Duration(minutes: 1));
         await db.setSetting(
             'ble_last_activity', '${last.millisecondsSinceEpoch}');
-        await db.setSetting('ble_hist_v', '2');
+        await db.setSetting('ble_hist_v', '3');
         if (!last.isBefore(now) || samples.length < 2) break;
         since = last.toLocal();
       }
+      String kinds(Map<int, int> m) =>
+          (m.entries.toList()..sort((a, b) => b.value.compareTo(a.value)))
+              .map((e) => '${e.key}×${e.value}')
+              .join(', ');
+      addLog('сон, диагностика: виды записей в выборке: ${kinds(kindAll)}; '
+          'внутри ночи между минутами сна: ${kinds(kindInNight).isEmpty ? 'нет' : kinds(kindInNight)}');
       if (err == null) {
         final sSince = DateTime.fromMillisecondsSinceEpoch(
             int.tryParse(settings['ble_last_spo2'] ?? '') ??
