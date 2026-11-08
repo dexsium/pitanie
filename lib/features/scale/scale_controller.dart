@@ -41,7 +41,25 @@ class ScaleController extends ChangeNotifier {
 
   bool _loaded = false;
   StreamSubscription<List<ScanResult>>? _sub;
+  StreamSubscription<bool>? _scanSub;
   Timer? _timer;
+
+  /// Диагностика приёма: сколько запусков сканирования, результатов и пакетов весов 0x181B.
+  int scanStarts = 0;
+  int resultsSeen = 0;
+  int scalePackets = 0;
+  DateTime? lastPacketSeen;
+  String? lastScanError;
+
+  String get diagnostics {
+    final p = lastPacketSeen;
+    final when = p == null
+        ? 'не было'
+        : '${p.hour.toString().padLeft(2, '0')}:${p.minute.toString().padLeft(2, '0')}:${p.second.toString().padLeft(2, '0')}';
+    return 'Сканирование: ${FlutterBluePlus.isScanningNow ? 'идёт' : 'остановлено'}, запусков $scanStarts, '
+        'устройств в эфире $resultsSeen, пакетов весов $scalePackets, последний $when'
+        '${lastScanError == null ? '' : ', ошибка: $lastScanError'}';
+  }
 
   void _addLog(String s) {
     final t = DateTime.now();
@@ -65,7 +83,15 @@ class ScaleController extends ChangeNotifier {
     }
     if (!enabled) return;
     _sub ??= FlutterBluePlus.scanResults.listen(_onResults);
-    _timer ??= Timer.periodic(const Duration(seconds: 25), (_) => _ensureScan());
+    // Сканирование останавливается при подключении к часам и поиске устройств:
+    // как только оно остановилось, запускаем снова.
+    _scanSub ??= FlutterBluePlus.isScanning.listen((on) {
+      if (!on && enabled) {
+        Future.delayed(const Duration(milliseconds: 800), _ensureScan);
+      }
+      notifyListeners();
+    });
+    _timer ??= Timer.periodic(const Duration(seconds: 8), (_) => _ensureScan());
     await _ensureScan();
   }
 
@@ -79,6 +105,8 @@ class ScaleController extends ChangeNotifier {
       _timer = null;
       await _sub?.cancel();
       _sub = null;
+      await _scanSub?.cancel();
+      _scanSub = null;
       scanning = false;
     }
     notifyListeners();
@@ -91,11 +119,14 @@ class ScaleController extends ChangeNotifier {
     try {
       await FlutterBluePlus.startScan(
           timeout: const Duration(seconds: 24), continuousUpdates: true);
+      scanStarts++;
+      lastScanError = null;
       if (!scanning) {
         scanning = true;
         notifyListeners();
       }
     } catch (e) {
+      lastScanError = '$e';
       _addLog('сканирование не запущено: $e');
     }
   }
@@ -104,9 +135,12 @@ class ScaleController extends ChangeNotifier {
   Timer? _pendingTimer;
 
   Future<void> _onResults(List<ScanResult> list) async {
+    resultsSeen = list.length;
     for (final r in list) {
       final data = r.advertisementData.serviceData[_uScale2];
       if (data == null) continue;
+      scalePackets++;
+      lastPacketSeen = DateTime.now();
       final reading = parseMiScale2(data);
       if (reading == null) {
         _addLog('пакет 0x181B не распознан (${data.length} байт)');
@@ -212,6 +246,7 @@ class ScaleController extends ChangeNotifier {
     _pendingTimer?.cancel();
     _timer?.cancel();
     _sub?.cancel();
+    _scanSub?.cancel();
     super.dispose();
   }
 }

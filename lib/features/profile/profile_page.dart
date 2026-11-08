@@ -577,6 +577,11 @@ class ProfilePage extends ConsumerWidget {
                   padding: EdgeInsets.only(top: s(6)),
                   child: Text(scale.log.first, style: t(19, c: muted)),
                 ),
+              if (scale.enabled)
+                Padding(
+                  padding: EdgeInsets.only(top: s(6)),
+                  child: Text(scale.diagnostics, style: t(19, c: muted)),
+                ),
             ]),
           ),
         ]),
