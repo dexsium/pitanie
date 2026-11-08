@@ -63,7 +63,7 @@ void main() {
             expect(tester.takeException(), isNull);
             expect(find.text('Сегодня'), findsNothing);
             expect(find.textContaining('Точек: '), findsOneWidget);
-            expect(find.textContaining('Источник: Amazfit'), findsOneWidget);
+            expect(find.textContaining('Источник: Умные часы'), findsOneWidget);
           }
           await tester.drag(find.byType(ListView), const Offset(0, -3000));
           await tester.pump(const Duration(milliseconds: 400));
