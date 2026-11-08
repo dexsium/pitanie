@@ -15,6 +15,9 @@ const _mockWidth = 851.0;
 const _purple = Color(0xFF6F2BD8);
 const _orange = Color(0xFFFF8A1F);
 
+/// Сколько продуктов можно показать, чтобы закрыть весь остаток (при большом остатке одного мало).
+const _maxItems = 5;
+
 class CoachCard extends ConsumerStatefulWidget {
   final DayData d;
   const CoachCard(this.d, {super.key});
@@ -28,23 +31,24 @@ class _CoachCardState extends ConsumerState<CoachCard> {
   Future<List<FoodSuggestion>>? _future;
   List<FoodSuggestion> _shown = const [];
 
-  /// Названия уже показанных продуктов: кнопка «Подобрать другие продукты» их исключает.
+  /// Уже показанные порции («продукт|граммы»): кнопка «Подобрать другие продукты» их исключает,
+  /// тот же продукт в другой порции показать можно.
   final Set<String> _exclude = {};
 
   void _load(Nutrients r, GoalValues goal) {
-    _future = suggestionsFor(ref.read(dbProvider), r, goal, exclude: _exclude);
+    _future = suggestionsFor(ref.read(dbProvider), r, goal, skip: _exclude, max: _maxItems);
   }
 
   /// Следующая подборка; если других продуктов нет, круг начинается заново.
   void _next(Nutrients r, GoalValues goal) {
     for (final x in _shown) {
-      _exclude.add(x.food.name);
+      _exclude.add(x.key);
     }
     final db = ref.read(dbProvider);
-    _future = suggestionsFor(db, r, goal, exclude: _exclude).then((v) {
+    _future = suggestionsFor(db, r, goal, skip: _exclude, max: _maxItems).then((v) {
       if (v.isNotEmpty) return v;
       _exclude.clear();
-      return suggestionsFor(db, r, goal);
+      return suggestionsFor(db, r, goal, max: _maxItems);
     });
   }
 

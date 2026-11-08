@@ -101,6 +101,10 @@ class FoodCandidate {
   }
 }
 
+/// Ключ «продукт + порция»: по нему «другой набор» исключает уже показанные порции,
+/// но тот же продукт в другой порции показать можно.
+String suggestionKey(String name, double amount) => '$name|${amount.round()}';
+
 class FoodSuggestion {
   final FoodCandidate food;
   final double amount;
@@ -116,6 +120,8 @@ class FoodSuggestion {
   }
 
   String get label => '${food.name} — $quantity';
+
+  String get key => suggestionKey(food.name, amount);
 }
 
 double _err(Nutrients r, List<double> s) {
@@ -137,7 +143,7 @@ double _err(Nutrients r, List<double> s) {
 /// Калории не превышаются больше чем на 10 % от остатка. Если подходящего нет, список пуст.
 List<FoodSuggestion> suggestFoods(
     Nutrients remaining, GoalValues goal, List<FoodCandidate> pool,
-    {int max = 3}) {
+    {int max = 3, Set<String> skip = const {}}) {
   double sc(double v) => v > 0 ? v : 1;
   final s = [
     sc(goal.calories),
@@ -156,6 +162,7 @@ List<FoodSuggestion> suggestFoods(
     for (final f in pool) {
       if (used.contains(f.name)) continue;
       for (final (amount, pieces) in f.options()) {
+        if (skip.contains(suggestionKey(f.name, amount))) continue;
         final d = f.per100 * (amount / 100);
         if (d.calories < 20) continue;
         if (d.calories > r.calories * 1.1 + 20) continue;

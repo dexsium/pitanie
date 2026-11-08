@@ -33,6 +33,29 @@ void main() {
       await db.close();
     });
 
+    test('сошёл раньше времени: повторы пакета не держат измерение, следующее взвешивание проходит',
+        () async {
+      final t0 = DateTime(2026, 11, 8, 12);
+      await c.onReading(reading(69.2, stamp: 'a'), now: t0);
+      expect(c.phase, ScalePhase.measuring);
+      // Весы повторяют один и тот же пакет, ничего не меняется.
+      for (var s = 5; s <= 30; s += 5) {
+        await c.onReading(reading(69.2, stamp: 'a'), now: t0.add(Duration(seconds: s)));
+      }
+      c.checkStale(now: t0.add(const Duration(seconds: 30)));
+      expect(c.phase, ScalePhase.idle);
+      // Тот же повтор после прерывания измерение не запускает.
+      await c.onReading(reading(69.2, stamp: 'a'), now: t0.add(const Duration(seconds: 35)));
+      expect(c.phase, ScalePhase.idle);
+      // Новое взвешивание (другая метка) проходит до сохранения.
+      await c.onReading(reading(70.0, stamp: 'b'), now: t0.add(const Duration(seconds: 60)));
+      expect(c.phase, ScalePhase.measuring);
+      await c.onReading(reading(70.1, stable: true, imp: 480, stamp: 'b'),
+          now: t0.add(const Duration(seconds: 65)));
+      expect(c.phase, ScalePhase.done);
+      expect((await db.allWeights()).length, 1);
+    });
+
     test('вес без стабилизации — идёт измерение, пока ничего не сохранено', () async {
       await c.onReading(reading(69.2));
       expect(c.phase, ScalePhase.measuring);

@@ -122,4 +122,20 @@ void main() {
       expect(s.quantity, '45 г');
     });
   });
+
+  test('большой остаток: набор и «другой набор» закрывают его почти целиком', () {
+    const r = Nutrients(1058, 73, 10, 189);
+    double kcal(List<FoodSuggestion> l) => l.fold(0.0, (a, x) => a + x.total.calories);
+    final first = suggestFoods(r, goal, builtinFoods, max: 5);
+    expect(kcal(first), greaterThan(r.calories * 0.7));
+    final shown = {for (final x in first) x.key};
+    final other = suggestFoods(r, goal, builtinFoods, max: 5, skip: shown);
+    // Те же порции не повторяются, а тот же продукт в другой порции возможен.
+    expect(other.where((x) => shown.contains(x.key)), isEmpty);
+    // Для справки: сколько закрывает второй набор, когда первые продукты исключены.
+    // ignore: avoid_print
+    print('первый ${kcal(first).round()} ккал (${first.length} шт.), '
+        'второй ${kcal(other).round()} ккал (${other.length} шт.)');
+    expect(kcal(other), greaterThan(r.calories * 0.5));
+  });
 }

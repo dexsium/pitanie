@@ -39,6 +39,16 @@ class ScaleController extends ChangeNotifier {
   DateTime? _lastPacketAt;
   Timer? _watchdog;
 
+  /// Подпись последнего пакета (метка, вес, флаги) и время, когда она последний раз менялась.
+  /// Весы после того, как человек сошёл, могут долго повторять один и тот же пакет: такие
+  /// повторы не считаются признаком идущего измерения.
+  String? _lastSig;
+  DateTime? _lastResultAt;
+  DateTime? _lastChangeAt;
+
+  /// Подпись прерванного измерения: пакеты с ней не запускают новое измерение.
+  String? _abortedSig;
+
   bool _loaded = false;
   StreamSubscription<List<ScanResult>>? _sub;
   StreamSubscription<bool>? _scanSub;
@@ -139,6 +149,11 @@ class ScaleController extends ChangeNotifier {
     for (final r in list) {
       final data = r.advertisementData.serviceData[_uScale2];
       if (data == null) continue;
+      // Поток отдаёт весь список при каждом пакете любого устройства, и данные весов в нём
+      // повторяются, хотя новых пакетов нет. Обрабатываем только свежие.
+      final prev = _lastResultAt;
+      if (prev != null && !r.timeStamp.isAfter(prev)) continue;
+      _lastResultAt = r.timeStamp;
       scalePackets++;
       lastPacketSeen = DateTime.now();
       final reading = parseMiScale2(data);
@@ -165,6 +180,15 @@ class ScaleController extends ChangeNotifier {
   Future<void> onReading(MiScaleReading reading, {DateTime? now}) async {
     final t = now ?? DateTime.now();
     _lastPacketAt = t;
+    final sig = '${reading.stamp}|${reading.weightKg}|${reading.stabilized}|'
+        '${reading.loadRemoved}|${reading.impedance}';
+    if (sig != _lastSig) {
+      _lastSig = sig;
+      _lastChangeAt = t;
+    }
+    // Повтор пакета прерванного измерения (человек сошёл, весы повторяют последний пакет).
+    if (sig == _abortedSig && phase == ScalePhase.idle) return;
+    if (sig != _abortedSig) _abortedSig = null;
     // Пакет уже сохранённого взвешивания или «нагрузка снята»: человек сошёл с весов.
     if (reading.stamp == lastStamp || reading.loadRemoved) {
       if (phase == ScalePhase.measuring) {
@@ -211,10 +235,18 @@ class ScaleController extends ChangeNotifier {
   void checkStale({DateTime? now}) {
     final t = now ?? DateTime.now();
     final last = _lastPacketAt;
-    if (phase == ScalePhase.measuring && last != null && t.difference(last).inSeconds > 25) {
+    final changed = _lastChangeAt;
+    if (phase != ScalePhase.measuring) return;
+    // Пакетов нет вообще или приходит один и тот же пакет без изменений: измерение не идёт.
+    final silent = last != null && t.difference(last).inSeconds > 25;
+    final frozen = changed != null && _pending == null && t.difference(changed).inSeconds > 20;
+    if (silent || frozen) {
       _pending = null;
       _pendingTimer?.cancel();
-      _addLog('измерение прервано: весы перестали передавать данные');
+      _abortedSig = frozen ? _lastSig : null;
+      _addLog(silent
+          ? 'измерение прервано: весы перестали передавать данные'
+          : 'измерение прервано: вес не меняется, человек сошёл');
       _setPhase(ScalePhase.idle);
     }
   }
