@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../core/dates.dart';
 import '../../core/nutrition.dart';
+import '../ai/ai_advice.dart';
 import '../dashboard/day_data.dart';
 import 'goal_coach.dart';
 import 'goal_service.dart';
@@ -287,6 +288,7 @@ class _CoachCardState extends ConsumerState<CoachCard> {
                     ),
                   ),
                 ),
+                AiAdvice(key: ValueKey(sig), d: d, remaining: r, accent: accent),
               ]),
             ),
           ]),

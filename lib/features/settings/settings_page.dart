@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../app/app.dart';
 import '../../app/providers.dart';
+import '../ai/ai_settings_card.dart';
 import '../../core/dates.dart';
 import '../../core/nutrition/nutrition_calculation_models.dart';
 import '../../services/health/plan_service.dart';
@@ -60,6 +61,8 @@ class SettingsPage extends ConsumerWidget {
             ),
           ]),
         ),
+        const SizedBox(height: 14),
+        const AiSettingsCard(),
         const SizedBox(height: 14),
         AppCard(
           child:

@@ -163,7 +163,9 @@ def patch_plist():
 	<key>NSHealthUpdateUsageDescription</key>
 	<string>Запись в Apple Health приложением не выполняется.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Камера нужна для сканирования штрихкодов продуктов.</string>
+	<string>Камера нужна для сканирования штрихкодов и для фото еды (распознавание умным помощником).</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Доступ к фото нужен, чтобы выбрать снимок еды для распознавания.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Питание</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
