@@ -18,8 +18,8 @@ const kAiEnabledKey = 'ai_enabled';
 const kAiModelKey = 'ai_model';
 const kAiKeyStorage = 'gemini_api_key';
 
-/// Псевдоним «последней быстрой модели» Gemini: не устаревает вместе с версиями.
-const kDefaultAiModel = 'gemini-flash-latest';
+/// Стабильная быстрая модель Gemini (по документации Google на ноябрь 2026).
+const kDefaultAiModel = 'gemini-3.6-flash';
 
 const _storage = FlutterSecureStorage();
 
@@ -45,6 +45,11 @@ class AiException implements Exception {
   const AiException(this.message);
   @override
   String toString() => message;
+}
+
+/// Google не принял формат схемы ответа: пробуем прежний формат.
+class AiBadSchema extends AiException {
+  const AiBadSchema() : super('Формат схемы ответа не принят.');
 }
 
 /// Временный сбой на стороне Google (перегрузка, лимит): можно повторить или сменить модель.
@@ -144,7 +149,7 @@ class GeminiClient {
   static const _host = 'generativelanguage.googleapis.com';
 
   /// Запасные модели на случай перегрузки основной.
-  static const _fallbackModels = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+  static const _fallbackModels = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
 
   Future<String> _generate(List<Map<String, Object?>> parts, Map<String, Object?> schema) async {
     final models = [model, for (final m in _fallbackModels) if (m != model) m];
@@ -152,7 +157,12 @@ class GeminiClient {
     for (final m in models) {
       for (var attempt = 0; attempt < 2; attempt++) {
         try {
-          return await _generateWith(m, parts, schema);
+          try {
+            return await _generateWith(m, parts, schema, jsonSchema: true);
+          } on AiBadSchema {
+            // Запасной вариант: прежний формат схемы (responseSchema, типы заглавными).
+            return await _generateWith(m, parts, schema, jsonSchema: false);
+          }
         } on AiTransient catch (e) {
           last = e;
           if (attempt == 0) await Future<void>.delayed(const Duration(seconds: 2));
@@ -162,8 +172,22 @@ class GeminiClient {
     throw last ?? const AiException('Не удалось получить ответ ИИ.');
   }
 
+  static Object? _lowerTypes(Object? v) {
+    if (v is Map) {
+      return {
+        for (final e in v.entries)
+          e.key: e.key == 'type' && e.value is String
+              ? (e.value as String).toLowerCase()
+              : _lowerTypes(e.value)
+      };
+    }
+    if (v is List) return [for (final x in v) _lowerTypes(x)];
+    return v;
+  }
+
   Future<String> _generateWith(
-      String model, List<Map<String, Object?>> parts, Map<String, Object?> schema) async {
+      String model, List<Map<String, Object?>> parts, Map<String, Object?> schema,
+      {required bool jsonSchema}) async {
     // На iOS идём через системную сетевую библиотеку (как Safari): она учитывает VPN и прокси
     // телефона, а встроенный сетевой код Dart их не видит.
     final http.Client client =
@@ -184,7 +208,10 @@ class GeminiClient {
               'generationConfig': {
                 'temperature': 0.3,
                 'responseMimeType': 'application/json',
-                'responseSchema': schema,
+                if (jsonSchema)
+                  'responseJsonSchema': _lowerTypes(schema)
+                else
+                  'responseSchema': schema,
               },
             })),
           )
@@ -194,6 +221,9 @@ class GeminiClient {
       if (res.statusCode != 200) {
         final msg = _httpError(res.statusCode, body);
         final c = res.statusCode;
+        if (c == 400 && jsonSchema && RegExp(r'schema|unknown name|invalid json payload', caseSensitive: false).hasMatch(body)) {
+          throw const AiBadSchema();
+        }
         throw (c == 404 || c == 429 || c >= 500) ? AiTransient(msg) : AiException(msg);
       }
       final j = jsonDecode(body) as Map<String, dynamic>;

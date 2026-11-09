@@ -7,7 +7,7 @@ import '../../app/providers.dart';
 import '../../shared/widgets.dart';
 import 'gemini_service.dart';
 
-const _keysUrl = 'https://aistudio.google.com/apikey';
+const _keysUrl = 'https://aistudio.google.com/api-keys';
 
 /// Подсказка для тех, у кого ИИ ещё не настроен.
 Future<void> showAiNotConfigured(BuildContext context) => showDialog(
@@ -16,7 +16,7 @@ Future<void> showAiNotConfigured(BuildContext context) => showDialog(
         title: const Text('ИИ не настроен'),
         content: const Text(
             'Откройте Настройки → Умный помощник, вставьте свой ключ Gemini API и включите '
-            'выключатель. Ключ можно получить бесплатно на aistudio.google.com/apikey.'),
+            'выключатель. Ключ можно получить бесплатно на aistudio.google.com/api-keys.'),
         actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Понятно'))],
       ),
     );
@@ -126,7 +126,7 @@ class _AiSettingsCardState extends ConsumerState<AiSettingsCard> {
         const SizedBox(height: 10),
         Text(
             'Распознаёт еду по фото и советует, чем добрать норму. Нужен ваш бесплатный ключ '
-            'Google Gemini API: получите его на aistudio.google.com/apikey. '
+            'Google Gemini API: получите его на aistudio.google.com/api-keys. '
             'Ключ хранится только на этом устройстве.',
             style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
         TextButton.icon(
