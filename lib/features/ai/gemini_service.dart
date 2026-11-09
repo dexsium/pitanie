@@ -7,7 +7,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:cupertino_http/cupertino_http.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
 
 import '../../core/nutrition.dart';
 import '../../database/database.dart';
@@ -137,26 +139,33 @@ class GeminiClient {
   static const _host = 'generativelanguage.googleapis.com';
 
   Future<String> _generate(List<Map<String, Object?>> parts, Map<String, Object?> schema) async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
+    // На iOS идём через системную сетевую библиотеку (как Safari): она учитывает VPN и прокси
+    // телефона, а встроенный сетевой код Dart их не видит.
+    final http.Client client =
+        Platform.isIOS || Platform.isMacOS ? CupertinoClient.defaultSessionConfiguration() : http.Client();
+    var stage = 'подключение и ожидание ответа';
     try {
-      final req = await client
-          .postUrl(Uri.https(_host, '/v1beta/models/$model:generateContent'))
-          .timeout(const Duration(seconds: 15));
-      req.headers
-        ..set('Content-Type', 'application/json; charset=utf-8')
-        ..set('x-goog-api-key', apiKey);
-      req.add(utf8.encode(jsonEncode({
-        'contents': [
-          {'role': 'user', 'parts': parts}
-        ],
-        'generationConfig': {
-          'temperature': 0.3,
-          'responseMimeType': 'application/json',
-          'responseSchema': schema,
-        },
-      })));
-      final res = await req.close().timeout(const Duration(seconds: 60));
-      final body = await res.transform(utf8.decoder).join();
+      final res = await client
+          .post(
+            Uri.https(_host, '/v1beta/models/$model:generateContent'),
+            headers: {
+              'Content-Type': 'application/json; charset=utf-8',
+              'x-goog-api-key': apiKey,
+            },
+            body: utf8.encode(jsonEncode({
+              'contents': [
+                {'role': 'user', 'parts': parts}
+              ],
+              'generationConfig': {
+                'temperature': 0.3,
+                'responseMimeType': 'application/json',
+                'responseSchema': schema,
+              },
+            })),
+          )
+          .timeout(const Duration(seconds: 90));
+      stage = 'разбор ответа';
+      final body = utf8.decode(res.bodyBytes);
       if (res.statusCode != 200) throw AiException(_httpError(res.statusCode, body));
       final j = jsonDecode(body) as Map<String, dynamic>;
       final block = (j['promptFeedback'] as Map?)?['blockReason'];
@@ -178,15 +187,20 @@ class GeminiClient {
     } on AiException {
       rethrow;
     } on TimeoutException {
-      throw const AiException('Нет ответа от Google. Проверьте интернет и повторите.');
-    } on SocketException {
-      throw const AiException('Нет соединения с интернетом.');
+      throw AiException('Нет ответа от Google (этап: $stage, ждали дольше положенного). '
+          'Проверьте, что VPN включён на этом телефоне и пропускает это приложение.');
+    } on SocketException catch (e) {
+      throw AiException('Нет соединения с Google (этап: $stage): ${e.message}. '
+          'Проверьте интернет и VPN на этом телефоне.');
+    } on http.ClientException catch (e) {
+      final m = e.message.length > 160 ? e.message.substring(0, 160) : e.message;
+      throw AiException('Нет соединения с Google: $m');
     } on HandshakeException {
-      throw const AiException('Не удалось установить защищённое соединение.');
-    } catch (_) {
-      throw const AiException('Не удалось получить ответ ИИ. Попробуйте ещё раз.');
+      throw const AiException('Не удалось установить защищённое соединение с Google (возможно, мешает VPN).');
+    } catch (e) {
+      throw AiException('Не удалось получить ответ ИИ (этап: $stage): ${e.runtimeType}.');
     } finally {
-      client.close(force: true);
+      client.close();
     }
   }
 

@@ -1,7 +1,7 @@
 name: pitanie
 description: Дневник питания, воды и физической активности
 publish_to: none
-version: 1.20.1+1
+version: 1.20.2+1
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -38,6 +38,8 @@ dependencies:
   pointycastle: ^4.0.0
   package_info_plus: ^10.2.2
   image_picker: ^1.1.2
+  http: ^1.6.0
+  cupertino_http: ^3.1.1
 
 dev_dependencies:
   flutter_test:
