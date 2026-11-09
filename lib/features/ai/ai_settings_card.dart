@@ -107,16 +107,17 @@ class _AiSettingsCardState extends ConsumerState<AiSettingsCard> {
           ),
         ),
         const SizedBox(height: 8),
-        Row(children: [
-          FilledButton(
-            onPressed: _busy ? null : _saveAndCheck,
-            child: _busy
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Проверить и сохранить'),
+        FilledButton(
+          onPressed: _busy ? null : _saveAndCheck,
+          child: _busy
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Проверить и сохранить'),
+        ),
+        if (_hasKey)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(onPressed: _removeKey, child: const Text('Удалить ключ')),
           ),
-          const SizedBox(width: 8),
-          if (_hasKey) TextButton(onPressed: _removeKey, child: const Text('Удалить ключ')),
-        ]),
         if (_status != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
