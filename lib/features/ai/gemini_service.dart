@@ -47,6 +47,11 @@ class AiException implements Exception {
   String toString() => message;
 }
 
+/// Временный сбой на стороне Google (перегрузка, лимит): можно повторить или сменить модель.
+class AiTransient extends AiException {
+  const AiTransient(super.message);
+}
+
 /// Позиция еды: значения указаны на всю порцию [grams], а не на 100 г.
 class AiFoodItem {
   final String name;
@@ -138,7 +143,27 @@ class GeminiClient {
 
   static const _host = 'generativelanguage.googleapis.com';
 
+  /// Запасные модели на случай перегрузки основной.
+  static const _fallbackModels = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+
   Future<String> _generate(List<Map<String, Object?>> parts, Map<String, Object?> schema) async {
+    final models = [model, for (final m in _fallbackModels) if (m != model) m];
+    AiException? last;
+    for (final m in models) {
+      for (var attempt = 0; attempt < 2; attempt++) {
+        try {
+          return await _generateWith(m, parts, schema);
+        } on AiTransient catch (e) {
+          last = e;
+          if (attempt == 0) await Future<void>.delayed(const Duration(seconds: 2));
+        }
+      }
+    }
+    throw last ?? const AiException('Не удалось получить ответ ИИ.');
+  }
+
+  Future<String> _generateWith(
+      String model, List<Map<String, Object?>> parts, Map<String, Object?> schema) async {
     // На iOS идём через системную сетевую библиотеку (как Safari): она учитывает VPN и прокси
     // телефона, а встроенный сетевой код Dart их не видит.
     final http.Client client =
@@ -166,7 +191,11 @@ class GeminiClient {
           .timeout(const Duration(seconds: 90));
       stage = 'разбор ответа';
       final body = utf8.decode(res.bodyBytes);
-      if (res.statusCode != 200) throw AiException(_httpError(res.statusCode, body));
+      if (res.statusCode != 200) {
+        final msg = _httpError(res.statusCode, body);
+        final c = res.statusCode;
+        throw (c == 404 || c == 429 || c >= 500) ? AiTransient(msg) : AiException(msg);
+      }
       final j = jsonDecode(body) as Map<String, dynamic>;
       final block = (j['promptFeedback'] as Map?)?['blockReason'];
       if (block != null) {
@@ -222,7 +251,11 @@ class GeminiClient {
     if (code == 429) {
       return 'Исчерпан бесплатный лимит запросов. Подождите минуту или до завтра.';
     }
-    if (code >= 500) return 'Сервис Google временно недоступен. Повторите позже.';
+    if (code >= 500) {
+      return 'Сервис Google временно недоступен ($code'
+          '${detail.isEmpty ? '' : ': ${detail.length > 140 ? detail.substring(0, 140) : detail}'}). '
+          'Приложение уже пробовало запасные модели; повторите через минуту.';
+    }
     return 'Ошибка Google ($code). Повторите позже.';
   }
 
