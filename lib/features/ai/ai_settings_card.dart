@@ -90,7 +90,39 @@ class _AiSettingsCardState extends ConsumerState<AiSettingsCard> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Text('Умный помощник (Gemini)',
             style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _key,
+          obscureText: !_show,
+          enableSuggestions: false,
+          autocorrect: false,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _busy ? null : _saveAndCheck(),
+          decoration: InputDecoration(
+            labelText: _hasKey ? 'Заменить ключ' : 'Ключ Gemini API',
+            suffixIcon: IconButton(
+              icon: Icon(_show ? Icons.visibility_off : Icons.visibility),
+              onPressed: () => setState(() => _show = !_show),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(children: [
+          FilledButton(
+            onPressed: _busy ? null : _saveAndCheck,
+            child: _busy
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Проверить и сохранить'),
+          ),
+          const SizedBox(width: 8),
+          if (_hasKey) TextButton(onPressed: _removeKey, child: const Text('Удалить ключ')),
+        ]),
+        if (_status != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(_status!, style: const TextStyle(fontSize: 13)),
+          ),
+        const SizedBox(height: 10),
         Text(
             'Распознаёт еду по фото и советует, чем добрать норму. Нужен ваш бесплатный ключ '
             'Google Gemini API: получите его на aistudio.google.com/apikey. '
@@ -117,35 +149,6 @@ class _AiSettingsCardState extends ConsumerState<AiSettingsCard> {
             title: const Text('Использовать помощника'),
             value: on,
             onChanged: (v) => db.setSetting(kAiEnabledKey, v ? '1' : '0'),
-          ),
-        TextField(
-          controller: _key,
-          obscureText: !_show,
-          enableSuggestions: false,
-          autocorrect: false,
-          decoration: InputDecoration(
-            labelText: _hasKey ? 'Заменить ключ' : 'Ключ Gemini API',
-            suffixIcon: IconButton(
-              icon: Icon(_show ? Icons.visibility_off : Icons.visibility),
-              onPressed: () => setState(() => _show = !_show),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(children: [
-          FilledButton(
-            onPressed: _busy ? null : _saveAndCheck,
-            child: _busy
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Проверить и сохранить'),
-          ),
-          const SizedBox(width: 8),
-          if (_hasKey) TextButton(onPressed: _removeKey, child: const Text('Удалить ключ')),
-        ]),
-        if (_status != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(_status!, style: const TextStyle(fontSize: 13)),
           ),
       ]),
     );

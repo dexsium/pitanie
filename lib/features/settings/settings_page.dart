@@ -43,7 +43,7 @@ class SettingsPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Настройки')),
-      body: ListView(padding: const EdgeInsets.all(16), children: [
+      body: ListView(keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag, padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.viewInsetsOf(context).bottom), children: [
         AppCard(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
