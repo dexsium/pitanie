@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
@@ -581,6 +582,25 @@ class ProfilePage extends ConsumerWidget {
                 Padding(
                   padding: EdgeInsets.only(top: s(6)),
                   child: Text(scale.diagnostics, style: t(19, c: muted)),
+                ),
+              if (scale.enabled)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      final text = [
+                        scale.diagnostics,
+                        ...scale.log.reversed,
+                      ].join('\n');
+                      await Clipboard.setData(ClipboardData(text: text));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('Диагностика весов скопирована')));
+                      }
+                    },
+                    icon: const Icon(Icons.copy, size: 18),
+                    label: const Text('Скопировать диагностику'),
+                  ),
                 ),
             ]),
           ),

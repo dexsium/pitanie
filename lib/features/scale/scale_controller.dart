@@ -74,7 +74,7 @@ class ScaleController extends ChangeNotifier {
   void _addLog(String s) {
     final t = DateTime.now();
     log.insert(0, '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')} $s');
-    if (log.length > 40) log.removeLast();
+    if (log.length > 150) log.removeLast();
   }
 
   Future<void> start() async {
@@ -185,6 +185,17 @@ class ScaleController extends ChangeNotifier {
     if (sig != _lastSig) {
       _lastSig = sig;
       _lastChangeAt = t;
+      final why = sig == _abortedSig && phase == ScalePhase.idle
+          ? 'повтор прерванного'
+          : reading.stamp == lastStamp
+              ? 'метка уже сохранена'
+              : reading.loadRemoved
+                  ? 'нагрузка снята'
+                  : 'принят';
+      _addLog('пакет: ${reading.weightKg} кг'
+          '${reading.stabilized ? ', стабилен' : ''}'
+          '${reading.impedance != null ? ', имп. ${reading.impedance}' : ''}'
+          ', метка ${reading.stamp}, фаза ${phase.name} → $why');
     }
     // Повтор пакета прерванного измерения (человек сошёл, весы повторяют последний пакет).
     if (sig == _abortedSig && phase == ScalePhase.idle) return;
