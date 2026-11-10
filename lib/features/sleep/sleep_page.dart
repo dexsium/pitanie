@@ -73,16 +73,15 @@ class _SleepPageState extends ConsumerState<SleepPage> {
   Future<_SleepData> _load() async {
     final db = ref.read(dbProvider);
     const six = Duration(hours: 6);
-    final recs = await db.sleepRecordsBetween(
-        dayStart(_day).subtract(six), dayEnd(_day).subtract(six),
-        source: kBleSource);
+    final recs = singleSource(await db.sleepRecordsBetween(
+        dayStart(_day).subtract(six), dayEnd(_day).subtract(six)));
     final sleepDay = analyzeSleepDay(recs, _day);
 
     final days = _range == 0 ? 7 : (_range == 1 ? 30 : 365);
     final first = dayStart(_day).subtract(Duration(days: days - 1));
-    final srecs = await db.sleepRecordsBetween(
+    final srecs = singleSource(await db.sleepRecordsBetween(
         first.subtract(six), dayEnd(_day).subtract(six),
-        source: kBleSource, stages: false);
+        stages: false));
     final byDay = nightMinutesByDay(srecs);
     final bars = <_Bar>[];
     if (_range == 2) {

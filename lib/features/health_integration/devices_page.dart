@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../core/dates.dart';
-import '../dashboard/day_data.dart' show kMainSourceKey, kBleSource;
 import '../../shared/widgets.dart';
 import 'health_service.dart';
 
@@ -91,11 +90,13 @@ class DevicesPage extends ConsumerWidget {
             _row('Последняя синхронизация',
                 src?.lastSync == null ? '—' : '${shortDate(src!.lastSync!)} ${fmtTime(src.lastSync!)}'),
             const SizedBox(height: 12),
-            FilledButton.icon(
-                onPressed: busy ? null : connect,
-                icon: const Icon(Icons.link),
-                label: Text(src == null ? 'Подключить' : 'Подключить заново')),
-            const SizedBox(height: 8),
+            if (src == null) ...[
+              FilledButton.icon(
+                  onPressed: busy ? null : connect,
+                  icon: const Icon(Icons.link),
+                  label: const Text('Подключить')),
+              const SizedBox(height: 8),
+            ],
             Row(children: [
               Expanded(
                 child: OutlinedButton.icon(
@@ -133,22 +134,6 @@ class DevicesPage extends ConsumerWidget {
                   child: const Text('Настроить разрешения'),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(foregroundColor: kRed),
-                  onPressed: src == null
-                      ? null
-                      : () async {
-                          if (await confirmDialog(context, 'Отключить источник?',
-                              'Ранее полученные данные останутся в приложении.',
-                              ok: 'Отключить')) {
-                            await svc.disconnect();
-                          }
-                        },
-                  child: const Text('Отключить'),
-                ),
-              ),
             ]),
           ]),
         ),
@@ -163,8 +148,6 @@ class DevicesPage extends ConsumerWidget {
             style: TextStyle(color: cs.onSurfaceVariant),
           ),
         ),
-        const SizedBox(height: 12),
-        _MainSourceCard(report),
         const SizedBox(height: 12),
         if (report != null) _Diagnostics(report),
       ]),
@@ -234,47 +217,3 @@ class _Diagnostics extends StatelessWidget {
 
 /// Выбор основного источника данных: когда подключены двое часов, нужно решить, чьи данные
 /// показывать за день (без суммирования и дублей).
-class _MainSourceCard extends ConsumerWidget {
-  final Map<String, dynamic>? report;
-  const _MainSourceCard(this.report);
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final settings = ref.watch(settingsProvider).valueOrNull ?? const {};
-    final current = settings[kMainSourceKey] ?? 'ble';
-    final found = (report?['sources'] as Map?)?.cast<String, dynamic>() ?? {};
-    final options = <String, String>{
-      'ble': 'Умные часы (Bluetooth)',
-      'auto': 'Автоматически (источник с большим объёмом за день)',
-      for (final e in found.entries)
-        if (e.key != kBleSource) e.key: '${e.value}',
-    };
-    final value = options.containsKey(current) ? current : 'ble';
-    final cs = Theme.of(context).colorScheme;
-    return AppCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Какие часы сейчас используются',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 4),
-        Text(
-            'Часы подключаются по одним: выберите те, которыми пользуетесь сейчас (например, '
-            'Amazfit или Huawei Watch Fit 4). Данные берутся из выбранного источника, суммы '
-            'разных часов не складываются. Источники из Apple Health появляются после синхронизации.',
-            style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
-        const SizedBox(height: 8),
-        for (final o in options.entries)
-          RadioListTile<String>(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: Text(o.value),
-            value: o.key,
-            groupValue: value,
-            onChanged: (v) async {
-              if (v == null) return;
-              await ref.read(dbProvider).setSetting(kMainSourceKey, v);
-            },
-          ),
-      ]),
-    );
-  }
-}

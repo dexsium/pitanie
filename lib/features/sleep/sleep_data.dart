@@ -1,4 +1,4 @@
-// Разбор сна по минутным записям часов (Bluetooth). Всё считается из данных часов;
+// Разбор сна по записям из Здоровья (Apple Health / Health Connect) и прежним минутным записям. Всё считается из данных часов;
 // фазы сна — приблизительная оценка (правила Gadgetbridge), а не точное измерение.
 import '../../core/dates.dart';
 import '../../database/database.dart';
@@ -45,20 +45,30 @@ const _minSessionMin = 20;
 int _minute(DateTime t) => t.millisecondsSinceEpoch ~/ 60000;
 DateTime _fromMinute(int m) => DateTime.fromMillisecondsSinceEpoch(m * 60000);
 
+/// Минуты записи: минутная запись даёт одну минуту, запись из Здоровья — весь свой интервал.
+Iterable<int> _recordMinutes(ActivityRecord r) {
+  final a = _minute(r.startTime);
+  var b = _minute(r.endTime);
+  if (b <= a) b = a + 1;
+  if (b - a > 1440) b = a + 1440;
+  return [for (var m = a; m < b; m++) m];
+}
+
 List<SleepSession> sleepSessions(List<ActivityRecord> recs) {
   final sleepMin = <int>{};
   final stage = <int, SleepKind>{};
   for (final r in recs) {
-    final m = _minute(r.startTime);
-    switch (r.type) {
-      case 'sleep':
-        sleepMin.add(m);
-      case 'sleepDeep':
-        stage[m] = SleepKind.deep;
-      case 'sleepRem':
-        stage[m] = SleepKind.rem;
-      case 'sleepLight':
-        stage[m] = SleepKind.light;
+    final kind = switch (r.type) {
+      'sleepDeep' => SleepKind.deep,
+      'sleepRem' => SleepKind.rem,
+      'sleepLight' => SleepKind.light,
+      _ => null,
+    };
+    if (r.type != 'sleep' && kind == null) continue;
+    for (final m in _recordMinutes(r)) {
+      // Минуты фаз тоже считаются сном: источник мог записать только фазы.
+      sleepMin.add(m);
+      if (kind != null) stage[m] = kind;
     }
   }
   final ms = sleepMin.toList()..sort();

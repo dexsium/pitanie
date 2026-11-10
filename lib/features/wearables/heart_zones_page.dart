@@ -8,7 +8,7 @@ import '../../core/dates.dart';
 import '../../core/nutrition.dart';
 import '../../database/database.dart';
 import '../../shared/widgets.dart';
-import '../dashboard/day_data.dart' show kBleSource;
+import '../dashboard/day_data.dart' show singleSource;
 import 'heart_zones.dart';
 
 const kHrZoneTypeKey = 'hr_zone_type'; // 'max' | 'reserve'
@@ -58,8 +58,7 @@ class _HeartZonesPageState extends ConsumerState<HeartZonesPage> {
     final recs = (await db.activityBetween(today, dayEnd(today)))
         .where((r) => r.type == 'heartRate' && r.value >= 30 && r.value <= 230)
         .toList();
-    final ble = recs.where((r) => r.source == kBleSource).toList();
-    final use = ble.isNotEmpty ? ble : recs;
+    final use = singleSource(recs);
     if (!mounted) return;
     setState(() {
       _restFromData = rest?.value.round();

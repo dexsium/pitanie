@@ -72,7 +72,7 @@ class NotificationService {
         iOS: DarwinNotificationDetails(),
       );
 
-  /// Немедленное уведомление анализа здоровья (канал «Анализ здоровья»).
+  /// Немедленное уведомление (канал «Тренировки»).
   Future<void> showNow(int id, String title, String body,
       {bool urgent = false}) async {
     if (!supported) return;
@@ -82,7 +82,7 @@ class NotificationService {
         title: title,
         body: body,
         notificationDetails: NotificationDetails(
-          android: AndroidNotificationDetails('health', 'Анализ здоровья',
+          android: AndroidNotificationDetails('health', 'Тренировки',
               importance:
                   urgent ? Importance.high : Importance.defaultImportance,
               styleInformation: BigTextStyleInformation(body)),

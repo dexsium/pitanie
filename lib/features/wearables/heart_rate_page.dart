@@ -8,7 +8,7 @@ import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../core/dates.dart';
 import '../../database/database.dart';
-import '../dashboard/day_data.dart' show kBleSource, sourceLabel;
+import '../dashboard/day_data.dart' show kBleSource, sourceLabel, singleSource;
 import 'heart_zones_page.dart';
 import '../health_integration/devices_page.dart';
 
@@ -32,9 +32,8 @@ class _HeartRatePageState extends ConsumerState<HeartRatePage> {
     final db = ref.read(dbProvider);
     final recs = await db.activityBetween(_day, dayEnd(_day));
     final hr = recs.where((r) => r.type == 'heartRate').toList();
-    // Как в остальном приложении: один источник, данные часов приоритетнее.
-    final ble = hr.where((r) => r.source == kBleSource).toList();
-    return ble.isNotEmpty ? ble : hr;
+    // Один источник (с наибольшим числом точек), без суммирования данных разных приложений.
+    return singleSource(hr);
   }
 
   Future<void> _pickDay() async {
@@ -150,7 +149,9 @@ class _HeartRatePageState extends ConsumerState<HeartRatePage> {
                 ? null
                 : sourceLabel(recs.first.source == kBleSource
                     ? kBleSource
-                    : recs.first.sourceName);
+                    : (recs.first.sourceName.isEmpty
+                        ? recs.first.source
+                        : recs.first.sourceName));
 
             return ListView(
                 padding: EdgeInsets.fromLTRB(s(22), s(14), s(22), s(28)),

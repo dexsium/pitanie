@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../../core/activity_aggregator.dart';
 import '../../core/dates.dart';
 import '../../core/nutrition.dart';
@@ -7,16 +9,22 @@ import '../../database/database.dart';
 /// Если за сутки есть его данные, они используются вместо Health (без суммирования).
 const kBleSource = 'amazfit_ble';
 
-/// Настройка «основные часы»: 'ble' (по умолчанию) — часы по Bluetooth, 'auto' — источник с
-/// наибольшим объёмом за день, иначе — идентификатор источника из Apple Health / Health Connect.
 const kMainSourceKey = 'main_source';
 
-/// Предпочитаемый источник для сведения данных; null — выбирать автоматически.
-String? mainSourceOf(Map<String, String> settings) {
-  final v = settings[kMainSourceKey];
-  if (v == null || v.isEmpty || v == 'ble') return kBleSource;
-  if (v == 'auto') return null;
-  return v;
+/// Предпочитаемый источник для сведения данных: всегда автоматический выбор (null),
+/// то есть источник с наибольшим объёмом за день из Apple Health / Health Connect.
+String? mainSourceOf(Map<String, String> settings) => null;
+
+/// Оставляет записи одного источника — того, у которого их больше (минимум дублей и суммирования
+/// данных двух приложений). Если источник один или записей нет, возвращает список как есть.
+List<ActivityRecord> singleSource(List<ActivityRecord> recs) {
+  final count = <String, int>{};
+  for (final r in recs) {
+    count[r.source] = (count[r.source] ?? 0) + 1;
+  }
+  if (count.length < 2) return recs;
+  final best = count.entries.reduce((a, b) => b.value > a.value ? b : a).key;
+  return recs.where((r) => r.source == best).toList();
 }
 
 String sourceLabel(String? s) => s == kBleSource ? 'Умные часы (Bluetooth)' : (s ?? '');
@@ -70,12 +78,15 @@ ActivityDay buildActivityDay(List<ActivityRecord> recs, List<Workout> wk,
     avg = hr.map((e) => e.value).reduce((a, b) => a + b) / hr.length;
     mx = hr.map((e) => e.value).reduce((a, b) => a > b ? a : b);
   }
-  // Фазы сна из данных часов по Bluetooth (приблизительные); окно 18:00 → 18:00.
+  // Фазы сна из Здоровья (если источник их пишет); окно 18:00 → 18:00.
   final wFrom = from.subtract(six), wTo = to.subtract(six);
-  final sleepRecs = recs
-      .where((r) => r.source == kBleSource && !r.startTime.isBefore(wFrom) && r.startTime.isBefore(wTo))
-      .toList();
-  double stageMin(String t) => sleepRecs.where((r) => r.type == t).length.toDouble();
+  final sleepRecs = singleSource(recs
+      .where((r) =>
+          r.type.startsWith('sleep') && !r.startTime.isBefore(wFrom) && r.startTime.isBefore(wTo))
+      .toList());
+  double stageMin(String t) => sleepRecs
+      .where((r) => r.type == t)
+      .fold<double>(0, (a, r) => a + (r.endTime.difference(r.startTime).inMinutes).clamp(1, 1440));
   final sleepOnly = sleepRecs.where((r) => r.type == 'sleep').toList()
     ..sort((a, b) => a.startTime.compareTo(b.startTime));
   final spo = recs
@@ -94,8 +105,9 @@ ActivityDay buildActivityDay(List<ActivityRecord> recs, List<Workout> wk,
     activeKcal: dayTotal(of('activeEnergy'), from, to, preferred: preferred),
     totalKcal: dayTotal(of('totalEnergy'), from, to, preferred: preferred),
     // Сон относится к дню пробуждения: окно 18:00 → 18:00.
-    sleepMinutes: dayTotal(of('sleep'), from.subtract(six), to.subtract(six),
-        preferred: preferred),
+    sleepMinutes: math.max(
+        dayTotal(of('sleep'), from.subtract(six), to.subtract(six), preferred: preferred),
+        stageMin('sleepDeep') + stageMin('sleepRem') + stageMin('sleepLight')),
     workoutMinutes: unionMinutes(
         dayWorkouts.map((w) => (w.startTime, w.endTime)).toList(), from, to),
     avgHr: avg,

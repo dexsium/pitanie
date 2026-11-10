@@ -75,6 +75,7 @@ Future<AiFoodItem?> editAiItem(BuildContext context, AiFoodItem item) {
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Отмена')),
         FilledButton(
+          style: FilledButton.styleFrom(minimumSize: const Size(90, 40)),
           onPressed: () {
             final g = double.tryParse(grams.text.replaceAll(',', '.'));
             if (g == null || g < 1 || g > 3000) return;

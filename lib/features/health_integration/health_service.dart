@@ -50,8 +50,11 @@ class HealthService {
           HealthDataType.ACTIVE_ENERGY_BURNED,
           HealthDataType.HEART_RATE,
           HealthDataType.SLEEP_ASLEEP,
+          HealthDataType.SLEEP_DEEP,
+          HealthDataType.SLEEP_REM,
+          HealthDataType.SLEEP_LIGHT,
           HealthDataType.WORKOUT,
-          // Показатели для «Анализа здоровья»: часы пишут их, если умеют измерять.
+          // Показатели, которые часы пишут, если умеют измерять.
           HealthDataType.RESTING_HEART_RATE,
           HealthDataType.HEART_RATE_VARIABILITY_SDNN,
           HealthDataType.BLOOD_OXYGEN,
@@ -64,6 +67,9 @@ class HealthService {
           HealthDataType.TOTAL_CALORIES_BURNED,
           HealthDataType.HEART_RATE,
           HealthDataType.SLEEP_SESSION,
+          HealthDataType.SLEEP_DEEP,
+          HealthDataType.SLEEP_REM,
+          HealthDataType.SLEEP_LIGHT,
           HealthDataType.WORKOUT,
         ];
 
@@ -200,6 +206,12 @@ class HealthService {
           HealthDataType.SLEEP_SESSION ||
           HealthDataType.SLEEP_ASLEEP =>
             ('sleep', 'min', p.dateTo.difference(p.dateFrom).inMinutes.toDouble()),
+          HealthDataType.SLEEP_DEEP =>
+            ('sleepDeep', 'min', p.dateTo.difference(p.dateFrom).inMinutes.toDouble()),
+          HealthDataType.SLEEP_REM =>
+            ('sleepRem', 'min', p.dateTo.difference(p.dateFrom).inMinutes.toDouble()),
+          HealthDataType.SLEEP_LIGHT =>
+            ('sleepLight', 'min', p.dateTo.difference(p.dateFrom).inMinutes.toDouble()),
           _ => ('', '', 0.0),
         };
         if (type.isEmpty) continue;

@@ -6,7 +6,6 @@ import '../core/dates.dart';
 import '../features/coach/goal_service.dart';
 import '../features/dashboard/day_data.dart';
 import '../features/settings/notif_prefs.dart';
-import '../features/health_analysis/services/health_monitor.dart';
 import '../services/health/plan_service.dart';
 import '../features/activity/activity_page.dart';
 import '../features/dashboard/dashboard_page.dart';
@@ -109,16 +108,8 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
     }
   }
 
-  /// Анализ здоровья: после синхронизации часов, при запуске и возврате в приложение.
+  /// Проверка после синхронизации, при запуске и возврате в приложение: тренировки и цели.
   Future<void> _healthCheck() async {
-    try {
-      final n = ref.read(notificationsProvider);
-      final db = ref.read(dbProvider);
-      await runHealthMonitor(db, (id, title, body, urgent) async {
-        if (!notifEnabled(await db.allSettings(), kNotifHealthKey)) return;
-        await n.showNow(id, title, body, urgent: urgent);
-      });
-    } catch (_) {}
     // Тренировки по пульсу: новая найденная тренировка приходит уведомлением.
     try {
       final n = ref.read(notificationsProvider);

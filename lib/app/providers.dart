@@ -4,7 +4,6 @@ import '../core/dates.dart';
 import '../database/database.dart';
 import '../features/dashboard/day_data.dart';
 import '../features/health_integration/health_service.dart';
-import '../features/health_analysis/data/health_repository.dart';
 import '../services/health/plan_service.dart';
 
 final dbProvider = Provider<AppDatabase>((ref) => throw UnimplementedError());
@@ -52,10 +51,4 @@ final catalogProgressProvider = StateProvider<double?>((ref) => null);
 final planProvider = StreamProvider<PlanSnapshot>((ref) {
   final db = ref.watch(dbProvider);
   return reactive(db, () => loadPlan(db, DateTime.now()));
-});
-
-/// Анализ здоровья (пульс, HRV, сон, SpO₂, восстановление) по данным часов.
-final healthProvider = StreamProvider<HealthSnapshot>((ref) {
-  final db = ref.watch(dbProvider);
-  return reactive(db, () => loadHealth(db, DateTime.now()));
 });

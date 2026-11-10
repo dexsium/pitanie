@@ -183,11 +183,11 @@ void main() {
       expect(d.activity.steps, 500);
     });
 
-    test('данные с часов по Bluetooth приоритетнее Health (без суммирования)', () async {
-      await db.upsertActivity([rec('a', 500, source: 'zepp'), rec('b', 450, source: kBleSource)]);
+    test('источник выбирается автоматически по объёму, без суммирования', () async {
+      await db.upsertActivity([rec('a', 500, source: 'zepp'), rec('b', 450, source: 'huawei')]);
       final d = await loadDayData(db, day);
-      expect(d.activity.steps, 450);
-      expect(d.activity.source, kBleSource);
+      expect(d.activity.steps, 500);
+      expect(d.activity.source, 'zepp');
     });
 
     test('нет данных — нули, без ошибок', () async {

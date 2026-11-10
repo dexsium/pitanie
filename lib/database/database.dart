@@ -827,12 +827,12 @@ class AppDatabase extends _$AppDatabase {
                 t.startTime.isSmallerOrEqualValue(to)))
           .get();
 
-  /// Минутные записи сна (и фаз) из данных часов за период; без шагов и пульса.
+  /// Записи сна (и фаз) за период; без шагов и пульса. Без [source] — из всех источников.
   Future<List<ActivityRecord>> sleepRecordsBetween(DateTime from, DateTime to,
-          {required String source, bool stages = true}) =>
+          {String? source, bool stages = true}) =>
       (select(activityRecords)
             ..where((t) =>
-                t.source.equals(source) &
+                (source == null ? const Constant(true) : t.source.equals(source)) &
                 t.startTime.isBiggerOrEqualValue(from) &
                 t.startTime.isSmallerThanValue(to) &
                 (stages
