@@ -6,6 +6,7 @@ import '../../app/theme.dart';
 import '../../core/dates.dart';
 import '../../core/labels.dart';
 import '../../database/database.dart';
+import '../ai/ai_photo_page.dart';
 import '../../shared/widgets.dart';
 import '../calendar/calendar_page.dart';
 import '../dashboard/day_data.dart';
@@ -283,6 +284,12 @@ class _MealCardState extends ConsumerState<MealCard> {
               builder: (_) => AddFoodPage(day: data.key, meal: meal)));
     }
 
+    Future<void> photo() async {
+      if (!await guardPast(context, data.key)) return;
+      if (!context.mounted) return;
+      await openAiPhoto(context, db, day: data.key, meal: meal);
+    }
+
     Future<void> scan() async {
       if (!await guardPast(context, data.key)) return;
       if (!context.mounted) return;
@@ -390,19 +397,27 @@ class _MealCardState extends ConsumerState<MealCard> {
                       shape: const StadiumBorder()),
                   onPressed: add,
                   icon: const Icon(Icons.add),
-                  label: const Text('Добавить продукт',
-                      style: TextStyle(fontWeight: FontWeight.w700))),
+                  label: const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('Добавить продукт',
+                          style: TextStyle(fontWeight: FontWeight.w700)))),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
+            IconButton.filledTonal(
+                tooltip: 'Распознать еду по фото',
+                style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+                onPressed: photo,
+                icon: const Icon(Icons.photo_camera_outlined, color: kPrimary)),
+            const SizedBox(width: 6),
             IconButton.filledTonal(
                 tooltip: 'Сканировать штрихкод',
-                style: IconButton.styleFrom(minimumSize: const Size(60, 48)),
+                style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
                 onPressed: scan,
                 icon: const Icon(Icons.qr_code_scanner, color: kPrimary)),
-            const SizedBox(width: 10),
+            const SizedBox(width: 6),
             IconButton.filledTonal(
                 tooltip: 'Быстрое добавление калорий',
-                style: IconButton.styleFrom(minimumSize: const Size(60, 48)),
+                style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
                 onPressed: quick,
                 icon: const Icon(Icons.add_circle_outline, color: kPrimary)),
           ]),

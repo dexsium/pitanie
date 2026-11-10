@@ -11,7 +11,21 @@ import '../../core/nutrition.dart';
 import '../../database/database.dart';
 import '../../shared/widgets.dart';
 import '../nutrition/diary_actions.dart';
+import 'ai_settings_card.dart';
 import 'gemini_service.dart';
+
+/// Открывает распознавание по фото; если ИИ не настроен, объясняет, что сделать.
+Future<void> openAiPhoto(BuildContext context, AppDatabase db,
+    {required String day, required Meal meal}) async {
+  final client = await loadGeminiClient(db);
+  if (!context.mounted) return;
+  if (client == null) {
+    await showAiNotConfigured(context);
+    return;
+  }
+  await Navigator.push<bool>(
+      context, MaterialPageRoute(builder: (_) => AiPhotoPage(day: day, meal: meal)));
+}
 
 /// Приём пищи по времени суток.
 Meal mealByHour(DateTime t) {

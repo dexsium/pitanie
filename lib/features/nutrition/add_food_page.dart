@@ -7,9 +7,6 @@ import '../../core/labels.dart';
 import '../../core/nutrition.dart';
 import '../../database/database.dart';
 import '../../shared/widgets.dart';
-import '../ai/ai_photo_page.dart';
-import '../ai/ai_settings_card.dart';
-import '../ai/gemini_service.dart';
 import '../products/barcode_scan_page.dart';
 import '../products/product_form_page.dart';
 import 'diary_actions.dart';
@@ -52,19 +49,6 @@ class _AddFoodPageState extends ConsumerState<AddFoodPage> {
     if (p != null && mounted) await _selected(p);
   }
 
-  Future<void> _photo() async {
-    final client = await loadGeminiClient(db);
-    if (!mounted) return;
-    if (client == null) {
-      await showAiNotConfigured(context);
-      return;
-    }
-    await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(
-            builder: (_) => AiPhotoPage(day: widget.day, meal: widget.meal)));
-  }
-
   Future<void> _create([String? name]) async {
     final p = await Navigator.push<Product>(context,
         MaterialPageRoute(builder: (_) => ProductFormPage(initialName: name)));
@@ -98,11 +82,6 @@ class _AddFoodPageState extends ConsumerState<AddFoodPage> {
         appBar: AppBar(
           title: Text(widget.pickProduct ? 'Выбор продукта' : widget.meal.label),
           actions: [
-            if (!widget.pickProduct)
-              IconButton(
-                  tooltip: 'Распознать еду по фото',
-                  onPressed: _photo,
-                  icon: const Icon(Icons.photo_camera_outlined)),
             IconButton(
                 tooltip: 'Сканировать штрихкод',
                 onPressed: _scan,
