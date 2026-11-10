@@ -5,8 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/dates.dart';
 import '../features/coach/goal_service.dart';
 import '../features/dashboard/day_data.dart';
-import '../features/wearables/watch_notifications_page.dart'
-    show notifEnabled, kNotifGoalsKey, kNotifWorkoutsKey, kNotifHealthKey, kNotifLinkKey;
+import '../features/settings/notif_prefs.dart';
 import '../features/health_analysis/services/health_monitor.dart';
 import '../services/health/plan_service.dart';
 import '../features/activity/activity_page.dart';
@@ -16,7 +15,6 @@ import '../features/profile/onboarding_page.dart';
 import '../features/profile/profile_page.dart';
 import '../features/settings/notification_service.dart';
 import '../features/statistics/statistics_page.dart';
-import '../features/wearables/wearable_controller.dart';
 import '../features/wearables/workout_service.dart';
 import '../database/catalog_importer.dart';
 import '../features/scale/scale_controller.dart';
@@ -77,7 +75,6 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserver {
   bool _measureOpen = false;
-  bool _syncWasBusy = false;
 
   @override
   void initState() {
@@ -85,7 +82,6 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       _sync();
-      ref.read(wearableProvider).start();
       ref.read(scaleProvider).start();
       _loadCatalog();
       _autoPlan();
@@ -104,32 +100,13 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
-      _linkNotice();
-    }
     if (state == AppLifecycleState.resumed) {
       ref.read(notificationsProvider).cancel(8).catchError((_) {});
       _sync();
-      ref.read(wearableProvider).start();
       ref.read(scaleProvider).start();
       _autoPlan();
       _healthCheck();
     }
-  }
-
-  /// При сворачивании: предупреждение, что смахивание приложения оборвёт связь с часами.
-  Future<void> _linkNotice() async {
-    try {
-      if (!ref.read(wearableProvider).isConnected) return;
-      final s = await ref.read(dbProvider).allSettings();
-      if (!notifEnabled(s, kNotifLinkKey)) return;
-      await ref.read(notificationsProvider).showNow(
-          8,
-          'Связь с часами работает',
-          'Приложение держит связь с часами, пока оно свёрнуто. Не смахивайте его из списка '
-              'открытых приложений: иначе связь оборвётся, и часы не будут получать данные, '
-              'пока вы не откроете приложение снова.');
-    } catch (_) {}
   }
 
   /// Анализ здоровья: после синхронизации часов, при запуске и возврате в приложение.
@@ -219,9 +196,8 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
       final p = prev?.valueOrNull;
       if (p == null || sig(p) != sig(d)) _goalCheck();
     });
-    ref.listen<WearableController>(wearableProvider, (prev, next) {
-      if (_syncWasBusy && !next.syncBusy) _healthCheck();
-      _syncWasBusy = next.syncBusy;
+    ref.listen<bool>(syncBusyProvider, (prev, next) {
+      if (prev == true && !next) _healthCheck();
     });
     ref.listen<ScaleController>(scaleProvider, (prev, next) {
       if (next.phase == ScalePhase.measuring &&

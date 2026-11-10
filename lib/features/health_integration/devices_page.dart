@@ -9,7 +9,6 @@ import '../../app/theme.dart';
 import '../../core/dates.dart';
 import '../dashboard/day_data.dart' show kMainSourceKey, kBleSource;
 import '../../shared/widgets.dart';
-import '../wearables/wearable_page.dart';
 import 'health_service.dart';
 
 String statusLabel(String s) => switch (s) {
@@ -156,7 +155,7 @@ class DevicesPage extends ConsumerWidget {
         const SizedBox(height: 12),
         AppCard(
           child: Text(
-            'Подключение к ${svc.sourceLabel} не означает прямого Bluetooth-соединения с часами. '
+            'Приложение не подключается к часам напрямую по Bluetooth. '
             'Часы (Huawei Watch Fit 4, Amazfit и другие) синхронизируются со своим приложением '
             '(Huawei Health, Zepp), а оно передаёт данные в ${svc.sourceLabel}, откуда их читает '
             'это приложение. Данные появляются с задержкой и только те, которые приложение часов '
@@ -166,19 +165,6 @@ class DevicesPage extends ConsumerWidget {
         ),
         const SizedBox(height: 12),
         _MainSourceCard(report),
-        const SizedBox(height: 12),
-        AppCard(
-          onTap: () => Navigator.push(
-              context, MaterialPageRoute(builder: (_) => const WearablePage())),
-          child: const Row(children: [
-            Icon(Icons.bluetooth),
-            SizedBox(width: 12),
-            Expanded(
-                child: Text('Прямое подключение по Bluetooth (в разработке)',
-                    style: TextStyle(fontWeight: FontWeight.w700))),
-            Icon(Icons.chevron_right),
-          ]),
-        ),
         const SizedBox(height: 12),
         if (report != null) _Diagnostics(report),
       ]),

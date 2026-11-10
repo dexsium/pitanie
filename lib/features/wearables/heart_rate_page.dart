@@ -10,7 +10,7 @@ import '../../core/dates.dart';
 import '../../database/database.dart';
 import '../dashboard/day_data.dart' show kBleSource, sourceLabel;
 import 'heart_zones_page.dart';
-import 'wearable_page.dart';
+import '../health_integration/devices_page.dart';
 
 /// Размеры экрана заданы в пикселях макета (ширина 852) и масштабируются по ширине устройства.
 const _mockWidth = 852.0;
@@ -431,7 +431,7 @@ class _HeartRatePageState extends ConsumerState<HeartRatePage> {
                         onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (_) => const WearablePage())),
+                                builder: (_) => const DevicesPage())),
                         child: Padding(
                           padding: EdgeInsets.symmetric(
                               horizontal: s(26), vertical: s(22)),

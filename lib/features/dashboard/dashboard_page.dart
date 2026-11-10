@@ -14,8 +14,7 @@ import '../calendar/calendar_page.dart';
 import '../coach/coach_card.dart';
 import '../settings/settings_page.dart';
 import '../water/water_page.dart';
-import '../wearables/wearable_controller.dart';
-import '../wearables/wearable_page.dart';
+import '../health_integration/devices_page.dart';
 import '../weight/weight_page.dart';
 import 'day_data.dart';
 
@@ -102,7 +101,7 @@ class DashboardPage extends ConsumerWidget {
             ]),
           ),
           SizedBox(height: s(14)),
-          const WatchStatusChip(),
+          const HealthStatusChip(),
           SizedBox(height: s(16)),
           data.when(
             loading: () => const Padding(
@@ -116,35 +115,26 @@ class DashboardPage extends ConsumerWidget {
   }
 }
 
-/// Карточка часов: фото, название, заряд, состояние связи, пульс и время обновления.
-class WatchStatusChip extends ConsumerWidget {
-  const WatchStatusChip({super.key});
+/// Карточка источника данных: Apple Health или Health Connect, состояние и время синхронизации.
+class HealthStatusChip extends ConsumerWidget {
+  const HealthStatusChip({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final c = ref.watch(wearableProvider);
+    final src = ref.watch(sourceProvider).valueOrNull;
+    final busy = ref.watch(syncBusyProvider);
     final cs = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final k = MediaQuery.sizeOf(context).width / _mockWidth;
     double s(double v) => v * k;
-    final ink = cs.onSurface;
-    final muted = cs.onSurfaceVariant;
     TextStyle t(double px, {FontWeight w = FontWeight.w400, Color? c}) =>
-        TextStyle(fontSize: s(px), fontWeight: w, color: c ?? ink, height: 1.2);
-
-    final (status, color) = switch (c.status) {
-      WearStatus.ready => ('Подключены', const Color(0xFF3CC24F)),
-      WearStatus.connected || WearStatus.authorizing => ('Авторизация…', kOrange),
-      WearStatus.connecting => ('Подключаем…', kOrange),
-      WearStatus.off => (
-        c.savedId == null ? 'Не подключены' : 'Нет связи',
-        const Color(0xFF9CA3AF)
-      ),
-    };
-    final updated = c.lastRead ?? c.hrAt;
-    final hasData = c.status == WearStatus.ready;
+        TextStyle(fontSize: s(px), fontWeight: w, color: c ?? cs.onSurface, height: 1.2);
+    final svc = ref.watch(healthServiceProvider);
+    final connected = src != null;
+    final color = connected ? const Color(0xFF3CC24F) : const Color(0xFF9CA3AF);
     String hhmm(DateTime d) =>
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+    final last = src?.lastSync;
 
     return Container(
       height: s(248),
@@ -162,13 +152,13 @@ class WatchStatusChip extends ConsumerWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(s(40)),
           onTap: () =>
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const WearablePage())),
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const DevicesPage())),
           child: Row(children: [
             SizedBox(width: s(68)),
             Image.asset('assets/dashboard/watch_card.png',
                 width: s(188), height: s(228), fit: BoxFit.contain),
             SizedBox(width: s(42)),
-            Container(width: 1, height: s(154), color: muted.withOpacity(0.25)),
+            Container(width: 1, height: s(154), color: cs.onSurfaceVariant.withOpacity(0.25)),
             SizedBox(width: s(34)),
             Expanded(
               child: Padding(
@@ -177,85 +167,53 @@ class WatchStatusChip extends ConsumerWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(children: [
-                        Expanded(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(c.deviceName, style: t(30, w: FontWeight.w800)),
-                          ),
-                        ),
-                        if (c.battery != null && c.status != WearStatus.off)
-                          Container(
-                            height: s(58),
-                            padding: EdgeInsets.symmetric(horizontal: s(18)),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(s(29)),
-                              border: Border.all(color: muted.withOpacity(0.35), width: s(2)),
-                            ),
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              Icon(c.charging ? Icons.battery_charging_full : Icons.battery_full,
-                                  size: s(34), color: ink),
-                              SizedBox(width: s(8)),
-                              Text('${c.battery}%', style: t(26, w: FontWeight.w800)),
-                            ]),
-                          ),
-                      ]),
-                      SizedBox(height: s(8)),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(svc.sourceLabel, style: t(30, w: FontWeight.w800)),
+                      ),
+                      SizedBox(height: s(10)),
                       Row(children: [
                         Container(
                           width: s(36),
                           height: s(36),
                           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                          child: Icon(
-                              c.status == WearStatus.off ? Icons.link_off : Icons.link,
-                              size: s(24),
-                              color: Colors.white),
+                          child: Icon(connected ? Icons.link : Icons.link_off,
+                              size: s(24), color: Colors.white),
                         ),
                         SizedBox(width: s(14)),
                         Expanded(
                           child: FittedBox(
                             fit: BoxFit.scaleDown,
                             alignment: Alignment.centerLeft,
-                            child: Text(status, style: t(26, w: FontWeight.w500, c: color)),
+                            child: Text(
+                                busy
+                                    ? 'Синхронизация…'
+                                    : connected
+                                        ? 'Подключено'
+                                        : 'Не подключено',
+                                style: t(26, w: FontWeight.w500, c: color)),
                           ),
                         ),
                       ]),
                       SizedBox(height: s(14)),
-                      Divider(height: 1, color: muted.withOpacity(0.25)),
+                      Divider(height: 1, color: cs.onSurfaceVariant.withOpacity(0.25)),
                       SizedBox(height: s(14)),
-                      IntrinsicHeight(
-                        child: Row(children: [
-                          Icon(Icons.favorite, size: s(34), color: _pl),
-                          SizedBox(width: s(10)),
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text.rich(TextSpan(children: [
-                                TextSpan(
-                                    text: hasData && c.hr != null ? '${c.hr}' : '—',
-                                    style: t(28, w: FontWeight.w800)),
-                                TextSpan(text: ' уд/мин', style: t(24)),
-                              ])),
-                            ),
+                      Row(children: [
+                        Icon(Icons.sync, size: s(32), color: cs.onSurface),
+                        SizedBox(width: s(8)),
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                                connected
+                                    ? 'Обновлено: ${last == null ? '—' : hhmm(last)}'
+                                    : 'Нажмите, чтобы подключить',
+                                style: t(24)),
                           ),
-                          SizedBox(width: s(14)),
-                          VerticalDivider(width: 1, color: muted.withOpacity(0.25)),
-                          SizedBox(width: s(14)),
-                          Icon(Icons.sync, size: s(32), color: ink),
-                          SizedBox(width: s(8)),
-                          Expanded(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                  'Обновлено: ${updated == null ? '—' : hhmm(updated)}',
-                                  style: t(24)),
-                            ),
-                          ),
-                        ]),
-                      ),
+                        ),
+                      ]),
                     ]),
               ),
             ),

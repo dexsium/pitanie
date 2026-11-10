@@ -15,7 +15,6 @@ import '../recipes/recipes_page.dart';
 import '../scale/scale_controller.dart';
 import '../settings/settings_page.dart';
 import '../water/water_page.dart';
-import '../wearables/wearable_controller.dart';
 import '../weight/weight_page.dart';
 import '../../core/nutrition/nutrition_calculation_models.dart';
 import '../../services/health/plan_service.dart';
@@ -39,7 +38,6 @@ class ProfilePage extends ConsumerWidget {
     final db = ref.read(dbProvider);
     final src = ref.watch(sourceProvider).valueOrNull;
     final busy = ref.watch(syncBusyProvider);
-    final watch = ref.watch(wearableProvider);
     final scale = ref.watch(scaleProvider);
     final plan = ref.watch(planProvider).valueOrNull;
 
@@ -486,19 +484,8 @@ class ProfilePage extends ConsumerWidget {
                   children: [
                     Text('Умные часы', style: t(34, w: FontWeight.w800)),
                     SizedBox(height: s(4)),
-                    Text(
-                      switch (watch.status) {
-                        WearStatus.ready => 'Bluetooth: подключено, данные идут',
-                        WearStatus.connected ||
-                        WearStatus.authorizing =>
-                          'Bluetooth: авторизация…',
-                        WearStatus.connecting => 'Bluetooth: подключаем…',
-                        WearStatus.off => watch.savedId == null
-                            ? 'Часы не подключены'
-                            : 'Bluetooth: нет связи',
-                      },
-                      style: t(23),
-                    ),
+                    if (src == null)
+                      Text('Часы не подключены', style: t(23)),
                     if (src != null)
                       Text(
                         '${src.deviceName.isEmpty ? 'Система здоровья' : src.deviceName} • ${statusLabel(src.syncStatus)}'
