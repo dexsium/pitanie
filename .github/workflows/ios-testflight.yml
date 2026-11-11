@@ -120,6 +120,11 @@ jobs:
               s["CODE_SIGN_IDENTITY"] = "Apple Distribution"
               s["CODE_SIGN_ENTITLEMENTS"] = "Runner/Runner.entitlements"
               s.delete("CODE_SIGN_IDENTITY[sdk=iphoneos*]")
+              # Яндекс SDK 8 (через Swift Package) ищет AppMetrica по имени класса: без -ObjC
+              # компоновщик её выбрасывает и приложение падает (MACAppMetricaAdapterHolder.require).
+              flags = Array(s["OTHER_LDFLAGS"] || ["$(inherited)"])
+              flags << "-ObjC" unless flags.include?("-ObjC")
+              s["OTHER_LDFLAGS"] = flags
             end
             proj.save
           '
@@ -155,6 +160,7 @@ jobs:
         run: |
           APP="build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app"
           strings "$APP/Runner" | grep -q "pitanie/native_ad" || { echo "в сборке нет представления pitanie/native_ad"; exit 1; }
+          strings "$APP/Runner" | grep -q "AMAAppMetrica" || { echo "в сборке нет AppMetrica (нужна рекламе Яндекса)"; exit 1; }
           strings "$APP/Runner" | grep -q "YandexMobileAds" || { echo "в сборке нет Yandex Mobile Ads SDK"; exit 1; }
 
       - name: Проверка расширения виджета в сборке
