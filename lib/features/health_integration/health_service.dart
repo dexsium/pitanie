@@ -252,14 +252,27 @@ class HealthService {
       await _configure();
       await _askNewPermissionsOnce();
       final now = DateTime.now();
-      final from = (src.lastSync == null || full)
-          ? now.subtract(const Duration(days: 30))
-          : src.lastSync!.subtract(const Duration(days: 2));
+      final settings = await db.allSettings();
+      final plan = planHealthRead(
+        now: now,
+        lastSync: src.lastSync,
+        full: full,
+        watermarks: parseWatermarks(settings[kHealthWatermarksKey]),
+        lastReconcile: DateTime.tryParse(settings[kHealthReconcileKey] ?? ''),
+        typeNames: [for (final t in types) t.name],
+      );
+      final from = plan.from; // общее окно: нужно сверке удалённого
+      final newest = <String, int>{}; // тип -> самое позднее начало прочитанной записи
 
       final errors = <String, String>{};
       final points = <HealthDataPoint>[];
       for (final t in types) {
-        points.addAll(await _readSliced(t, from, now, errors));
+        final got = await _readSliced(t, plan.fromFor(t.name), now, errors);
+        for (final g in got) {
+          final ms = g.dateFrom.millisecondsSinceEpoch;
+          if (ms > (newest[t.name] ?? 0)) newest[t.name] = ms;
+        }
+        points.addAll(got);
         await _breath();
       }
       if (errors.length == types.length) {
@@ -392,15 +405,29 @@ class HealthService {
         for (final c in comp) {
           await db.attachBodyComposition(c.$1, fatPct: c.$2, leanKg: c.$3);
         }
-        // Удалённое в источнике: сверка окна по типам, которые источник вернул.
-        for (final e in seen.entries) {
-          deleted += await db.deleteActivityMissing(sourceType, e.key, from, e.value);
-          await _breath();
-        }
-        if (weightIds.isNotEmpty) {
-          deleted += await db.deleteImportedWeightsMissing(sourceType, from, weightIds);
+        // Удалённое в источнике: сверка окна по типам, которые источник вернул. Только в сверочном
+        // проходе (раз в сутки или при полной синхронизации): окно в нём общее и не короче 2 суток.
+        if (plan.reconcile) {
+          for (final e in seen.entries) {
+            deleted += await db.deleteActivityMissing(sourceType, e.key, from, e.value);
+            await _breath();
+          }
+          if (weightIds.isNotEmpty) {
+            deleted += await db.deleteImportedWeightsMissing(sourceType, from, weightIds);
+          }
         }
       });
+      // Отметки «прочитано до»: у типов без ошибок чтения.
+      final newMarks = advanceWatermarks(
+          old: plan.watermarks,
+          newest: newest,
+          failed: errors.keys.toSet(),
+          now: now,
+          typeNames: [for (final t in types) t.name]);
+      await db.setSetting(kHealthWatermarksKey, jsonEncode(newMarks));
+      if (plan.reconcile) {
+        await db.setSetting(kHealthReconcileKey, now.toIso8601String());
+      }
 
       final empty = recs.isEmpty && works.isEmpty && weights == 0 && duplicates == 0;
       final result = SyncResult(empty ? 'no_data' : 'ok',
@@ -467,4 +494,105 @@ class HeartRateIndex {
     }
     return n == 0 ? null : (avg: sum / n, max: mx);
   }
+}
+
+const kHealthWatermarksKey = 'health_watermarks';
+const kHealthReconcileKey = 'health_reconcile_at';
+
+/// Запас перед отметкой: часы досылают данные с опозданием, а повторное чтение безвредно
+/// (записи с тем же идентификатором обновляются). Для сна запас больше: сессия охватывает ночь.
+const _overlapDefault = Duration(hours: 3);
+const _overlapSleep = Duration(hours: 18);
+const _reconcileEvery = Duration(hours: 20);
+const _reconcileWindow = Duration(days: 2);
+const _maxWindow = Duration(days: 30);
+
+bool _isSleepName(String n) => n.startsWith('SLEEP');
+
+Map<String, int> parseWatermarks(String? json) {
+  if (json == null || json.isEmpty) return {};
+  try {
+    final m = jsonDecode(json);
+    if (m is! Map) return {};
+    return {
+      for (final e in m.entries)
+        if (e.key is String && e.value is int && (e.value as int) > 0)
+          e.key as String: e.value as int,
+    };
+  } catch (_) {
+    return {};
+  }
+}
+
+/// План чтения: с какого времени читать каждый тип и нужен ли сверочный проход.
+class HealthReadPlan {
+  final bool reconcile;
+  final DateTime from;
+  final Map<String, int> watermarks;
+  final Map<String, DateTime> _perType;
+  HealthReadPlan(this.reconcile, this.from, this.watermarks, this._perType);
+  DateTime fromFor(String type) => _perType[type] ?? from;
+}
+
+/// Первая и полная синхронизации читают 30 суток. Обычная читает каждый тип от его отметки
+/// (минус запас), то есть только новое. Раз в сутки (и если отметок нет) выполняется сверочный
+/// проход: чтение не короче 2 суток по всем типам с общим окном и сверкой удалённого.
+HealthReadPlan planHealthRead({
+  required DateTime now,
+  required DateTime? lastSync,
+  required bool full,
+  required Map<String, int> watermarks,
+  required DateTime? lastReconcile,
+  required Iterable<String> typeNames,
+}) {
+  final floor = now.subtract(_maxWindow);
+  if (full || lastSync == null) {
+    return HealthReadPlan(true, floor, watermarks, {});
+  }
+  final due = lastReconcile == null || now.difference(lastReconcile) >= _reconcileEvery;
+  final per = <String, DateTime>{};
+  for (final t in typeNames) {
+    final w = watermarks[t];
+    var f = w != null
+        ? DateTime.fromMillisecondsSinceEpoch(w)
+            .subtract(_isSleepName(t) ? _overlapSleep : _overlapDefault)
+        : lastSync.subtract(_reconcileWindow);
+    if (f.isBefore(floor)) f = floor;
+    per[t] = f;
+  }
+  if (!due) {
+    final from = per.values.reduce((a, b) => a.isBefore(b) ? a : b);
+    return HealthReadPlan(false, from, watermarks, per);
+  }
+  // Сверочный проход: общее окно, не короче 2 суток.
+  var from = now.subtract(_reconcileWindow);
+  for (final f in per.values) {
+    if (f.isBefore(from)) from = f;
+  }
+  return HealthReadPlan(true, from, watermarks, {});
+}
+
+/// Новые отметки: по самой поздней прочитанной записи; если данных нет, отметка подтягивается
+/// к «сутки назад», чтобы окно чтения не росло. Тип с ошибкой чтения не сдвигается.
+Map<String, int> advanceWatermarks({
+  required Map<String, int> old,
+  required Map<String, int> newest,
+  required Set<String> failed,
+  required DateTime now,
+  required Iterable<String> typeNames,
+}) {
+  final dayAgo = now.subtract(const Duration(days: 1)).millisecondsSinceEpoch;
+  final out = Map<String, int>.of(old);
+  for (final t in typeNames) {
+    if (failed.contains(t)) continue;
+    final n = newest[t];
+    if (n != null) {
+      final prev = old[t] ?? 0;
+      out[t] = n > prev ? n : prev;
+    } else {
+      // Данных за окно нет: окно чтения не должно расти, отметка встаёт на «сутки назад».
+      out[t] = dayAgo;
+    }
+  }
+  return out;
 }
