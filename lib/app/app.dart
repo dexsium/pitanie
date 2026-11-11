@@ -97,14 +97,15 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
       // Главный экран рисуется сразу, тяжёлая работа запускается по очереди с паузами,
       // чтобы интерфейс не подвисал на старте (разбор данных Здоровья идёт в том же потоке).
       PerfLog.mark('главный экран: первый кадр');
+      // Весы запускаются сразу (как раньше): приём пакетов должен быть готов к моменту, когда
+      // человек встаёт на весы; запуск лёгкий и тяжёлым задачам не мешает.
+      PerfLog.time('весы: запуск', () async => ref.read(scaleProvider).start());
       _later(const Duration(milliseconds: 800), () => PerfLog.time('виджет: обновление',
           () async => scheduleWidgetUpdate(ref.read(dbProvider))));
       _later(const Duration(milliseconds: 1500),
           () => PerfLog.time('уведомления', _initNotifications));
       _later(const Duration(milliseconds: 2500), () => PerfLog.time('синхронизация (всего)', _sync));
       _later(const Duration(milliseconds: 3500), () => PerfLog.time('автоплан', _autoPlan));
-      _later(const Duration(milliseconds: 4500),
-          () => PerfLog.time('весы: запуск', () async => ref.read(scaleProvider).start()));
       _later(const Duration(milliseconds: 6000), () => PerfLog.time('каталог', _loadCatalog));
       _later(const Duration(milliseconds: 7000),
           () => PerfLog.time('проверка тренировок', _healthCheck));

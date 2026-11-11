@@ -5,6 +5,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
+import '../../core/perf_log.dart';
 import '../../database/database.dart';
 import 'gatt_scale.dart';
 import 'mi_scale.dart';
@@ -222,10 +223,18 @@ class ScaleController extends ChangeNotifier {
   /// Сканирование прерывается при подключении к часам и поиске устройств: перезапускаем.
   Future<void> _ensureScan() async {
     if (!enabled || FlutterBluePlus.isScanningNow) return;
-    if (FlutterBluePlus.adapterStateNow != BluetoothAdapterState.on) return;
+    final st = FlutterBluePlus.adapterStateNow;
+    if (st != BluetoothAdapterState.on) {
+      if (_lastAdapterMark != st) {
+        _lastAdapterMark = st;
+        PerfLog.mark('весы: Bluetooth ${st.name}, сканирование не запускается');
+      }
+      return;
+    }
     try {
       await FlutterBluePlus.startScan(
           timeout: const Duration(seconds: 24), continuousUpdates: true);
+      if (scanStarts == 0) PerfLog.mark('весы: сканирование запущено');
       scanStarts++;
       lastScanError = null;
       if (!scanning) {
@@ -234,10 +243,12 @@ class ScaleController extends ChangeNotifier {
       }
     } catch (e) {
       lastScanError = '$e';
+      PerfLog.mark('весы: сканирование не запущено: $e');
       _addLog('сканирование не запущено: $e');
     }
   }
 
+  BluetoothAdapterState? _lastAdapterMark;
   MiScaleReading? _pending;
   Timer? _pendingTimer;
 
@@ -256,6 +267,7 @@ class ScaleController extends ChangeNotifier {
       final prev = _lastResultAt;
       if (prev != null && !r.timeStamp.isAfter(prev)) continue;
       _lastResultAt = r.timeStamp;
+      if (scalePackets == 0) PerfLog.mark('весы: получен первый пакет 0x181B');
       scalePackets++;
       lastPacketSeen = DateTime.now();
       final reading = parseMiScale2(data);
