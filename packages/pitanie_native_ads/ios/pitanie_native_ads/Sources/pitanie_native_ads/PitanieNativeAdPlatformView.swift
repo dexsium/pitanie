@@ -2,78 +2,49 @@ import Flutter
 import UIKit
 import YandexMobileAds
 
-/// Платформенное представление нативной рекламы. Загрузка начинается только по команде Dart
-/// ("load"), чтобы события не терялись до подписки. Все обращения к SDK идут в главном потоке.
-/// Состояния и события отправляются в Dart методом "event": loading, loaded (height), failed,
-/// bindFailed, impression, click, disposed. Тексты объявлений и данные пользователя в события
-/// не попадают.
-final class PitanieNativeAdPlatformView: NSObject, FlutterPlatformView, NativeAdDelegate {
-  private let container = UIView()
+/// Вся работа с нативным рекламным SDK: загрузчик, объявление, привязка к карточке и события.
+/// SDK Яндекса требует главный поток, а его типы изолированы на главном акторе, поэтому класс
+/// целиком @MainActor (в том числе делегат NativeAdDelegate). Создаётся и вызывается только
+/// из блоков Task { @MainActor }.
+@MainActor
+private final class NativeAdHost: NSObject, NativeAdDelegate {
   private let adView = PitanieNativeAdView(frame: .zero)
   private let loader = NativeAdLoader()
   private var ad: NativeAd?
-  private let channel: FlutterMethodChannel
   private let unitId: String
   private let width: CGFloat
+  private let emit: @MainActor (String, [String: Any]) -> Void
   private var loading = false
   private var disposed = false
 
-  init(unitId: String, width: CGFloat, channel: FlutterMethodChannel) {
+  init(
+    container: UIView,
+    unitId: String,
+    width: CGFloat,
+    emit: @escaping @MainActor (String, [String: Any]) -> Void
+  ) {
     self.unitId = unitId
     self.width = width
-    self.channel = channel
+    self.emit = emit
     super.init()
-
-    container.backgroundColor = .clear
     adView.translatesAutoresizingMaskIntoConstraints = false
+    adView.isHidden = true
     container.addSubview(adView)
     NSLayoutConstraint.activate([
       adView.topAnchor.constraint(equalTo: container.topAnchor),
       adView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
       adView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
     ])
-    adView.isHidden = true
-
-    channel.setMethodCallHandler { [weak self] call, result in
-      switch call.method {
-      case "load":
-        self?.load()
-        result(nil)
-      default:
-        result(FlutterMethodNotImplemented)
-      }
-    }
   }
 
-  func view() -> UIView { container }
-
-  deinit {
-    disposed = true
-    ad?.delegate = nil
-    ad = nil
-    channel.setMethodCallHandler(nil)
-  }
-
-  private func send(_ type: String, _ extra: [String: Any] = [:]) {
-    guard !disposed else { return }
-    var payload = extra
-    payload["type"] = type
-    DispatchQueue.main.async { [weak self] in
-      self?.channel.invokeMethod("event", arguments: payload)
-    }
-  }
-
-  private func load() {
+  func load() {
     guard !loading, !disposed, !unitId.isEmpty else { return }
     loading = true
-    send("loading")
+    emit("loading", [:])
     let request = AdRequest(adUnitID: unitId)
     let options = NativeAdOptions()
-    DispatchQueue.main.async { [weak self] in
-      guard let self = self else { return }
-      self.loader.loadAd(with: request, options: options) { [weak self] result in
-        DispatchQueue.main.async { self?.handle(result) }
-      }
+    loader.loadAd(with: request, options: options) { [weak self] result in
+      Task { @MainActor in self?.handle(result) }
     }
   }
 
@@ -89,22 +60,79 @@ final class PitanieNativeAdPlatformView: NSObject, FlutterPlatformView, NativeAd
         adView.isHidden = false
         adView.setNeedsLayout()
         adView.layoutIfNeeded()
-        send("loaded", ["height": Double(adView.fittingHeight(width: width))])
+        emit("loaded", ["height": Double(adView.fittingHeight(width: width))])
       } catch {
-        send("bindFailed", ["code": (error as NSError).code])
+        emit("bindFailed", ["code": (error as NSError).code])
       }
     case .failure(let error):
-      send("failed", ["code": (error as NSError).code])
+      emit("failed", ["code": (error as NSError).code])
     }
   }
 
-  // MARK: - NativeAdDelegate (все методы необязательные)
+  func dispose() {
+    disposed = true
+    ad?.delegate = nil
+    ad = nil
+    adView.removeFromSuperview()
+  }
+
+  // MARK: - NativeAdDelegate (методы необязательные)
 
   func nativeAdDidClick(_ ad: NativeAd) {
-    send("click")
+    emit("click", [:])
   }
 
   func nativeAd(_ ad: NativeAd, didTrackImpression impressionData: ImpressionData?) {
-    send("impression")
+    emit("impression", [:])
+  }
+}
+
+/// Платформенное представление нативной рекламы. Загрузка начинается только по команде Dart
+/// ("load"), чтобы события не терялись до подписки. События уходят в Dart методом "event":
+/// loading, loaded (height), failed, bindFailed, impression, click. Тексты объявлений и данные
+/// пользователя в события не попадают.
+final class PitanieNativeAdPlatformView: NSObject, FlutterPlatformView {
+  private let container = UIView()
+  private let channel: FlutterMethodChannel
+  private let unitId: String
+  private let width: CGFloat
+  private var host: NativeAdHost?
+
+  init(unitId: String, width: CGFloat, channel: FlutterMethodChannel) {
+    self.unitId = unitId
+    self.width = width
+    self.channel = channel
+    super.init()
+    container.backgroundColor = .clear
+    channel.setMethodCallHandler { [weak self] call, result in
+      if call.method == "load" {
+        Task { @MainActor in self?.startLoad() }
+        result(nil)
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  func view() -> UIView { container }
+
+  @MainActor
+  private func startLoad() {
+    if host == nil {
+      host = NativeAdHost(container: container, unitId: unitId, width: width) {
+        [weak self] type, extra in
+        var payload = extra
+        payload["type"] = type
+        self?.channel.invokeMethod("event", arguments: payload)
+      }
+    }
+    host?.load()
+  }
+
+  deinit {
+    channel.setMethodCallHandler(nil)
+    let h = host
+    host = nil
+    Task { @MainActor in h?.dispose() }
   }
 }
