@@ -15,6 +15,8 @@ import '../recipes/recipes_page.dart';
 import 'add_food_page.dart';
 import 'diary_actions.dart';
 import 'edit_entry_sheet.dart';
+import 'meal_templates.dart';
+import '../planner/planner_page.dart';
 
 class NutritionPage extends ConsumerWidget {
   const NutritionPage({super.key});
@@ -50,6 +52,32 @@ class NutritionPage extends ConsumerWidget {
       if (m != null && context.mounted) {
         await Navigator.push(context,
             MaterialPageRoute(builder: (_) => AddFoodPage(day: d.key, meal: m)));
+      }
+    }
+
+    Future<void> copyDay() async {
+      if (!await guardPast(context, key)) return;
+      if (!context.mounted) return;
+      final from = await showDatePicker(
+          context: context,
+          initialDate: sel.subtract(const Duration(days: 1)),
+          firstDate: DateTime(2020),
+          lastDate: DateTime.now().add(const Duration(days: 365)),
+          helpText: 'Откуда копировать весь день');
+      if (from == null || !context.mounted) return;
+      final fk = dayKey(from);
+      if (fk == key) {
+        toast(context, 'Выберите другую дату');
+        return;
+      }
+      if (!await confirmDialog(context, 'Скопировать день?',
+          'Все приёмы пищи за ${dayDateLine(from)} будут добавлены к выбранному дню.',
+          ok: 'Скопировать')) {
+        return;
+      }
+      final n = await ref.read(dbProvider).copyDay(fk, key);
+      if (context.mounted) {
+        toast(context, n == 0 ? 'В выбранный день нет записей' : 'Скопировано записей: $n');
       }
     }
 
@@ -99,9 +127,16 @@ class NutritionPage extends ConsumerWidget {
                 Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const RecipesPage()));
               }
+              if (v == 'copy_day') copyDay();
+              if (v == 'planner') {
+                Navigator.push(
+                    context, MaterialPageRoute(builder: (_) => const PlannerPage()));
+              }
             },
             itemBuilder: (_) => const [
               PopupMenuItem(value: 'recipes', child: Text('Мои блюда')),
+              PopupMenuItem(value: 'planner', child: Text('Планировщик питания')),
+              PopupMenuItem(value: 'copy_day', child: Text('Скопировать день из другой даты…')),
             ],
           ),
         ]),
@@ -309,6 +344,23 @@ class _MealCardState extends ConsumerState<MealCard> {
       }
     }
 
+    Future<void> repeatLast() async {
+      if (!await guardPast(context, data.key)) return;
+      final n = await db.repeatLastMeal(data.key, meal.name);
+      if (context.mounted) {
+        toast(context,
+            n == 0 ? 'Раньше этот приём пищи не записывался' : 'Скопировано записей: $n');
+      }
+    }
+
+    Future<void> saveTemplate() => saveMealAsTemplate(context, db, data.key, meal);
+
+    Future<void> fromTemplate() async {
+      if (!await guardPast(context, data.key)) return;
+      if (!context.mounted) return;
+      await showMealTemplatePicker(context, db, data.key, meal);
+    }
+
     Future<void> copyFrom() async {
       if (!await guardPast(context, data.key)) return;
       if (!context.mounted) return;
@@ -360,16 +412,26 @@ class _MealCardState extends ConsumerState<MealCard> {
             PopupMenuButton<String>(
               icon: Icon(_open ? Icons.chevron_right : Icons.expand_more),
               onSelected: (v) {
+                if (v == 'last') repeatLast();
                 if (v == 'yesterday') repeatYesterday();
+                if (v == 'save_tpl') saveTemplate();
+                if (v == 'tpl') fromTemplate();
                 if (v == 'copy') copyFrom();
                 if (v == 'quick') quick();
               },
               itemBuilder: (_) => [
                 PopupMenuItem(
+                    value: 'last', child: Text('Повторить последний ${meal.label.toLowerCase()}')),
+                PopupMenuItem(
                     value: 'yesterday',
                     child: Text('Повторить вчерашний ${meal.label.toLowerCase()}')),
                 const PopupMenuItem(value: 'copy', child: Text('Копировать из другого дня…')),
                 const PopupMenuItem(value: 'quick', child: Text('Быстрое добавление калорий')),
+                const PopupMenuItem(value: 'tpl', child: Text('Добавить из шаблона…')),
+                PopupMenuItem(
+                    value: 'save_tpl',
+                    enabled: entries.isNotEmpty,
+                    child: const Text('Сохранить как шаблон…')),
               ],
             ),
           ]),

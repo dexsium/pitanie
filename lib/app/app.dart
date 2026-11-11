@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +20,12 @@ import '../features/wearables/workout_service.dart';
 import '../database/catalog_importer.dart';
 import '../features/scale/scale_controller.dart';
 import '../features/scale/scale_measure_page.dart';
+import 'package:pitanie_widgets/pitanie_widgets.dart';
+
+import '../features/settings/settings_page.dart';
+import '../features/water/water_page.dart';
+import '../features/weight/weight_page.dart';
+import '../features/widgets/widget_sync.dart';
 import 'providers.dart';
 import 'theme.dart';
 
@@ -74,12 +82,18 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserver {
   bool _measureOpen = false;
+  StreamSubscription<String>? _widgetActions;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _widgetActions = PitanieWidgets.actions.listen(_onWidgetAction);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      PitanieWidgets.takeInitialAction().then((a) {
+        if (a != null) _onWidgetAction(a);
+      });
+      scheduleWidgetUpdate(ref.read(dbProvider));
       _sync();
       ref.read(scaleProvider).start();
       _loadCatalog();
@@ -94,6 +108,7 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _widgetActions?.cancel();
     super.dispose();
   }
 
@@ -101,10 +116,27 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       ref.read(notificationsProvider).cancel(8).catchError((_) {});
+      scheduleWidgetUpdate(ref.read(dbProvider));
       _sync();
       ref.read(scaleProvider).start();
       _autoPlan();
       _healthCheck();
+    }
+  }
+
+  /// Нажатие на виджет главного экрана: открываем нужный раздел. Данные из виджета в базу
+  /// не пишутся: вода и взвешивание добавляются на открывшемся экране самим пользователем.
+  void _onWidgetAction(String action) {
+    if (!mounted) return;
+    switch (action) {
+      case 'nutrition':
+        ref.read(tabProvider.notifier).state = 1;
+      case 'water':
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WaterPage()));
+      case 'weight':
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const WeightPage()));
+      case 'settings':
+        Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
     }
   }
 
@@ -185,7 +217,10 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
           '${x.food.length}|${x.eaten.calories.round()}|${x.plainWaterMl.round()}|'
           '${x.activity.steps.round()}|${x.calorieTarget.round()}';
       final p = prev?.valueOrNull;
-      if (p == null || sig(p) != sig(d)) _goalCheck();
+      if (p == null || sig(p) != sig(d)) {
+        _goalCheck();
+        scheduleWidgetUpdate(ref.read(dbProvider));
+      }
     });
     ref.listen<bool>(syncBusyProvider, (prev, next) {
       if (prev == true && !next) _healthCheck();

@@ -154,13 +154,20 @@ void main() {
       await first.close();
       final raw = sql.sqlite3.open(path);
       raw.execute('DROP INDEX IF EXISTS idx_product_source');
-      for (final c in ['name_en', 'source_id', 'state', 'kind', 'verified', 'portion_label']) {
+      for (final c in ['name_en', 'source_id', 'state', 'kind', 'verified', 'portion_label', 'updated_at']) {
         raw.execute('ALTER TABLE products DROP COLUMN $c');
       }
       raw.execute(
           "INSERT INTO products (name, calories, proteins, fats, carbohydrates, source, is_custom) "
           "VALUES ('Моя гречка', 110, 3.6, 1.2, 21.3, 'Пользователь', 1)");
       raw.execute('ALTER TABLE weight_entries DROP COLUMN impedance');
+      // Столбцы схемы 5 тоже убираем: база выглядит как версия 1.
+      for (final c in ['source', 'external_id', 'body_fat_pct', 'lean_mass_kg', 'muscle_mass_kg', 'body_water_kg', 'bmr_kcal', 'scale_driver']) {
+        raw.execute('ALTER TABLE weight_entries DROP COLUMN $c');
+      }
+      for (final c in ['platform', 'modified_at', 'origin']) {
+        raw.execute('ALTER TABLE activity_records DROP COLUMN $c');
+      }
       raw.execute('PRAGMA user_version = 1');
       raw.dispose();
 

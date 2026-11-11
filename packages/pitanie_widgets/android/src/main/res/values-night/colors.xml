@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="pw_bg">#FF1C1C26</color>
+    <color name="pw_text">#FFF2F1F7</color>
+    <color name="pw_muted">#FFA8A7B5</color>
+    <color name="pw_accent">#FF9D86FF</color>
+    <color name="pw_water">#FF5AB0FF</color>
+    <color name="pw_track">#33FFFFFF</color>
+    <color name="pw_btn_bg">#33FFFFFF</color>
+</resources>

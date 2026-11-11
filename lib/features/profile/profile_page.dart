@@ -10,6 +10,10 @@ import '../../core/nutrition.dart';
 import '../../database/database.dart';
 import '../../shared/widgets.dart';
 import '../calendar/calendar_page.dart';
+import '../calendar/habits_page.dart';
+import '../planner/planner_page.dart';
+import '../body/measurements_page.dart';
+import '../goals/training_goals_page.dart';
 import '../health_integration/devices_page.dart';
 import '../recipes/recipes_page.dart';
 import '../scale/scale_controller.dart';
@@ -597,8 +601,12 @@ class ProfilePage extends ConsumerWidget {
       navCard(Icons.monitor_weight_outlined, 'Вес', const WeightPage()),
       navCard(Icons.water_drop_outlined, 'Вода', const WaterPage()),
       navCard(Icons.calendar_month_outlined, 'Календарь питания', const CalendarPage()),
+      navCard(Icons.emoji_events_outlined, 'Календарь привычек', const HabitsPage()),
+      navCard(Icons.event_note_outlined, 'Планировщик питания', const PlannerPage()),
+      navCard(Icons.straighten, 'Измерения тела и фото', const MeasurementsPage()),
+      navCard(Icons.fitness_center, 'Цели для тренировочных дней', const TrainingGoalsPage()),
       navCard(Icons.menu_book_outlined, 'Мои блюда', const RecipesPage()),
-      navCard(Icons.watch_outlined, 'Устройства и источники', const DevicesPage()),
+      navCard(Icons.watch_outlined, 'Источники здоровья', const DevicesPage()),
     ]);
   }
 

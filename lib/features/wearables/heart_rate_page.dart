@@ -8,7 +8,7 @@ import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../core/dates.dart';
 import '../../database/database.dart';
-import '../dashboard/day_data.dart' show kBleSource, sourceLabel, singleSource;
+import '../dashboard/day_data.dart' show kBleSource, sourceLabel, singleSource, mainSourceOf;
 import 'heart_zones_page.dart';
 import '../health_integration/devices_page.dart';
 
@@ -33,7 +33,7 @@ class _HeartRatePageState extends ConsumerState<HeartRatePage> {
     final recs = await db.activityBetween(_day, dayEnd(_day));
     final hr = recs.where((r) => r.type == 'heartRate').toList();
     // Один источник (с наибольшим числом точек), без суммирования данных разных приложений.
-    return singleSource(hr);
+    return singleSource(hr, preferred: mainSourceOf(await db.allSettings()));
   }
 
   Future<void> _pickDay() async {

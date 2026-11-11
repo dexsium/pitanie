@@ -5,7 +5,8 @@ build/
 *.g.dart
 android/
 ios/
-!packages/watch_ancs/ios/
+!packages/pitanie_widgets/android/
+!packages/pitanie_widgets/ios/
 .idea/
 *.iml
 __pycache__/

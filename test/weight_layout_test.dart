@@ -15,7 +15,7 @@ void main() {
   test('изменение веса за период', () {
     final now = DateTime(2026, 11, 4, 12);
     WeightEntry w(int id, DateTime at, double kg) =>
-        WeightEntry(id: id, date: '', measuredAt: at, weightKg: kg);
+        WeightEntry(id: id, date: '', measuredAt: at, weightKg: kg, source: 'manual');
     final ws = [
       w(1, DateTime(2026, 11, 3, 17, 14), 69.0),
       w(2, DateTime(2026, 11, 4, 9, 13), 69.5),

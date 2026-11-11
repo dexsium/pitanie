@@ -1,0 +1,21 @@
+name: pitanie_widgets
+description: Виджеты главного экрана Android и iOS для приложения питания. Данные передаются в виджет локально, в сеть ничего не уходит.
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.3.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.pitanie.pitanie_widgets
+        pluginClass: PitanieWidgetsPlugin
+      ios:
+        pluginClass: PitanieWidgetsPlugin

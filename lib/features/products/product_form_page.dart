@@ -52,6 +52,39 @@ class _State extends ConsumerState<ProductFormPage> {
         return;
       }
     }
+    final nameText = name.text.trim();
+    final brandText = brand.text.trim();
+    final similar = await db.findSimilarProduct(
+        name: nameText,
+        brand: brandText.isEmpty ? null : brandText,
+        kcal: parseNum(kcal.text)!,
+        p: p,
+        f: f,
+        c: c,
+        excludeId: widget.product?.id);
+    if (similar != null && mounted) {
+      final use = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Такой продукт уже есть'),
+          content: Text('«${similar.name}» с тем же составом уже в базе. '
+              'Можно использовать его или создать отдельную карточку.'),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false), child: const Text('Создать всё равно')),
+            FilledButton(
+                style: FilledButton.styleFrom(minimumSize: const Size(90, 40)),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Использовать')),
+          ],
+        ),
+      );
+      if (use == true) {
+        if (mounted) Navigator.pop(context, similar);
+        return;
+      }
+      if (!mounted) return;
+    }
     final comp = ProductsCompanion(
       name: Value(name.text.trim()),
       brand: Value(brand.text.trim().isEmpty ? null : brand.text.trim()),

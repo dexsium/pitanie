@@ -13,11 +13,15 @@ import 'package:share_plus/share_plus.dart';
 import '../../app/app.dart';
 import '../../app/providers.dart';
 import '../ai/ai_settings_card.dart';
+import '../ai/gemini_service.dart' show writeAiKey;
+import '../../app/theme.dart' show kRed;
 import '../../core/dates.dart';
 import '../../core/nutrition/nutrition_calculation_models.dart';
 import '../../services/health/plan_service.dart';
 import '../../shared/widgets.dart';
 import 'backup_service.dart';
+import '../widgets/widget_sync.dart';
+import '../body/measurements_page.dart' show deletePhotoFiles;
 import 'notification_service.dart';
 
 class SettingsPage extends ConsumerWidget {
@@ -194,6 +198,29 @@ class SettingsPage extends ConsumerWidget {
         ),
         const SizedBox(height: 14),
         AppCard(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Виджеты главного экрана',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: widgetsEnabled(ref.watch(settingsProvider).valueOrNull ?? const {}),
+              title: const Text('Показывать данные в виджетах'),
+              subtitle: const Text(
+                  'Калории, белки, жиры, углеводы и вода за сегодня видны на главном экране телефона '
+                  'всем, кто его видит. По умолчанию выключено.'),
+              onChanged: (v) async {
+                await db.setSetting(kWidgetsEnabledKey, v ? '1' : '0');
+                await pushWidgetsNow(db);
+              },
+            ),
+            Text(
+                'Добавьте виджет «Питание» долгим нажатием на главный экран. Нажатие на кнопки '
+                'виджета открывает приложение: вода и вес добавляются уже внутри него.',
+                style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+          ]),
+        ),
+        const SizedBox(height: 14),
+        AppCard(
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Данные и резервные копии',
@@ -237,6 +264,18 @@ class SettingsPage extends ConsumerWidget {
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.verified_outlined),
+              title: const Text('Проверить целостность данных'),
+              subtitle: const Text('Проверка файла базы на ошибки'),
+              onTap: () async {
+                final problems = await db.integrityProblems();
+                if (!context.mounted) return;
+                toast(context,
+                    problems.isEmpty ? 'Ошибок в данных не найдено' : 'Найдены проблемы: ${problems.take(3).join('; ')}');
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.download),
               title: const Text('Восстановить из копии'),
               subtitle: const Text('Текущие данные будут заменены'),
@@ -256,12 +295,41 @@ class SettingsPage extends ConsumerWidget {
                     ok: 'Восстановить');
                 if (!ok) return;
                 try {
-                  await backup.restore(text);
-                  if (context.mounted) toast(context, 'Данные восстановлены');
+                  final docs = await getApplicationDocumentsDirectory();
+                  await BackupService(db, snapshotDir: p.join(docs.path, 'backups'))
+                      .restore(text);
+                  if (context.mounted) {
+                    toast(context, 'Данные восстановлены. Прежние данные сохранены в снимке.');
+                  }
                 } catch (e) {
                   if (context.mounted)
                     toast(context, 'Ошибка восстановления: $e');
                 }
+              },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.delete_forever_outlined, color: kRed),
+              title: const Text('Удалить все мои данные', style: TextStyle(color: kRed)),
+              subtitle: const Text('Дневник, вес, активность, цели, настройки и ключ ИИ'),
+              onTap: () async {
+                if (!await confirmDialog(context, 'Удалить все данные?',
+                    'Будут безвозвратно удалены дневник, вода, вес, активность, тренировки, цели, блюда, шаблоны и настройки на этом устройстве. Данные в Apple Health / Health Connect не затрагиваются. Перед удалением можно сделать резервную копию.',
+                    ok: 'Продолжить')) {
+                  return;
+                }
+                if (!context.mounted) return;
+                if (!await confirmDialog(context, 'Точно удалить?',
+                    'Отменить это действие нельзя.',
+                    ok: 'Удалить всё')) {
+                  return;
+                }
+                final photos = [for (final x in await db.allProgressPhotos()) x.fileName];
+                await db.wipeUserData();
+                await deletePhotoFiles(photos);
+                await pushWidgetsNow(db);
+                await writeAiKey(null);
+                if (context.mounted) toast(context, 'Все данные удалены');
               },
             ),
           ]),
@@ -303,7 +371,8 @@ class SettingsPage extends ConsumerWidget {
         AppCard(
           child: Text(
             'Все данные хранятся только на этом устройстве. Данные о здоровье не отправляются на сторонние серверы. '
-            'Единственный сетевой запрос — поиск штрихкода в Open Food Facts, и только с вашего согласия. '
+            'Сетевые запросы выполняются только по вашему действию: поиск штрихкода в Open Food Facts '
+            'и, если вы включили помощника, отправка фото еды или данных рациона в Google Gemini по вашему ключу. '
             'Расчётные нормы ориентировочные и не заменяют консультацию специалиста.',
             style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
           ),

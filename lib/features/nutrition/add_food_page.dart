@@ -437,7 +437,32 @@ class _AmountSheetState extends State<_AmountSheet> {
                   style: TextStyle(
                       fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
             ),
-          const SizedBox(height: 12),
+          FutureBuilder<List<({double qty, String unit, int count})>>(
+            future: widget.db.frequentPortions(p.id),
+            builder: (context, snap) {
+              final list = snap.data ?? const [];
+              if (list.isEmpty) return const SizedBox(height: 12);
+              return Padding(
+                padding: const EdgeInsets.only(top: 10, bottom: 2),
+                child: Wrap(spacing: 8, runSpacing: 0, children: [
+                  for (final f in list)
+                    ActionChip(
+                      avatar: const Icon(Icons.history, size: 16),
+                      label: Text('${fmtAuto(f.qty)} ${unitName(f.unit)}'
+                          '${f.count > 1 ? ' · ${f.count}×' : ''}'),
+                      onPressed: () => setState(() {
+                        _unit = switch (f.unit) {
+                          'portion' when p.portionSize != null => QtyUnit.portion,
+                          'piece' when p.pieceWeight != null => QtyUnit.piece,
+                          _ => QtyUnit.base,
+                        };
+                        _qty.text = fmtAuto(f.qty);
+                      }),
+                    ),
+                ]),
+              );
+            },
+          ),
           TextFormField(
             controller: _qty,
             autofocus: true,

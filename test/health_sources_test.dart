@@ -13,7 +13,9 @@ ActivityRecord rec(String type, DateTime a, DateTime b, String source) => Activi
     source: source,
     sourceName: source,
     externalRecordId: '$type$a',
-    tzOffsetMin: 0);
+    tzOffsetMin: 0,
+    platform: '',
+    origin: '');
 
 void main() {
   test('сон из Здоровья: запись-интервал превращается в минуты, фазы считаются сном', () {

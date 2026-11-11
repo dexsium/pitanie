@@ -11,13 +11,21 @@ const kBleSource = 'amazfit_ble';
 
 const kMainSourceKey = 'main_source';
 
-/// Предпочитаемый источник для сведения данных: всегда автоматический выбор (null),
-/// то есть источник с наибольшим объёмом за день из Apple Health / Health Connect.
-String? mainSourceOf(Map<String, String> settings) => null;
+/// Предпочитаемый источник для сведения данных (экран «Источники здоровья»); null —
+/// автоматический выбор: источник с наибольшим объёмом из Apple Health / Health Connect.
+String? mainSourceOf(Map<String, String> settings) {
+  final v = settings[kMainSourceKey];
+  if (v == null || v.isEmpty || v == 'auto' || v == 'ble') return null;
+  return v;
+}
 
 /// Оставляет записи одного источника — того, у которого их больше (минимум дублей и суммирования
 /// данных двух приложений). Если источник один или записей нет, возвращает список как есть.
-List<ActivityRecord> singleSource(List<ActivityRecord> recs) {
+List<ActivityRecord> singleSource(List<ActivityRecord> recs, {String? preferred}) {
+  if (preferred != null) {
+    final own = recs.where((r) => r.source == preferred).toList();
+    if (own.isNotEmpty) return own;
+  }
   final count = <String, int>{};
   for (final r in recs) {
     count[r.source] = (count[r.source] ?? 0) + 1;
@@ -80,7 +88,7 @@ ActivityDay buildActivityDay(List<ActivityRecord> recs, List<Workout> wk,
   }
   // Фазы сна из Здоровья (если источник их пишет); окно 18:00 → 18:00.
   final wFrom = from.subtract(six), wTo = to.subtract(six);
-  final sleepRecs = singleSource(recs
+  final sleepRecs = singleSource(preferred: preferred, recs
       .where((r) =>
           r.type.startsWith('sleep') && !r.startTime.isBefore(wFrom) && r.startTime.isBefore(wTo))
       .toList());
@@ -166,7 +174,7 @@ Future<DayData> loadDayData(AppDatabase db, String key) async {
   final settings = await db.allSettings();
   final food = await db.foodForDay(key);
   final water = await db.waterForDay(key);
-  final goal = await db.goalFor(key);
+  final goal = await db.goalForDay(key);
   final act =
       await loadActivityDay(db, parseDayKey(key), mainSourceOf(settings));
   final weights = (await db.allWeights()).where((w) => w.date == key).toList();
@@ -210,10 +218,27 @@ Future<Map<String, DayStat>> computeRangeStats(
       fromD.subtract(const Duration(hours: 6)), dayEnd(toD));
   final wk = await db.workoutsBetween(fromD, dayEnd(toD));
 
+  // Дни с тренировкой (часы или дневник тренировок) для норм тренировочных дней.
+  final tGoals = await db.allTrainingGoals();
+  final lifts = await db.liftSessionsBetween(fromD, dayEnd(toD));
+  final trainDays = <String>{
+    for (final w in wk) dayKey(w.startTime),
+    for (final l in lifts) dayKey(l.startedAt),
+  };
+
   GoalValues goalFor(String k) {
     DailyGoal? g;
     for (final x in goals) {
       if (x.effectiveDate.compareTo(k) <= 0) g = x;
+    }
+    if (tGoals.isNotEmpty && trainDays.contains(k)) {
+      TrainingGoal? t;
+      for (final x in tGoals) {
+        if (x.effectiveDate.compareTo(k) <= 0) t = x;
+      }
+      if (t != null && t.enabled) {
+        return GoalValues(t.calories, t.proteins, t.fats, t.carbohydrates, t.waterMl);
+      }
     }
     return g == null
         ? GoalValues.fallback

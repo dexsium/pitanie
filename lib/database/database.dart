@@ -51,6 +51,93 @@ class Products extends Table {
   TextColumn get kind => text().withDefault(const Constant('food'))();
   BoolColumn get verified => boolean().withDefault(const Constant(false))();
   TextColumn get portionLabel => text().nullable()();
+  // Когда карточка продукта последний раз создана или исправлена (schema 5).
+  DateTimeColumn get updatedAt => dateTime().nullable()();
+}
+
+/// Обхваты тела в сантиметрах (schema 5). kind: waist, chest, hips, arm, thigh или своё название.
+class BodyMeasurements extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get date => text()();
+  DateTimeColumn get measuredAt => dateTime()();
+  TextColumn get kind => text()();
+  RealColumn get valueCm => real()();
+}
+
+/// Фото прогресса: только имя файла в закрытой папке приложения (schema 5).
+class ProgressPhotos extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  DateTimeColumn get takenAt => dateTime()();
+  TextColumn get fileName => text()();
+  TextColumn get note => text().withDefault(const Constant(''))();
+}
+
+/// Нормы для тренировочных дней. Действуют с даты вступления в силу, как и DailyGoals;
+/// enabled = false отключает отдельные нормы с этой даты (schema 5).
+class TrainingGoals extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get effectiveDate => text().unique()();
+  BoolColumn get enabled => boolean().withDefault(const Constant(true))();
+  RealColumn get calories => real()();
+  RealColumn get proteins => real()();
+  RealColumn get fats => real()();
+  RealColumn get carbohydrates => real()();
+  RealColumn get waterMl => real()();
+}
+
+/// Планируемое питание. Хранится отдельно от дневника фактического питания (schema 5).
+class MealPlanItems extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get date => text()();
+  TextColumn get mealType => text()();
+  TextColumn get name => text()();
+  IntColumn get productId => integer().nullable()();
+  IntColumn get recipeId => integer().nullable()();
+  RealColumn get amount => real().withDefault(const Constant(0))();
+  TextColumn get amountUnit => text().withDefault(const Constant('g'))();
+  RealColumn get displayQty => real().withDefault(const Constant(0))();
+  TextColumn get displayUnit => text().withDefault(const Constant('g'))();
+  RealColumn get caloriesSnapshot => real()();
+  RealColumn get proteinsSnapshot => real()();
+  RealColumn get fatsSnapshot => real()();
+  RealColumn get carbohydratesSnapshot => real()();
+  // Перенесено в дневник.
+  BoolColumn get done => boolean().withDefault(const Constant(false))();
+}
+
+/// Список покупок на неделю (weekStart — день понедельника). manual: добавлено вручную (schema 5).
+class ShoppingItems extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get weekStart => text()();
+  TextColumn get name => text()();
+  RealColumn get grams => real().withDefault(const Constant(0))();
+  BoolColumn get checked => boolean().withDefault(const Constant(false))();
+  BoolColumn get manual => boolean().withDefault(const Constant(false))();
+}
+
+/// Шаблон приёма пищи: набор позиций со снимком пищевой ценности (schema 5).
+class MealTemplates extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+class MealTemplateItems extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get templateId =>
+      integer().references(MealTemplates, #id, onDelete: KeyAction.cascade)();
+  TextColumn get name => text()();
+  IntColumn get productId => integer().nullable()();
+  IntColumn get recipeId => integer().nullable()();
+  RealColumn get amount => real().withDefault(const Constant(0))();
+  TextColumn get amountUnit => text().withDefault(const Constant('g'))();
+  RealColumn get displayQty => real().withDefault(const Constant(0))();
+  TextColumn get displayUnit => text().withDefault(const Constant('g'))();
+  RealColumn get caloriesSnapshot => real()();
+  RealColumn get proteinsSnapshot => real()();
+  RealColumn get fatsSnapshot => real()();
+  RealColumn get carbohydratesSnapshot => real()();
+  BoolColumn get isManual => boolean().withDefault(const Constant(false))();
 }
 
 class Recipes extends Table {
@@ -111,6 +198,19 @@ class WeightEntries extends Table {
   RealColumn get weightKg => real()();
   // Импеданс (Ом) с умных весов: по нему считается состав тела. У ручных замеров его нет.
   RealColumn get impedance => real().nullable()();
+  // Откуда запись: 'manual' (ввод и весы приложения) или 'health:<платформа>' (импорт из Здоровья).
+  TextColumn get source => text().withDefault(const Constant('manual'))();
+  // Идентификатор записи в Здоровье (для импорта: обновление и сверка удалений).
+  TextColumn get externalId => text().nullable()();
+  // Состав тела, пришедший вместе со взвешиванием (из Здоровья или с весов).
+  RealColumn get bodyFatPct => real().nullable()();
+  RealColumn get leanMassKg => real().nullable()();
+  // Показатели, переданные весами (null — весы их не передали, значения не выдумываются).
+  RealColumn get muscleMassKg => real().nullable()();
+  RealColumn get bodyWaterKg => real().nullable()();
+  RealColumn get bmrKcal => real().nullable()();
+  // Драйвер весов: 'mi_scale2', 'gatt_standard'.
+  TextColumn get scaleDriver => text().nullable()();
 }
 
 class ActivityRecords extends Table {
@@ -125,6 +225,12 @@ class ActivityRecords extends Table {
   TextColumn get source => text()();
   TextColumn get sourceName => text().withDefault(const Constant(''))();
   TextColumn get externalRecordId => text()();
+  // Платформа импорта ('apple_health' / 'health_connect'; пусто — прежние записи).
+  TextColumn get platform => text().withDefault(const Constant(''))();
+  // Когда запись последний раз добавлена или обновлена в приложении.
+  DateTimeColumn get modifiedAt => dateTime().nullable()();
+  // Способ получения: 'automatic', 'manual', 'active' или 'unknown'.
+  TextColumn get origin => text().withDefault(const Constant(''))();
 
   @override
   List<Set<Column>> get uniqueKeys => [
@@ -232,6 +338,13 @@ class AppSettings extends Table {
   LiftSessions,
   LiftSets,
   LiftTemplates,
+  MealTemplates,
+  MealTemplateItems,
+  BodyMeasurements,
+  ProgressPhotos,
+  TrainingGoals,
+  MealPlanItems,
+  ShoppingItems,
   DailyGoals,
   ConnectedSources,
   AppSettings,
@@ -248,7 +361,7 @@ class AppDatabase extends _$AppDatabase {
       }));
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -263,6 +376,7 @@ class AppDatabase extends _$AppDatabase {
           ]) {
             await customStatement(s);
           }
+          await _ensureIndexes();
         },
         // При повышении schemaVersion добавляйте шаги вида
         //   if (from < 2) { await m.addColumn(table, table.newColumn); }
@@ -289,13 +403,101 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(liftSets);
             await m.createTable(liftTemplates);
           }
+          if (from < 5) {
+            // Только добавление столбцов со значениями по умолчанию: данные не затрагиваются.
+            await m.addColumn(weightEntries, weightEntries.source);
+            await m.addColumn(weightEntries, weightEntries.externalId);
+            await m.addColumn(weightEntries, weightEntries.bodyFatPct);
+            await m.addColumn(weightEntries, weightEntries.leanMassKg);
+            await m.addColumn(weightEntries, weightEntries.muscleMassKg);
+            await m.addColumn(weightEntries, weightEntries.bodyWaterKg);
+            await m.addColumn(weightEntries, weightEntries.bmrKcal);
+            await m.addColumn(weightEntries, weightEntries.scaleDriver);
+            await m.addColumn(activityRecords, activityRecords.platform);
+            await m.addColumn(activityRecords, activityRecords.modifiedAt);
+            await m.addColumn(activityRecords, activityRecords.origin);
+            await m.addColumn(products, products.updatedAt);
+            await m.createTable(mealTemplates);
+            await m.createTable(mealTemplateItems);
+            await m.createTable(bodyMeasurements);
+            await m.createTable(progressPhotos);
+            await m.createTable(trainingGoals);
+            await m.createTable(mealPlanItems);
+            await m.createTable(shoppingItems);
+          }
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
+          await _ensureIndexes();
           await seedProducts();
           await seedLiftExercises();
         },
       );
+
+  /// Индексы для больших объёмов истории (запросы по продукту, типу данных и времени).
+  Future<void> _ensureIndexes() async {
+    for (final s in const [
+      'CREATE INDEX IF NOT EXISTS idx_food_product ON food_entries(product_id)',
+      'CREATE INDEX IF NOT EXISTS idx_food_meal_date ON food_entries(meal_type, date)',
+      'CREATE INDEX IF NOT EXISTS idx_activity_type_time ON activity_records(type, start_time)',
+      'CREATE INDEX IF NOT EXISTS idx_weight_time ON weight_entries(measured_at)',
+      'CREATE INDEX IF NOT EXISTS idx_body_kind ON body_measurements(kind, measured_at)',
+      'CREATE INDEX IF NOT EXISTS idx_plan_date ON meal_plan_items(date)',
+      'CREATE INDEX IF NOT EXISTS idx_shop_week ON shopping_items(week_start)',
+    ]) {
+      await customStatement(s);
+    }
+  }
+
+  /// Проверка целостности базы SQLite: пустой список означает, что проблем нет.
+  Future<List<String>> integrityProblems() async {
+    final out = <String>[];
+    final ic = await customSelect('PRAGMA integrity_check').get();
+    for (final r in ic) {
+      final v = r.data.values.first.toString();
+      if (v != 'ok') out.add(v);
+    }
+    final fk = await customSelect('PRAGMA foreign_key_check').get();
+    for (final r in fk) {
+      out.add('нарушена связь: ${r.data['table']} -> ${r.data['parent']}');
+    }
+    return out;
+  }
+
+  /// Удаляет все данные пользователя: дневник, воду, вес, активность, тренировки, цели, блюда,
+  /// шаблоны, свои продукты, настройки и подключённые источники. Встроенный справочник остаётся,
+  /// у его продуктов сбрасываются избранное и счётчик использования.
+  Future<void> wipeUserData() => transaction(() async {
+        for (final t in <TableInfo>[
+          shoppingItems,
+          mealPlanItems,
+          trainingGoals,
+          progressPhotos,
+          bodyMeasurements,
+          mealTemplateItems,
+          mealTemplates,
+          liftSets,
+          liftSessions,
+          liftTemplates,
+          liftExercises,
+          recipeIngredients,
+          recipes,
+          foodEntries,
+          waterEntries,
+          weightEntries,
+          activityRecords,
+          workouts,
+          dailyGoals,
+          connectedSources,
+          appSettings,
+          users,
+        ]) {
+          await delete(t).go();
+        }
+        await (delete(products)..where((t) => t.isCustom.equals(true))).go();
+        await update(products).write(const ProductsCompanion(
+            isFavorite: Value(false), useCount: Value(0), lastUsedAt: Value(null)));
+      });
 
   /// Базовый список упражнений при первом запуске. Дальше пользователь правит его сам.
   Future<void> seedLiftExercises() async {
@@ -477,15 +679,49 @@ class AppDatabase extends _$AppDatabase {
         ..limit(1))
       .getSingleOrNull();
 
-  ProductsCompanion _withKey(ProductsCompanion c) => c.copyWith(
+  ProductsCompanion _withKey(ProductsCompanion c) => !c.name.present
+      ? c
+      : c.copyWith(
       searchKey: Value(
           '${c.name.value} ${c.brand.value ?? ''}'.toLowerCase().trim()));
 
   Future<int> insertProduct(ProductsCompanion c) =>
-      into(products).insert(_withKey(c));
+      into(products).insert(_withKey(c).copyWith(updatedAt: Value(DateTime.now())));
 
   Future<void> updateProduct(int id, ProductsCompanion c) =>
-      (update(products)..where((t) => t.id.equals(id))).write(_withKey(c));
+      (update(products)..where((t) => t.id.equals(id)))
+          .write(_withKey(c).copyWith(updatedAt: Value(DateTime.now())));
+
+  static String _norm(String s) =>
+      s.toLowerCase().replaceAll('ё', 'е').replaceAll(RegExp(r'\s+'), ' ').trim();
+
+  /// Продукт с тем же названием и производителем и практически той же пищевой ценностью
+  /// (±1 ккал, ±0,5 г на 100 г). Товары с отличающимся составом дублями не считаются.
+  Future<Product?> findSimilarProduct(
+      {required String name,
+      String? brand,
+      required double kcal,
+      required double p,
+      required double f,
+      required double c,
+      int? excludeId}) async {
+    final n = _norm(name), b = _norm(brand ?? '');
+    final rows = await (select(products)
+          ..where((t) => t.searchKey.like('%${n.replaceAll('%', '')}%'))
+          ..limit(60))
+        .get();
+    for (final r in rows) {
+      if (r.id == excludeId) continue;
+      if (_norm(r.name) != n || _norm(r.brand ?? '') != b) continue;
+      if ((r.calories - kcal).abs() <= 1 &&
+          (r.proteins - p).abs() <= 0.5 &&
+          (r.fats - f).abs() <= 0.5 &&
+          (r.carbohydrates - c).abs() <= 0.5) {
+        return r;
+      }
+    }
+    return null;
+  }
 
   Future<void> setFavorite(int id, bool v) => (update(products)
         ..where((t) => t.id.equals(id)))
@@ -726,6 +962,334 @@ class AppDatabase extends _$AppDatabase {
     return n;
   }
 
+  /// Копирует все приёмы пищи одного дня в другой. Возвращает число записей.
+  Future<int> copyDay(String fromDay, String toDay) async {
+    if (fromDay == toDay) return 0;
+    var n = 0;
+    for (final m in ['breakfast', 'lunch', 'dinner', 'snack']) {
+      n += await copyMeal(fromDay, toDay, m);
+    }
+    return n;
+  }
+
+  /// День, в который [meal] последний раз записывался раньше [beforeDay]; null, если не было.
+  Future<String?> lastMealDay(String meal, String beforeDay) async {
+    final row = await (select(foodEntries)
+          ..where((t) => t.mealType.equals(meal) & t.date.isSmallerThanValue(beforeDay))
+          ..orderBy([(t) => OrderingTerm.desc(t.date)])
+          ..limit(1))
+        .getSingleOrNull();
+    return row?.date;
+  }
+
+  /// Повторяет последний записанный раньше приём пищи этого типа. Возвращает число записей.
+  Future<int> repeatLastMeal(String toDay, String meal) async {
+    final from = await lastMealDay(meal, toDay);
+    if (from == null) return 0;
+    return copyMeal(from, toDay, meal);
+  }
+
+  // ---------- гибкие нормы: тренировочные дни ----------
+  Future<void> setTrainingGoal(String effectiveDate, GoalValues g, {bool enabled = true}) {
+    final c = TrainingGoalsCompanion.insert(
+      effectiveDate: effectiveDate,
+      enabled: Value(enabled),
+      calories: g.calories,
+      proteins: g.proteins,
+      fats: g.fats,
+      carbohydrates: g.carbs,
+      waterMl: g.waterMl,
+    );
+    return into(trainingGoals).insertOnConflictUpdate(c);
+  }
+
+  /// Нормы тренировочных дней, действовавшие в [day]; null, если не заданы или отключены.
+  Future<GoalValues?> trainingGoalFor(String day) async {
+    final g = await (select(trainingGoals)
+          ..where((t) => t.effectiveDate.isSmallerOrEqualValue(day))
+          ..orderBy([(t) => OrderingTerm.desc(t.effectiveDate)])
+          ..limit(1))
+        .getSingleOrNull();
+    if (g == null || !g.enabled) return null;
+    return GoalValues(g.calories, g.proteins, g.fats, g.carbohydrates, g.waterMl);
+  }
+
+  Future<List<TrainingGoal>> allTrainingGoals() => (select(trainingGoals)
+        ..orderBy([(t) => OrderingTerm.asc(t.effectiveDate)]))
+      .get();
+
+  /// В этот день была тренировка: с часов (Здоровье) или записанная в дневнике тренировок.
+  Future<bool> isTrainingDay(String day) async {
+    final d = parseDayKey(day);
+    final from = dayStart(d), to = dayEnd(d);
+    final w = await (select(workouts)
+          ..where((t) => t.startTime.isBiggerOrEqualValue(from) & t.startTime.isSmallerThanValue(to))
+          ..limit(1))
+        .get();
+    if (w.isNotEmpty) return true;
+    final l = await (select(liftSessions)
+          ..where((t) => t.startedAt.isBiggerOrEqualValue(from) & t.startedAt.isSmallerThanValue(to))
+          ..limit(1))
+        .get();
+    return l.isNotEmpty;
+  }
+
+  Future<List<LiftSession>> liftSessionsBetween(DateTime from, DateTime to) =>
+      (select(liftSessions)
+            ..where((t) => t.startedAt.isBiggerOrEqualValue(from) & t.startedAt.isSmallerThanValue(to)))
+          .get();
+
+  /// Норма дня с учётом типа дня: для тренировочного дня берутся нормы тренировочных дней,
+  /// если они заданы и включены, иначе обычные. Прошлые дни не меняются при новой цели.
+  Future<GoalValues> goalForDay(String day) async {
+    final base = await goalFor(day);
+    final tg = await trainingGoalFor(day);
+    if (tg == null) return base;
+    return await isTrainingDay(day) ? tg : base;
+  }
+
+  // ---------- обхваты тела и фото прогресса ----------
+  Future<int> addBodyMeasure(String kind, double cm, DateTime at) =>
+      into(bodyMeasurements).insert(BodyMeasurementsCompanion.insert(
+          date: dayKey(at), measuredAt: at, kind: kind.trim(), valueCm: cm));
+
+  Stream<List<BodyMeasurement>> watchBodyMeasures() => (select(bodyMeasurements)
+        ..orderBy([(t) => OrderingTerm.asc(t.measuredAt)]))
+      .watch();
+
+  Future<void> deleteBodyMeasure(int id) =>
+      (delete(bodyMeasurements)..where((t) => t.id.equals(id))).go();
+
+  Future<int> addProgressPhoto(String fileName, DateTime at, {String note = ''}) =>
+      into(progressPhotos).insert(
+          ProgressPhotosCompanion.insert(takenAt: at, fileName: fileName, note: Value(note)));
+
+  Stream<List<ProgressPhoto>> watchProgressPhotos() => (select(progressPhotos)
+        ..orderBy([(t) => OrderingTerm.desc(t.takenAt)]))
+      .watch();
+
+  Future<List<ProgressPhoto>> allProgressPhotos() => select(progressPhotos).get();
+
+  /// Удаляет запись о фото и возвращает имя файла, который нужно удалить с диска.
+  Future<String?> deleteProgressPhoto(int id) async {
+    final p = await (select(progressPhotos)..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (p == null) return null;
+    await (delete(progressPhotos)..where((t) => t.id.equals(id))).go();
+    return p.fileName;
+  }
+
+  // ---------- планировщик питания ----------
+  Future<int> addPlanItem(MealPlanItemsCompanion c) => into(mealPlanItems).insert(c);
+
+  Stream<List<MealPlanItem>> watchPlan(String fromDay, String toDay) =>
+      (select(mealPlanItems)
+            ..where((t) => t.date.isBiggerOrEqualValue(fromDay) & t.date.isSmallerOrEqualValue(toDay))
+            ..orderBy([(t) => OrderingTerm.asc(t.date), (t) => OrderingTerm.asc(t.id)]))
+          .watch();
+
+  Future<List<MealPlanItem>> planBetween(String fromDay, String toDay) =>
+      (select(mealPlanItems)
+            ..where((t) => t.date.isBiggerOrEqualValue(fromDay) & t.date.isSmallerOrEqualValue(toDay))
+            ..orderBy([(t) => OrderingTerm.asc(t.date), (t) => OrderingTerm.asc(t.id)]))
+          .get();
+
+  Future<void> deletePlanItem(int id) =>
+      (delete(mealPlanItems)..where((t) => t.id.equals(id))).go();
+
+  Future<void> clearPlanDay(String day) =>
+      (delete(mealPlanItems)..where((t) => t.date.equals(day))).go();
+
+  /// Копирует план одного дня в другой (отметки «перенесено» не копируются).
+  Future<int> copyPlanDay(String fromDay, String toDay) async {
+    if (fromDay == toDay) return 0;
+    final src = await planBetween(fromDay, fromDay);
+    for (final i in src) {
+      await into(mealPlanItems).insert(MealPlanItemsCompanion.insert(
+        date: toDay,
+        mealType: i.mealType,
+        name: i.name,
+        caloriesSnapshot: i.caloriesSnapshot,
+        proteinsSnapshot: i.proteinsSnapshot,
+        fatsSnapshot: i.fatsSnapshot,
+        carbohydratesSnapshot: i.carbohydratesSnapshot,
+        productId: Value(i.productId),
+        recipeId: Value(i.recipeId),
+        amount: Value(i.amount),
+        amountUnit: Value(i.amountUnit),
+        displayQty: Value(i.displayQty),
+        displayUnit: Value(i.displayUnit),
+      ));
+    }
+    return src.length;
+  }
+
+  /// Переносит запланированную позицию в дневник фактического питания (в тот же день и приём
+  /// пищи) и отмечает её выполненной. План и дневник остаются раздельными записями.
+  Future<bool> transferPlanItemToDiary(int id) async {
+    final i = await (select(mealPlanItems)..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (i == null || i.done) return false;
+    final now = DateTime.now();
+    final d = parseDayKey(i.date);
+    await into(foodEntries).insert(FoodEntriesCompanion.insert(
+      date: i.date,
+      eatenAt: DateTime(d.year, d.month, d.day, now.hour, now.minute, now.second),
+      mealType: i.mealType,
+      name: i.name,
+      caloriesSnapshot: i.caloriesSnapshot,
+      proteinsSnapshot: i.proteinsSnapshot,
+      fatsSnapshot: i.fatsSnapshot,
+      carbohydratesSnapshot: i.carbohydratesSnapshot,
+      tzOffsetMin: Value(tzOffsetMinutes(now)),
+      productId: Value(i.productId),
+      recipeId: Value(i.recipeId),
+      amount: Value(i.amount),
+      amountUnit: Value(i.amountUnit),
+      displayQty: Value(i.displayQty),
+      displayUnit: Value(i.displayUnit),
+    ));
+    await (update(mealPlanItems)..where((t) => t.id.equals(id)))
+        .write(const MealPlanItemsCompanion(done: Value(true)));
+    return true;
+  }
+
+  // ---------- список покупок ----------
+  Stream<List<ShoppingItem>> watchShopping(String weekStart) => (select(shoppingItems)
+        ..where((t) => t.weekStart.equals(weekStart))
+        ..orderBy([(t) => OrderingTerm.asc(t.checked), (t) => OrderingTerm.asc(t.name)]))
+      .watch();
+
+  Future<void> toggleShopping(int id, bool checked) =>
+      (update(shoppingItems)..where((t) => t.id.equals(id)))
+          .write(ShoppingItemsCompanion(checked: Value(checked)));
+
+  Future<void> deleteShopping(int id) =>
+      (delete(shoppingItems)..where((t) => t.id.equals(id))).go();
+
+  Future<void> addManualShopping(String weekStart, String name) =>
+      into(shoppingItems).insert(ShoppingItemsCompanion.insert(
+          weekStart: weekStart, name: name.trim(), manual: const Value(true)));
+
+  /// Список покупок по плану недели: ингредиенты блюд и продукты, суммированные по продукту.
+  /// Позиции без состава (быстрые записи) в список не попадают. Отметки «куплено» сохраняются
+  /// для тех же названий, ручные позиции не трогаются.
+  Future<int> buildShoppingList(String weekStart) async {
+    final from = weekStart;
+    final to = dayKey(parseDayKey(weekStart).add(const Duration(days: 6)));
+    final items = await planBetween(from, to);
+    final need = <String, double>{};
+    void add(String name, double g) => need[name] = (need[name] ?? 0) + g;
+    for (final i in items) {
+      if (i.recipeId != null) {
+        final r = await recipeById(i.recipeId!);
+        if (r == null) continue;
+        final res = await recipeResult(r.id);
+        final factor = i.displayUnit == 'portion'
+            ? i.displayQty / (r.servings <= 0 ? 1 : r.servings)
+            : (res.finalWeight <= 0 ? 0.0 : i.amount / res.finalWeight);
+        for (final ing in await ingredientsOf(r.id)) {
+          add(ing.$2.name, ing.$1.quantity * factor);
+        }
+      } else if (i.productId != null && i.amount > 0) {
+        final pr = await productById(i.productId!);
+        if (pr != null) add(pr.name, i.amount);
+      }
+    }
+    final old = await (select(shoppingItems)..where((t) => t.weekStart.equals(weekStart))).get();
+    final checked = {for (final o in old) if (!o.manual && o.checked) o.name};
+    await (delete(shoppingItems)
+          ..where((t) => t.weekStart.equals(weekStart) & t.manual.equals(false)))
+        .go();
+    for (final e in need.entries) {
+      await into(shoppingItems).insert(ShoppingItemsCompanion.insert(
+          weekStart: weekStart,
+          name: e.key,
+          grams: Value(double.parse(e.value.toStringAsFixed(0))),
+          checked: Value(checked.contains(e.key))));
+    }
+    return need.length;
+  }
+
+  // ---------- шаблоны приёмов пищи ----------
+  /// Сохраняет приём пищи дня как шаблон. Возвращает id или null, если записей нет.
+  Future<int?> saveMealTemplate(String day, String meal, String name) async {
+    final src = (await foodForDay(day)).where((e) => e.mealType == meal).toList();
+    if (src.isEmpty) return null;
+    final id = await into(mealTemplates).insert(MealTemplatesCompanion.insert(
+        name: name.trim().isEmpty ? 'Шаблон' : name.trim()));
+    for (final e in src) {
+      await into(mealTemplateItems).insert(MealTemplateItemsCompanion.insert(
+        templateId: id,
+        name: e.name,
+        caloriesSnapshot: e.caloriesSnapshot,
+        proteinsSnapshot: e.proteinsSnapshot,
+        fatsSnapshot: e.fatsSnapshot,
+        carbohydratesSnapshot: e.carbohydratesSnapshot,
+        productId: Value(e.productId),
+        recipeId: Value(e.recipeId),
+        amount: Value(e.amount),
+        amountUnit: Value(e.amountUnit),
+        displayQty: Value(e.displayQty),
+        displayUnit: Value(e.displayUnit),
+        isManual: Value(e.isManual),
+      ));
+    }
+    return id;
+  }
+
+  Stream<List<MealTemplate>> watchMealTemplates() => (select(mealTemplates)
+        ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
+      .watch();
+
+  Future<List<MealTemplateItem>> templateItems(int templateId) =>
+      (select(mealTemplateItems)..where((t) => t.templateId.equals(templateId))).get();
+
+  Future<void> deleteMealTemplate(int id) => transaction(() async {
+        await (delete(mealTemplateItems)..where((t) => t.templateId.equals(id))).go();
+        await (delete(mealTemplates)..where((t) => t.id.equals(id))).go();
+      });
+
+  /// Добавляет позиции шаблона в приём пищи дня (со снимком из шаблона).
+  Future<int> applyMealTemplate(int id, String toDay, String meal) async {
+    final items = await templateItems(id);
+    final now = DateTime.now();
+    for (final i in items) {
+      await into(foodEntries).insert(FoodEntriesCompanion.insert(
+        date: toDay,
+        eatenAt: now,
+        mealType: meal,
+        name: i.name,
+        caloriesSnapshot: i.caloriesSnapshot,
+        proteinsSnapshot: i.proteinsSnapshot,
+        fatsSnapshot: i.fatsSnapshot,
+        carbohydratesSnapshot: i.carbohydratesSnapshot,
+        tzOffsetMin: Value(tzOffsetMinutes(now)),
+        productId: Value(i.productId),
+        recipeId: Value(i.recipeId),
+        amount: Value(i.amount),
+        amountUnit: Value(i.amountUnit),
+        displayQty: Value(i.displayQty),
+        displayUnit: Value(i.displayUnit),
+        isManual: Value(i.isManual),
+      ));
+    }
+    return items.length;
+  }
+
+  /// Самые частые порции продукта: количество, единица и сколько раз выбиралась.
+  Future<List<({double qty, String unit, int count})>> frequentPortions(int productId,
+      {int limit = 3}) async {
+    final rows = await customSelect(
+        'SELECT display_qty q, display_unit u, COUNT(*) c, MAX(eaten_at) last '
+        'FROM food_entries WHERE product_id = ? AND is_manual = 0 AND display_qty > 0 '
+        'GROUP BY display_qty, display_unit ORDER BY c DESC, last DESC LIMIT ?',
+        variables: [Variable<int>(productId), Variable<int>(limit)],
+        readsFrom: {foodEntries}).get();
+    return [
+      for (final r in rows)
+        (qty: r.read<double>('q'), unit: r.read<String>('u'), count: r.read<int>('c'))
+    ];
+  }
+
   // ---------- вода ----------
   Future<List<WaterEntry>> waterForDay(String day) => (select(waterEntries)
         ..where((t) => t.date.equals(day))
@@ -777,6 +1341,123 @@ class AppDatabase extends _$AppDatabase {
           measuredAt: at,
           weightKg: kg,
           impedance: Value(impedance)));
+
+  /// Импорт взвешивания из Здоровья. Возвращает 'added', 'updated' или 'duplicate'.
+  /// Запись, совпавшая по времени (±10 мин) и массе (±0,3 кг) с уже имеющейся, не добавляется.
+  Future<String> importWeight(
+      {required String platform,
+      required String externalId,
+      required DateTime at,
+      required double kg}) async {
+    final tag = 'health:$platform';
+    final same = await (select(weightEntries)
+          ..where((t) => t.source.equals(tag) & t.externalId.equals(externalId)))
+        .getSingleOrNull();
+    if (same != null) {
+      await (update(weightEntries)..where((t) => t.id.equals(same.id))).write(
+          WeightEntriesCompanion(
+              date: Value(dayKey(at)), measuredAt: Value(at), weightKg: Value(kg)));
+      return 'updated';
+    }
+    const win = Duration(minutes: 10);
+    final near = await (select(weightEntries)
+          ..where((t) =>
+              t.measuredAt.isBiggerOrEqualValue(at.subtract(win)) &
+              t.measuredAt.isSmallerOrEqualValue(at.add(win))))
+        .get();
+    if (near.any((e) => (e.weightKg - kg).abs() <= 0.3)) return 'duplicate';
+    await into(weightEntries).insert(WeightEntriesCompanion.insert(
+        date: dayKey(at),
+        measuredAt: at,
+        weightKg: kg,
+        source: Value(tag),
+        externalId: Value(externalId)));
+    return 'added';
+  }
+
+  /// Записывает жир и безжировую массу во взвешивание, ближайшее по времени (±15 мин).
+  Future<void> attachBodyComposition(DateTime at, {double? fatPct, double? leanKg}) async {
+    const win = Duration(minutes: 15);
+    final near = await (select(weightEntries)
+          ..where((t) =>
+              t.measuredAt.isBiggerOrEqualValue(at.subtract(win)) &
+              t.measuredAt.isSmallerOrEqualValue(at.add(win))))
+        .get();
+    if (near.isEmpty) return;
+    near.sort((a, b) => a.measuredAt
+        .difference(at)
+        .abs()
+        .compareTo(b.measuredAt.difference(at).abs()));
+    final w = near.first;
+    await (update(weightEntries)..where((t) => t.id.equals(w.id))).write(
+        WeightEntriesCompanion(
+            bodyFatPct: fatPct != null ? Value(fatPct) : const Value.absent(),
+            leanMassKg: leanKg != null ? Value(leanKg) : const Value.absent()));
+  }
+
+  /// Удаляет импортированные взвешивания, которых больше нет в источнике (сверка окна).
+  Future<int> deleteImportedWeightsMissing(
+      String platform, DateTime from, Set<String> keepIds) async {
+    final tag = 'health:$platform';
+    final rows = await (select(weightEntries)
+          ..where((t) => t.source.equals(tag) & t.measuredAt.isBiggerOrEqualValue(from)))
+        .get();
+    final gone = [for (final r in rows) if (!keepIds.contains(r.externalId)) r.id];
+    if (gone.isEmpty) return 0;
+    return (delete(weightEntries)..where((t) => t.id.isIn(gone))).go();
+  }
+
+  /// Удаляет записи активности платформы, которых больше нет в источнике (сверка окна).
+  Future<int> deleteActivityMissing(
+      String platform, String type, DateTime from, Set<String> keepIds) async {
+    final rows = await (select(activityRecords)
+          ..where((t) =>
+              t.platform.equals(platform) &
+              t.type.equals(type) &
+              t.startTime.isBiggerOrEqualValue(from)))
+        .get();
+    final gone = [for (final r in rows) if (!keepIds.contains(r.externalRecordId)) r.id];
+    if (gone.isEmpty) return 0;
+    return (delete(activityRecords)..where((t) => t.id.isIn(gone))).go();
+  }
+
+  /// Взвешивание с весов приложения. Если то же измерение уже пришло из Здоровья
+  /// (±10 мин, ±0,3 кг), оно дополняется данными весов вместо добавления дубля.
+  /// Показатели состава записываются только те, что весы действительно передали.
+  Future<int> saveScaleWeight(DateTime at, double kg,
+      {double? impedance,
+      double? bodyFatPct,
+      double? fatFreeKg,
+      double? muscleKg,
+      double? waterKg,
+      double? bmrKcal,
+      String? driver}) async {
+    WeightEntriesCompanion extra() => WeightEntriesCompanion(
+          impedance: impedance != null ? Value(impedance) : const Value.absent(),
+          bodyFatPct: bodyFatPct != null ? Value(bodyFatPct) : const Value.absent(),
+          leanMassKg: fatFreeKg != null ? Value(fatFreeKg) : const Value.absent(),
+          muscleMassKg: muscleKg != null ? Value(muscleKg) : const Value.absent(),
+          bodyWaterKg: waterKg != null ? Value(waterKg) : const Value.absent(),
+          bmrKcal: bmrKcal != null ? Value(bmrKcal) : const Value.absent(),
+          scaleDriver: driver != null ? Value(driver) : const Value.absent(),
+        );
+    const win = Duration(minutes: 10);
+    final near = await (select(weightEntries)
+          ..where((t) =>
+              t.source.like('health:%') &
+              t.measuredAt.isBiggerOrEqualValue(at.subtract(win)) &
+              t.measuredAt.isSmallerOrEqualValue(at.add(win))))
+        .get();
+    for (final e in near) {
+      if ((e.weightKg - kg).abs() <= 0.3) {
+        await (update(weightEntries)..where((t) => t.id.equals(e.id))).write(extra());
+        return e.id;
+      }
+    }
+    final id = await addWeight(at, kg, impedance: impedance);
+    await (update(weightEntries)..where((t) => t.id.equals(id))).write(extra());
+    return id;
+  }
 
   Future<void> updateWeight(int id, DateTime at, double kg) =>
       (update(weightEntries)..where((t) => t.id.equals(id))).write(

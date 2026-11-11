@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../database/database.dart';
+import 'gatt_scale.dart';
 import 'mi_scale.dart';
+import 'scale_driver.dart';
 
 final scaleProvider =
     ChangeNotifierProvider<ScaleController>((ref) => ScaleController(ref.watch(dbProvider)));
@@ -49,6 +51,14 @@ class ScaleController extends ChangeNotifier {
   /// Подпись прерванного измерения: пакеты с ней не запускают новое измерение.
   String? _abortedSig;
 
+  /// Весы со стандартными сервисами Bluetooth (подключение): выбранное пользователем устройство.
+  String? gattId;
+  String? gattName;
+  bool _gattBusy = false;
+  DateTime? _gattCooldownUntil;
+  double? _lastGattKg;
+  DateTime? _lastGattAt;
+
   bool _loaded = false;
   StreamSubscription<List<ScanResult>>? _sub;
   StreamSubscription<bool>? _scanSub;
@@ -83,6 +93,8 @@ class ScaleController extends ChangeNotifier {
       final m = await db.allSettings();
       enabled = m['scale_enabled'] != '0';
       lastStamp = m['scale_last_stamp'];
+      gattId = m['gatt_scale_id'];
+      gattName = m['gatt_scale_name'];
       final kg = double.tryParse(m['scale_last_kg'] ?? '');
       final at = int.tryParse(m['scale_last_at'] ?? '');
       if (kg != null && at != null) {
@@ -122,6 +134,91 @@ class ScaleController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Запоминает весы со стандартными сервисами (найденные на экране «Источники здоровья»).
+  Future<void> setGattScale(String id, String name) async {
+    gattId = id;
+    gattName = name;
+    await db.setSetting('gatt_scale_id', id);
+    await db.setSetting('gatt_scale_name', name);
+    _addLog('выбраны весы: $name');
+    notifyListeners();
+  }
+
+  Future<void> forgetGattScale() async {
+    gattId = null;
+    gattName = null;
+    await db.setSetting('gatt_scale_id', '');
+    await db.setSetting('gatt_scale_name', '');
+    notifyListeners();
+  }
+
+  /// Подключается к выбранным весам, когда они появились в эфире. До трёх попыток с паузой;
+  /// после измерения 30 секунд не подключается снова (весы продолжают рекламироваться).
+  Future<void> _tryGatt(BluetoothDevice device) async {
+    final until = _gattCooldownUntil;
+    if (_gattBusy || (until != null && DateTime.now().isBefore(until))) return;
+    _gattBusy = true;
+    try {
+      for (var attempt = 1; attempt <= 3; attempt++) {
+        _addLog('весы ${gattName ?? ''}: подключение, попытка $attempt');
+        final res = await readGattScale(device, onProgress: (kg) {
+          if (phase == ScalePhase.done || phase == ScalePhase.saving) {
+            phase = ScalePhase.idle;
+            savedEntry = null;
+          }
+          phase = ScalePhase.measuring;
+          liveKg = kg;
+          notifyListeners();
+        });
+        final m = res.measurement;
+        if (m?.weightKg != null) {
+          await _saveGatt(m!);
+          return;
+        }
+        _addLog('весы: ${res.error ?? 'нет данных'}');
+        if (phase == ScalePhase.measuring) _setPhase(ScalePhase.idle);
+        if (attempt < 3) await Future<void>.delayed(Duration(seconds: attempt == 1 ? 2 : 5));
+      }
+    } finally {
+      _gattBusy = false;
+      _gattCooldownUntil = DateTime.now().add(const Duration(seconds: 30));
+    }
+  }
+
+  Future<void> _saveGatt(ScaleMeasurement m) async {
+    final kg = m.weightKg!;
+    final now = DateTime.now();
+    final prevKg = _lastGattKg, prevAt = _lastGattAt;
+    if (prevKg != null &&
+        prevAt != null &&
+        (prevKg - kg).abs() < 0.05 &&
+        now.difference(prevAt).inSeconds < 120) {
+      _addLog('весы: то же измерение повторно, пропущено');
+      if (phase == ScalePhase.measuring) _setPhase(ScalePhase.idle);
+      return;
+    }
+    _setPhase(ScalePhase.saving);
+    final id = await db.saveScaleWeight(now, kg,
+        impedance: m.impedanceOhm,
+        bodyFatPct: m.bodyFatPct,
+        fatFreeKg: m.fatFreeKg,
+        muscleKg: m.muscleMassKg,
+        waterKg: m.bodyWaterKg,
+        bmrKcal: m.bmrKcal,
+        driver: 'gatt_standard');
+    _lastGattKg = kg;
+    _lastGattAt = now;
+    await db.setSetting('scale_last_kg', '$kg');
+    await db.setSetting('scale_last_at', '${now.millisecondsSinceEpoch}');
+    lastKg = kg;
+    lastAt = now;
+    liveKg = kg;
+    savedEntry = await db.weightById(id);
+    _addLog('весы: вес $kg кг сохранён'
+        '${m.hasComposition ? ' (с составом тела)' : ' (только вес)'}');
+    _setPhase(ScalePhase.done);
+  }
+
   /// Сканирование прерывается при подключении к часам и поиске устройств: перезапускаем.
   Future<void> _ensureScan() async {
     if (!enabled || FlutterBluePlus.isScanningNow) return;
@@ -147,6 +244,11 @@ class ScaleController extends ChangeNotifier {
   Future<void> _onResults(List<ScanResult> list) async {
     resultsSeen = list.length;
     for (final r in list) {
+      final gid = gattId;
+      if (gid != null && gid.isNotEmpty && r.device.remoteId.str == gid) {
+        unawaited(_tryGatt(r.device));
+        continue;
+      }
       final data = r.advertisementData.serviceData[_uScale2];
       if (data == null) continue;
       // Поток отдаёт весь список при каждом пакете любого устройства, и данные весов в нём
@@ -270,7 +372,8 @@ class ScaleController extends ChangeNotifier {
     lastStamp = reading.stamp;
     _setPhase(ScalePhase.saving);
     final now = DateTime.now();
-    final id = await db.addWeight(now, reading.weightKg, impedance: reading.impedance?.toDouble());
+    final id = await db.saveScaleWeight(now, reading.weightKg,
+        impedance: reading.impedance?.toDouble(), driver: 'mi_scale2');
     await db.setSetting('scale_last_stamp', reading.stamp);
     await db.setSetting('scale_last_kg', '${reading.weightKg}');
     await db.setSetting('scale_last_at', '${now.millisecondsSinceEpoch}');

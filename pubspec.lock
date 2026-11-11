@@ -997,6 +997,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.2"
+  pitanie_widgets:
+    dependency: "direct main"
+    description:
+      path: "packages/pitanie_widgets"
+      relative: true
+    source: path
+    version: "0.0.1"
   platform:
     dependency: transitive
     description:

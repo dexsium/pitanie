@@ -103,6 +103,13 @@ class _EditEntrySheetState extends State<EditEntrySheet> {
         }
       });
 
+  /// Быстрое изменение количества: умножает текущее значение на [k].
+  void _scaleQty(double k) {
+    final q = parseNum(_qty.text);
+    if (q == null || q <= 0) return;
+    setState(() => _qty.text = fmtInput(double.parse((q * k).toStringAsFixed(2))));
+  }
+
   double? _amount() {
     final q = parseNum(_qty.text);
     if (q == null || q <= 0) return null;
@@ -223,7 +230,12 @@ class _EditEntrySheetState extends State<EditEntrySheet> {
               validator: numValidator(allowZero: false, max: 20000),
               onChanged: (_) => setState(() {}),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, children: [
+              for (final k in const [(0.5, '½'), (0.75, '−25%'), (1.1, '+10%'), (1.25, '+25%'), (2.0, '×2')])
+                ActionChip(label: Text(k.$2), onPressed: () => _scaleQty(k.$1)),
+            ]),
+            const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
