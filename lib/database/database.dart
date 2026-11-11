@@ -1333,6 +1333,14 @@ class AppDatabase extends _$AppDatabase {
   Future<WeightEntry> weightById(int id) =>
       (select(weightEntries)..where((t) => t.id.equals(id))).getSingle();
 
+  /// Взвешивания за дни [fromKey, toKey] включительно (для экранов дня и статистики:
+  /// вся история им не нужна).
+  Future<List<WeightEntry>> weightsBetweenKeys(String fromKey, String toKey) =>
+      (select(weightEntries)
+            ..where((t) => t.date.isBiggerOrEqualValue(fromKey) & t.date.isSmallerOrEqualValue(toKey))
+            ..orderBy([(t) => OrderingTerm.asc(t.measuredAt)]))
+          .get();
+
   Future<List<WeightEntry>> allWeights() => (select(weightEntries)
         ..orderBy([(t) => OrderingTerm.asc(t.measuredAt)]))
       .get();
@@ -1577,9 +1585,17 @@ class AppDatabase extends _$AppDatabase {
 /// Поток, пересчитываемый при изменении таблиц БД. События, пришедшие во время расчёта,
 /// схлопываются в один повторный расчёт (раньше каждое событие запускало полный расчёт по
 /// очереди, и при пачке записей интерфейс надолго «замирал»).
-Stream<T> reactive<T>(AppDatabase db, Future<T> Function() load, {String name = ''}) {
+///
+/// [ignore]: таблицы, изменения которых этот расчёт не читает (они не запускают пересчёт).
+/// [debounce]: пересчёт запускается после паузы без новых изменений, поэтому серия записей
+/// (синхронизация, настройки) даёт один расчёт, а не десятки.
+Stream<T> reactive<T>(AppDatabase db, Future<T> Function() load,
+    {String name = '',
+    Set<String> ignore = const {},
+    Duration debounce = const Duration(milliseconds: 300)}) {
   final ctrl = StreamController<T>();
   StreamSubscription<Set<TableUpdate>>? sub;
+  Timer? timer;
   var busy = false;
   var dirty = false;
 
@@ -1612,14 +1628,18 @@ Stream<T> reactive<T>(AppDatabase db, Future<T> Function() load, {String name = 
 
   ctrl.onListen = () {
     sub = db.tableUpdates().listen((u) {
+      final tables = {for (final x in u) x.table};
+      if (tables.every(ignore.contains)) return;
       if (name.isNotEmpty) {
-        PerfLog.mark('изменение: ${{for (final x in u) x.table}.join(", ")} -> $name');
+        PerfLog.mark('изменение: ${tables.join(", ")} -> $name');
       }
-      run();
+      timer?.cancel();
+      timer = Timer(debounce, run);
     });
     run();
   };
   ctrl.onCancel = () async {
+    timer?.cancel();
     await sub?.cancel();
   };
   return ctrl.stream;

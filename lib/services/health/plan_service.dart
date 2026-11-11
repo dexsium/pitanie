@@ -182,8 +182,7 @@ Future<PlanSnapshot> loadPlan(AppDatabase db, DateTime now) async {
 
   // Дневник питания за 28 дней: нужен и для оценки расхода, и для проверки адаптации.
   final from = today.subtract(const Duration(days: 27));
-  final stats = await computeRangeStats(db, dayKey(from), dayKey(today));
-  final intake = [for (final s in stats.values) s.hasFood ? s.n.calories : 0.0];
+  final intake = await computeIntakeByDay(db, dayKey(from), dayKey(today));
   final coverage = intake.where((v) => v > 0).length / 28;
 
   final goalType = GoalType.values.firstWhere(

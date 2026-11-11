@@ -14,7 +14,7 @@ void main() {
       loads++;
       await Future<void>.delayed(const Duration(milliseconds: 80));
       return loads;
-    }).listen(values.add);
+    }, debounce: const Duration(milliseconds: 10)).listen(values.add);
     await Future<void>.delayed(const Duration(milliseconds: 200));
     expect(loads, 1);
 
@@ -39,7 +39,7 @@ void main() {
       loads++;
       if (loads == 2) throw StateError('сбой');
       return loads;
-    }).listen(values.add, onError: errors.add);
+    }, debounce: const Duration(milliseconds: 10)).listen(values.add, onError: errors.add);
     await Future<void>.delayed(const Duration(milliseconds: 50));
     await db.setSetting('a', '1');
     await Future<void>.delayed(const Duration(milliseconds: 100));
@@ -53,5 +53,28 @@ void main() {
     await db.setSetting('c', '3');
     await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(loads, before);
+  });
+
+  test('изменения игнорируемых таблиц не запускают пересчёт, серия записей даёт один расчёт', () async {
+    final db = AppDatabase.memory();
+    addTearDown(db.close);
+    await db.getUser(); // открытие базы (начальное наполнение) до подписки
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    var loads = 0;
+    final sub = reactive<int>(db, () async => ++loads,
+        ignore: const {'app_settings'}, debounce: const Duration(milliseconds: 30)).listen((_) {});
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    expect(loads, 1);
+    for (var i = 0; i < 10; i++) {
+      await db.setSetting('x$i', '1');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    expect(loads, 1, reason: 'настройки игнорируются');
+    for (var i = 0; i < 5; i++) {
+      await db.addWeight(DateTime(2026, 11, 1 + i, 8), 70.0 + i);
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(loads, 2, reason: 'серия записей веса даёт один пересчёт');
+    await sub.cancel();
   });
 }

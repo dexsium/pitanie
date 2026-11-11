@@ -24,7 +24,7 @@ final tabProvider = StateProvider<int>((ref) => 0);
 
 final dayDataProvider = StreamProvider.family<DayData, String>((ref, key) {
   final db = ref.watch(dbProvider);
-  return reactive(db, () => loadDayData(db, key), name: 'день $key');
+  return reactive(db, () => loadDayData(db, key), name: 'день $key', ignore: const {'connected_sources'});
 });
 
 final rangeStatsProvider =
@@ -32,7 +32,7 @@ final rangeStatsProvider =
         (ref, r) {
   final db = ref.watch(dbProvider);
   return reactive(db, () => computeRangeStats(db, r.from, r.to),
-      name: 'статистика ${r.from}..${r.to}');
+      name: 'статистика ${r.from}..${r.to}', ignore: const {'connected_sources'});
 });
 
 final healthServiceProvider =
@@ -51,5 +51,6 @@ final catalogProgressProvider = StateProvider<double?>((ref) => null);
 /// Расчёт норм (BMR, TDEE, КБЖУ, тренд веса, предложение адаптации).
 final planProvider = StreamProvider<PlanSnapshot>((ref) {
   final db = ref.watch(dbProvider);
-  return reactive(db, () => loadPlan(db, DateTime.now()), name: 'план');
+  return reactive(db, () => loadPlan(db, DateTime.now()), name: 'план',
+      ignore: const {'connected_sources', 'activity_records', 'workouts'});
 });

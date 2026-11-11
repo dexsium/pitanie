@@ -177,7 +177,7 @@ Future<DayData> loadDayData(AppDatabase db, String key) async {
   final goal = await db.goalForDay(key);
   final act =
       await loadActivityDay(db, parseDayKey(key), mainSourceOf(settings));
-  final weights = (await db.allWeights()).where((w) => w.date == key).toList();
+  final weights = await db.weightsBetweenKeys(key, key);
   return DayData(
     key,
     food,
@@ -206,13 +206,28 @@ class DayStat {
       hasFood && n.calories >= goal.calories * 0.9 && n.calories <= goal.calories * 1.1;
 }
 
+/// Калории по дням диапазона (подряд, от первого дня к последнему; 0, если еды нет).
+/// Без активности и пульса: плану питания нужен только дневник.
+Future<List<double>> computeIntakeByDay(AppDatabase db, String fromKey, String toKey) async {
+  final food = await db.foodBetween(fromKey, toKey);
+  final byDay = <String, double>{};
+  for (final e in food) {
+    byDay[e.date] = (byDay[e.date] ?? 0) + e.caloriesSnapshot;
+  }
+  final fromD = parseDayKey(fromKey), toD = parseDayKey(toKey);
+  return [
+    for (var d = fromD; !d.isAfter(toD); d = DateTime(d.year, d.month, d.day + 1))
+      byDay[dayKey(d)] ?? 0.0
+  ];
+}
+
 Future<Map<String, DayStat>> computeRangeStats(
     AppDatabase db, String fromKey, String toKey) async {
   final preferred = mainSourceOf(await db.allSettings());
   final food = await db.foodBetween(fromKey, toKey);
   final water = await db.waterBetween(fromKey, toKey);
   final goals = await db.allGoals();
-  final weights = await db.allWeights();
+  final weights = await db.weightsBetweenKeys(fromKey, toKey);
   final fromD = parseDayKey(fromKey), toD = parseDayKey(toKey);
   final recs = await db.activityBetween(
       fromD.subtract(const Duration(hours: 6)), dayEnd(toD));
