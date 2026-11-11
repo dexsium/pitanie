@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:drift/drift.dart';
@@ -7,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../core/dates.dart';
 import '../core/nutrition.dart';
+import '../core/perf_log.dart';
 import 'seed.dart';
 
 part 'database.g.dart';
@@ -1572,10 +1574,53 @@ class AppDatabase extends _$AppDatabase {
       (delete(connectedSources)..where((t) => t.sourceType.equals(type))).go();
 }
 
-/// Поток, пересчитываемый при любом изменении таблиц БД.
-Stream<T> reactive<T>(AppDatabase db, Future<T> Function() load) async* {
-  yield await load();
-  await for (final _ in db.tableUpdates()) {
-    yield await load();
+/// Поток, пересчитываемый при изменении таблиц БД. События, пришедшие во время расчёта,
+/// схлопываются в один повторный расчёт (раньше каждое событие запускало полный расчёт по
+/// очереди, и при пачке записей интерфейс надолго «замирал»).
+Stream<T> reactive<T>(AppDatabase db, Future<T> Function() load, {String name = ''}) {
+  final ctrl = StreamController<T>();
+  StreamSubscription<Set<TableUpdate>>? sub;
+  var busy = false;
+  var dirty = false;
+
+  Future<void> run() async {
+    if (busy) {
+      dirty = true;
+      return;
+    }
+    busy = true;
+    try {
+      do {
+        dirty = false;
+        final sw = Stopwatch()..start();
+        try {
+          final v = await load();
+          if (ctrl.isClosed) return;
+          ctrl.add(v);
+        } catch (e, s) {
+          if (ctrl.isClosed) return;
+          ctrl.addError(e, s);
+        }
+        if (name.isNotEmpty && sw.elapsedMilliseconds >= 50) {
+          PerfLog.mark('пересчёт $name: ${sw.elapsedMilliseconds} мс');
+        }
+      } while (dirty && !ctrl.isClosed);
+    } finally {
+      busy = false;
+    }
   }
+
+  ctrl.onListen = () {
+    sub = db.tableUpdates().listen((u) {
+      if (name.isNotEmpty) {
+        PerfLog.mark('изменение: ${{for (final x in u) x.table}.join(", ")} -> $name');
+      }
+      run();
+    });
+    run();
+  };
+  ctrl.onCancel = () async {
+    await sub?.cancel();
+  };
+  return ctrl.stream;
 }

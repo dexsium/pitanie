@@ -7,7 +7,7 @@ import 'package:flutter/scheduler.dart';
 class PerfLog {
   static final Stopwatch _sw = Stopwatch()..start();
   static final List<String> _lines = [];
-  static const _max = 400;
+  static const _max = 1500;
   static bool _watching = false;
 
   static void mark(String what) {

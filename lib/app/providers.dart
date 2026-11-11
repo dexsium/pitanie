@@ -24,14 +24,15 @@ final tabProvider = StateProvider<int>((ref) => 0);
 
 final dayDataProvider = StreamProvider.family<DayData, String>((ref, key) {
   final db = ref.watch(dbProvider);
-  return reactive(db, () => loadDayData(db, key));
+  return reactive(db, () => loadDayData(db, key), name: 'день $key');
 });
 
 final rangeStatsProvider =
     StreamProvider.family<Map<String, DayStat>, ({String from, String to})>(
         (ref, r) {
   final db = ref.watch(dbProvider);
-  return reactive(db, () => computeRangeStats(db, r.from, r.to));
+  return reactive(db, () => computeRangeStats(db, r.from, r.to),
+      name: 'статистика ${r.from}..${r.to}');
 });
 
 final healthServiceProvider =
@@ -50,5 +51,5 @@ final catalogProgressProvider = StateProvider<double?>((ref) => null);
 /// Расчёт норм (BMR, TDEE, КБЖУ, тренд веса, предложение адаптации).
 final planProvider = StreamProvider<PlanSnapshot>((ref) {
   final db = ref.watch(dbProvider);
-  return reactive(db, () => loadPlan(db, DateTime.now()));
+  return reactive(db, () => loadPlan(db, DateTime.now()), name: 'план');
 });
