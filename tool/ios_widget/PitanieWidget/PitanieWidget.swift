@@ -56,8 +56,8 @@ struct PitanieProvider: TimelineProvider {
         PitanieEntry(
             date: Date(),
             snap: DaySnapshot(
-                enabled: true, day: todayKey(), kcal: 1200, kcalGoal: 2000, p: 70, pGoal: 120,
-                f: 40, fGoal: 65, c: 140, cGoal: 250, water: 900, waterGoal: 2000))
+                enabled: true, day: todayKey(), kcal: 789, kcalGoal: 2456, p: 38, pGoal: 140,
+                f: 57, fGoal: 63, c: 31, cGoal: 332, water: 250, waterGoal: 2300))
     }
 
     func getSnapshot(in context: Context, completion: @escaping (PitanieEntry) -> Void) {
@@ -71,7 +71,36 @@ struct PitanieProvider: TimelineProvider {
     }
 }
 
-private let accent = Color(red: 0.42, green: 0.30, blue: 0.95)
+// MARK: - Оформление в стиле приложения
+
+private func dyn(_ light: UIColor, _ dark: UIColor) -> Color {
+    Color(UIColor { $0.userInterfaceStyle == .dark ? dark : light })
+}
+
+private let accent = dyn(
+    UIColor(red: 0.486, green: 0.227, blue: 0.929, alpha: 1),
+    UIColor(red: 0.635, green: 0.482, blue: 1.0, alpha: 1))
+private let orange = dyn(
+    UIColor(red: 1.0, green: 0.54, blue: 0.0, alpha: 1),
+    UIColor(red: 1.0, green: 0.66, blue: 0.30, alpha: 1))
+private let blue = dyn(
+    UIColor(red: 0.12, green: 0.48, blue: 0.97, alpha: 1),
+    UIColor(red: 0.35, green: 0.69, blue: 1.0, alpha: 1))
+private let bgColor = dyn(
+    UIColor(red: 0.969, green: 0.961, blue: 1.0, alpha: 1),
+    UIColor(red: 0.110, green: 0.110, blue: 0.149, alpha: 1))
+private let chipColor = dyn(
+    UIColor.white,
+    UIColor(red: 0.149, green: 0.149, blue: 0.2, alpha: 1))
+private let trackColor = dyn(
+    UIColor(red: 0.855, green: 0.847, blue: 0.91, alpha: 1),
+    UIColor(red: 0.227, green: 0.227, blue: 0.29, alpha: 1))
+private let pillColor = dyn(
+    UIColor(red: 0.933, green: 0.91, blue: 1.0, alpha: 1),
+    UIColor(red: 0.18, green: 0.157, blue: 0.251, alpha: 1))
+private let pillStroke = dyn(
+    UIColor(red: 0.831, green: 0.776, blue: 0.98, alpha: 1),
+    UIColor(red: 0.29, green: 0.247, blue: 0.42, alpha: 1))
 
 private func n(_ v: Double) -> String { String(Int(max(0, v).rounded())) }
 
@@ -79,15 +108,53 @@ private struct Bar: View {
     let value: Double
     let goal: Double
     let color: Color
+    var height: CGFloat = 5
     var body: some View {
         GeometryReader { g in
             ZStack(alignment: .leading) {
-                Capsule().fill(color.opacity(0.18))
+                Capsule().fill(trackColor)
                 Capsule().fill(color)
                     .frame(width: g.size.width * CGFloat(goal > 0 ? min(1, value / goal) : 0))
             }
         }
-        .frame(height: 6)
+        .frame(height: height)
+    }
+}
+
+private struct RoundIcon: View {
+    let symbol: String
+    let color: Color
+    var size: CGFloat = 22
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: size * 0.5, weight: .semibold))
+            .foregroundColor(color)
+            .frame(width: size, height: size)
+            .background(Circle().fill(color.opacity(0.16)))
+    }
+}
+
+private struct MacroChip: View {
+    let symbol: String
+    let letter: String
+    let value: Double
+    let goal: Double
+    let color: Color
+    var body: some View {
+        HStack(spacing: 5) {
+            RoundIcon(symbol: symbol, color: color, size: 22)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(letter) \(n(value))/\(n(goal)) г")
+                    .font(.system(size: 10, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Bar(value: value, goal: goal, color: color, height: 4)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 12).fill(chipColor))
     }
 }
 
@@ -95,9 +162,9 @@ extension View {
     @ViewBuilder
     fileprivate func pwBackground() -> some View {
         if #available(iOS 17.0, *) {
-            self.containerBackground(for: .widget) { Color(UIColor.secondarySystemBackground) }
+            self.containerBackground(for: .widget) { bgColor }
         } else {
-            self.padding().background(Color(UIColor.secondarySystemBackground))
+            self.padding(12).background(bgColor)
         }
     }
 }
@@ -109,7 +176,7 @@ struct PitanieWidgetView: View {
     var body: some View {
         Group {
             if let s = entry.snap, s.enabled, s.day == todayKey() {
-                content(s)
+                if family == .systemSmall { small(s) } else { medium(s) }
             } else {
                 Text(
                     (entry.snap?.enabled ?? false)
@@ -124,50 +191,103 @@ struct PitanieWidgetView: View {
         .pwBackground()
     }
 
-    @ViewBuilder
-    private func content(_ s: DaySnapshot) -> some View {
+    private func header(_ s: DaySnapshot, bigSize: CGFloat, icon: CGFloat) -> some View {
         let left = s.kcalGoal - s.kcal
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .lastTextBaseline, spacing: 6) {
-                Text(left >= 0 ? n(left) : "+" + n(-left))
-                    .font(.system(size: family == .systemSmall ? 28 : 32, weight: .bold))
-                Text(left >= 0 ? "ккал осталось" : "ккал сверх нормы")
-                    .font(.caption).foregroundColor(.secondary)
+        return HStack(spacing: 8) {
+            Image(systemName: "flame.fill")
+                .font(.system(size: icon * 0.55, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: icon, height: icon)
+                .background(RoundedRectangle(cornerRadius: icon * 0.32).fill(accent))
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .lastTextBaseline, spacing: 4) {
+                    Text(left >= 0 ? n(left) : "+" + n(-left))
+                        .font(.system(size: bigSize, weight: .bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    Text(left >= 0 ? "ккал осталось" : "ккал сверх")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                Text("\(n(s.kcal)) из \(n(s.kcalGoal)) ккал")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
-            Bar(value: s.kcal, goal: s.kcalGoal, color: accent)
-            Text("\(n(s.kcal)) из \(n(s.kcalGoal)) ккал")
-                .font(.caption).foregroundColor(.secondary)
-            if family != .systemSmall {
-                HStack {
-                    Text("Б \(n(s.p))/\(n(s.pGoal))")
-                    Spacer()
-                    Text("Ж \(n(s.f))/\(n(s.fGoal))")
-                    Spacer()
-                    Text("У \(n(s.c))/\(n(s.cGoal))")
-                }
-                .font(.caption)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func waterRow(_ s: DaySnapshot, withPercent: Bool) -> some View {
+        let pct = s.waterGoal > 0 ? Int(min(1, s.water / s.waterGoal) * 100) : 0
+        return HStack(spacing: 6) {
+            Image(systemName: "drop.fill").font(.system(size: 12)).foregroundColor(blue)
+            VStack(alignment: .leading, spacing: 3) {
                 Text("Вода \(n(s.water)) из \(n(s.waterGoal)) мл")
-                    .font(.caption).foregroundColor(.secondary)
-                Bar(value: s.water, goal: s.waterGoal, color: .blue)
-                HStack(spacing: 8) {
-                    actionLink("Вода", "water")
-                    actionLink("Питание", "nutrition")
-                    actionLink("Вес", "weight")
-                }
+                    .font(.system(size: 10.5, weight: .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Bar(value: s.water, goal: s.waterGoal, color: blue, height: 4)
+            }
+            if withPercent {
+                Text("\(pct)%")
+                    .font(.system(size: 10.5, weight: .bold))
+                    .foregroundColor(accent)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(pillColor))
+            }
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(RoundedRectangle(cornerRadius: 12).fill(chipColor))
+    }
+
+    @ViewBuilder
+    private func small(_ s: DaySnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            header(s, bigSize: 22, icon: 30)
+            Bar(value: s.kcal, goal: s.kcalGoal, color: accent, height: 6)
+            Spacer(minLength: 0)
+            waterRow(s, withPercent: false)
+        }
+        .widgetURL(URL(string: "pitanie://widget/nutrition"))
+    }
+
+    @ViewBuilder
+    private func medium(_ s: DaySnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            header(s, bigSize: 24, icon: 30)
+            Bar(value: s.kcal, goal: s.kcalGoal, color: accent, height: 6)
+            HStack(spacing: 5) {
+                MacroChip(symbol: "dumbbell.fill", letter: "Б", value: s.p, goal: s.pGoal, color: accent)
+                MacroChip(symbol: "drop.fill", letter: "Ж", value: s.f, goal: s.fGoal, color: orange)
+                MacroChip(symbol: "leaf.fill", letter: "У", value: s.c, goal: s.cGoal, color: blue)
+            }
+            waterRow(s, withPercent: true)
+            HStack(spacing: 5) {
+                actionLink("Вода", "drop", "water")
+                actionLink("Питание", "fork.knife", "nutrition")
+                actionLink("Вес", "scalemass", "weight")
             }
         }
         .widgetURL(URL(string: "pitanie://widget/nutrition"))
     }
 
-    private func actionLink(_ title: String, _ action: String) -> some View {
+    private func actionLink(_ title: String, _ symbol: String, _ action: String) -> some View {
         Link(destination: URL(string: "pitanie://widget/\(action)")!) {
-            Text(title)
-                .font(.caption.bold())
-                .foregroundColor(accent)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-                .background(accent.opacity(0.14))
-                .cornerRadius(10)
+            HStack(spacing: 4) {
+                Image(systemName: symbol).font(.system(size: 11, weight: .semibold))
+                Text(title).font(.system(size: 11, weight: .bold))
+            }
+            .foregroundColor(accent)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(pillColor))
+            .overlay(Capsule().stroke(pillStroke, lineWidth: 1))
         }
     }
 }

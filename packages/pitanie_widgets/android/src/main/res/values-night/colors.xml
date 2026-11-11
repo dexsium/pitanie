@@ -1,10 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="pw_bg">#FF1C1C26</color>
+    <color name="pw_chip">#FF262633</color>
     <color name="pw_text">#FFF2F1F7</color>
     <color name="pw_muted">#FFA8A7B5</color>
-    <color name="pw_accent">#FF9D86FF</color>
-    <color name="pw_water">#FF5AB0FF</color>
-    <color name="pw_track">#33FFFFFF</color>
-    <color name="pw_btn_bg">#33FFFFFF</color>
+    <color name="pw_accent">#FFA27BFF</color>
+    <color name="pw_orange">#FFFFA94D</color>
+    <color name="pw_blue">#FF5AB0FF</color>
+    <color name="pw_track">#FF3A3A4A</color>
+    <color name="pw_pill_bg">#FF2E2840</color>
+    <color name="pw_pill_stroke">#FF4A3F6B</color>
+    <color name="pw_c_purple">#FF3A2F5C</color>
+    <color name="pw_c_orange">#FF4D3A22</color>
+    <color name="pw_c_blue">#FF22364F</color>
+    <color name="pw_on_accent">#FFFFFFFF</color>
 </resources>

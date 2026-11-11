@@ -7,10 +7,12 @@
     <string name="pw_left">ккал осталось</string>
     <string name="pw_over">ккал сверх нормы</string>
     <string name="pw_eaten_of">%1$s из %2$s ккал</string>
-    <string name="pw_protein">Б %1$s/%2$s</string>
-    <string name="pw_fat">Ж %1$s/%2$s</string>
-    <string name="pw_carbs">У %1$s/%2$s</string>
+    <string name="pw_protein">Б %1$s/%2$s г</string>
+    <string name="pw_fat">Ж %1$s/%2$s г</string>
+    <string name="pw_carbs">У %1$s/%2$s г</string>
     <string name="pw_water_of">Вода %1$s из %2$s мл</string>
+    <string name="pw_water_short">Вода %1$s/%2$s мл</string>
+    <string name="pw_pct">%1$d%%</string>
     <string name="pw_btn_water">Вода</string>
     <string name="pw_btn_food">Питание</string>
     <string name="pw_btn_weight">Вес</string>

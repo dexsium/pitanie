@@ -101,22 +101,30 @@ object WidgetRenderer {
         )
         views.setProgressBar(R.id.pw_kcal_bar, 1000, progress(eaten, goal), false)
 
+        val water = snap.optDouble("water", 0.0)
+        val waterGoal = snap.optDouble("waterGoal", 0.0)
+        views.setTextViewText(
+            R.id.pw_water,
+            context.getString(
+                if (medium) R.string.pw_water_of else R.string.pw_water_short, n(water), n(waterGoal)
+            )
+        )
+        views.setProgressBar(R.id.pw_water_bar, 1000, progress(water, waterGoal), false)
+
         if (medium) {
+            val p = snap.optDouble("p"); val pg = snap.optDouble("pGoal")
+            val f = snap.optDouble("f"); val fg = snap.optDouble("fGoal")
+            val c = snap.optDouble("c"); val cg = snap.optDouble("cGoal")
+            views.setTextViewText(R.id.pw_p, context.getString(R.string.pw_protein, n(p), n(pg)))
+            views.setTextViewText(R.id.pw_f, context.getString(R.string.pw_fat, n(f), n(fg)))
+            views.setTextViewText(R.id.pw_c, context.getString(R.string.pw_carbs, n(c), n(cg)))
+            views.setProgressBar(R.id.pw_p_bar, 1000, progress(p, pg), false)
+            views.setProgressBar(R.id.pw_f_bar, 1000, progress(f, fg), false)
+            views.setProgressBar(R.id.pw_c_bar, 1000, progress(c, cg), false)
             views.setTextViewText(
-                R.id.pw_p, context.getString(R.string.pw_protein, n(snap.optDouble("p")), n(snap.optDouble("pGoal")))
+                R.id.pw_water_pct,
+                context.getString(R.string.pw_pct, (progress(water, waterGoal) / 10))
             )
-            views.setTextViewText(
-                R.id.pw_f, context.getString(R.string.pw_fat, n(snap.optDouble("f")), n(snap.optDouble("fGoal")))
-            )
-            views.setTextViewText(
-                R.id.pw_c, context.getString(R.string.pw_carbs, n(snap.optDouble("c")), n(snap.optDouble("cGoal")))
-            )
-            val water = snap.optDouble("water", 0.0)
-            val waterGoal = snap.optDouble("waterGoal", 0.0)
-            views.setTextViewText(
-                R.id.pw_water, context.getString(R.string.pw_water_of, n(water), n(waterGoal))
-            )
-            views.setProgressBar(R.id.pw_water_bar, 1000, progress(water, waterGoal), false)
             setButtons(context, views)
         }
         return views

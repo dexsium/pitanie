@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/pw_background"
-    android:padding="14dp">
+    android:padding="10dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -18,36 +18,64 @@
             android:layout_weight="1"
             android:orientation="vertical">
 
+            <!-- Калории -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:gravity="bottom"
+                android:gravity="center_vertical"
                 android:orientation="horizontal">
 
-                <TextView
-                    android:id="@+id/pw_main"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textColor="@color/pw_text"
-                    android:textSize="28sp"
-                    android:textStyle="bold" />
+                <FrameLayout
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="@drawable/pw_icon_bg">
 
-                <TextView
-                    android:id="@+id/pw_main_label"
-                    android:layout_width="wrap_content"
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_gravity="center"
+                        android:src="@drawable/pw_ic_flame" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
-                    android:layout_marginBottom="4dp"
-                    android:textColor="@color/pw_muted"
-                    android:textSize="13sp" />
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="bottom"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/pw_main"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="@color/pw_text"
+                            android:textSize="26sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/pw_main_label"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="6dp"
+                            android:layout_marginBottom="3dp"
+                            android:textColor="@color/pw_muted"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/pw_sub"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/pw_muted"
+                        android:textSize="11sp" />
+                </LinearLayout>
             </LinearLayout>
-
-            <TextView
-                android:id="@+id/pw_sub"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="@color/pw_muted"
-                android:textSize="12sp" />
 
             <ProgressBar
                 android:id="@+id/pw_kcal_bar"
@@ -60,55 +88,222 @@
                 android:progressBackgroundTint="@color/pw_track"
                 android:progressTint="@color/pw_accent" />
 
+            <!-- Белки, жиры, углеводы -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:orientation="horizontal">
 
-                <TextView
-                    android:id="@+id/pw_p"
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_marginEnd="5dp"
                     android:layout_weight="1"
-                    android:textColor="@color/pw_text"
-                    android:textSize="12sp" />
+                    android:background="@drawable/pw_chip"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="6dp">
 
-                <TextView
-                    android:id="@+id/pw_f"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:textColor="@color/pw_text"
-                    android:textSize="12sp" />
+                    <FrameLayout
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:background="@drawable/pw_circle_purple">
 
-                <TextView
-                    android:id="@+id/pw_c"
+                        <ImageView
+                            android:layout_width="14dp"
+                            android:layout_height="14dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/pw_ic_dumbbell" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="5dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/pw_p"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:singleLine="true"
+                            android:textColor="@color/pw_text"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+
+                        <ProgressBar
+                            android:id="@+id/pw_p_bar"
+                            style="?android:attr/progressBarStyleHorizontal"
+                            android:layout_width="match_parent"
+                            android:layout_height="4dp"
+                            android:layout_marginTop="3dp"
+                            android:max="1000"
+                            android:progress="0"
+                            android:progressBackgroundTint="@color/pw_track"
+                            android:progressTint="@color/pw_accent" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="5dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/pw_chip"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="6dp">
+
+                    <FrameLayout
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:background="@drawable/pw_circle_orange">
+
+                        <ImageView
+                            android:layout_width="14dp"
+                            android:layout_height="14dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/pw_ic_drop_orange" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="5dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/pw_f"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:singleLine="true"
+                            android:textColor="@color/pw_text"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+
+                        <ProgressBar
+                            android:id="@+id/pw_f_bar"
+                            style="?android:attr/progressBarStyleHorizontal"
+                            android:layout_width="match_parent"
+                            android:layout_height="4dp"
+                            android:layout_marginTop="3dp"
+                            android:max="1000"
+                            android:progress="0"
+                            android:progressBackgroundTint="@color/pw_track"
+                            android:progressTint="@color/pw_orange" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:textColor="@color/pw_text"
-                    android:textSize="12sp" />
+                    android:background="@drawable/pw_chip"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:padding="6dp">
+
+                    <FrameLayout
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:background="@drawable/pw_circle_blue">
+
+                        <ImageView
+                            android:layout_width="14dp"
+                            android:layout_height="14dp"
+                            android:layout_gravity="center"
+                            android:src="@drawable/pw_ic_leaf" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="5dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/pw_c"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:singleLine="true"
+                            android:textColor="@color/pw_text"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+
+                        <ProgressBar
+                            android:id="@+id/pw_c_bar"
+                            style="?android:attr/progressBarStyleHorizontal"
+                            android:layout_width="match_parent"
+                            android:layout_height="4dp"
+                            android:layout_marginTop="3dp"
+                            android:max="1000"
+                            android:progress="0"
+                            android:progressBackgroundTint="@color/pw_track"
+                            android:progressTint="@color/pw_blue" />
+                    </LinearLayout>
+                </LinearLayout>
             </LinearLayout>
 
-            <TextView
-                android:id="@+id/pw_water"
-                android:layout_width="wrap_content"
+            <!-- Вода -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:textColor="@color/pw_muted"
-                android:textSize="12sp" />
+                android:background="@drawable/pw_chip"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:padding="6dp">
 
-            <ProgressBar
-                android:id="@+id/pw_water_bar"
-                style="?android:attr/progressBarStyleHorizontal"
-                android:layout_width="match_parent"
-                android:layout_height="6dp"
-                android:layout_marginTop="3dp"
-                android:max="1000"
-                android:progress="0"
-                android:progressBackgroundTint="@color/pw_track"
-                android:progressTint="@color/pw_water" />
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/pw_ic_drop_blue" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/pw_water"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:singleLine="true"
+                        android:textColor="@color/pw_text"
+                        android:textSize="11sp" />
+
+                    <ProgressBar
+                        android:id="@+id/pw_water_bar"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="match_parent"
+                        android:layout_height="4dp"
+                        android:layout_marginTop="3dp"
+                        android:max="1000"
+                        android:progress="0"
+                        android:progressBackgroundTint="@color/pw_track"
+                        android:progressTint="@color/pw_blue" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/pw_water_pct"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/pw_pct_bg"
+                    android:paddingStart="8dp"
+                    android:paddingTop="2dp"
+                    android:paddingEnd="8dp"
+                    android:paddingBottom="2dp"
+                    android:textColor="@color/pw_accent"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
         </LinearLayout>
 
         <TextView
@@ -121,49 +316,86 @@
             android:textSize="13sp"
             android:visibility="gone" />
 
+        <!-- Кнопки -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:orientation="horizontal">
 
-            <TextView
+            <LinearLayout
                 android:id="@+id/pw_btn_water"
                 android:layout_width="0dp"
-                android:layout_height="32dp"
-                android:layout_marginEnd="6dp"
+                android:layout_height="34dp"
+                android:layout_marginEnd="5dp"
                 android:layout_weight="1"
                 android:background="@drawable/pw_button"
                 android:gravity="center"
-                android:text="@string/pw_btn_water"
-                android:textColor="@color/pw_accent"
-                android:textSize="13sp"
-                android:textStyle="bold" />
+                android:orientation="horizontal">
 
-            <TextView
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/pw_ic_drop_accent" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="@string/pw_btn_water"
+                    android:textColor="@color/pw_accent"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
                 android:id="@+id/pw_btn_food"
                 android:layout_width="0dp"
-                android:layout_height="32dp"
-                android:layout_marginEnd="6dp"
+                android:layout_height="34dp"
+                android:layout_marginEnd="5dp"
                 android:layout_weight="1"
                 android:background="@drawable/pw_button"
                 android:gravity="center"
-                android:text="@string/pw_btn_food"
-                android:textColor="@color/pw_accent"
-                android:textSize="13sp"
-                android:textStyle="bold" />
+                android:orientation="horizontal">
 
-            <TextView
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/pw_ic_food" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="@string/pw_btn_food"
+                    android:textColor="@color/pw_accent"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
                 android:id="@+id/pw_btn_weight"
                 android:layout_width="0dp"
-                android:layout_height="32dp"
+                android:layout_height="34dp"
                 android:layout_weight="1"
                 android:background="@drawable/pw_button"
                 android:gravity="center"
-                android:text="@string/pw_btn_weight"
-                android:textColor="@color/pw_accent"
-                android:textSize="13sp"
-                android:textStyle="bold" />
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/pw_ic_scale" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:text="@string/pw_btn_weight"
+                    android:textColor="@color/pw_accent"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 </FrameLayout>
