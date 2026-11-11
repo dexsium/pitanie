@@ -24,6 +24,7 @@ import 'backup_service.dart';
 import '../widgets/widget_sync.dart';
 import '../body/measurements_page.dart' show deletePhotoFiles;
 import 'notification_service.dart';
+import 'perf_log_page.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -327,6 +328,14 @@ class SettingsPage extends ConsumerWidget {
                     toast(context, 'Ошибка восстановления: $e');
                 }
               },
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.speed_outlined),
+              title: const Text('Журнал производительности'),
+              subtitle: const Text('Время запуска и синхронизации, чтобы найти, что тормозит'),
+              onTap: () => Navigator.of(context)
+                  .push(MaterialPageRoute(builder: (_) => const PerfLogPage())),
             ),
             ListTile(
               contentPadding: EdgeInsets.zero,

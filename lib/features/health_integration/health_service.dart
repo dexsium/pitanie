@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:drift/drift.dart' show Value;
 import 'package:health/health.dart';
 
+import '../../core/perf_log.dart';
 import '../../database/database.dart';
 
 class SyncResult {
@@ -266,8 +267,14 @@ class HealthService {
 
       final errors = <String, String>{};
       final points = <HealthDataPoint>[];
+      PerfLog.mark('синхронизация: начало (сверка: ${plan.reconcile})');
+      final readSw = Stopwatch()..start();
       for (final t in types) {
+        final one = Stopwatch()..start();
         final got = await _readSliced(t, plan.fromFor(t.name), now, errors);
+        if (got.isNotEmpty || one.elapsedMilliseconds > 150) {
+          PerfLog.mark('  чтение ${t.name}: ${got.length} шт., ${one.elapsedMilliseconds} мс');
+        }
         for (final g in got) {
           final ms = g.dateFrom.millisecondsSinceEpoch;
           if (ms > (newest[t.name] ?? 0)) newest[t.name] = ms;
@@ -275,6 +282,8 @@ class HealthService {
         points.addAll(got);
         await _breath();
       }
+      PerfLog.mark('синхронизация: чтение всего ${readSw.elapsedMilliseconds} мс, '
+          'точек ${points.length}');
       if (errors.length == types.length) {
         final r = SyncResult('no_access', errors: errors);
         await _saveStatus('no_access', null, r);
@@ -301,6 +310,7 @@ class HealthService {
       hr.freeze();
       final comp = <(DateTime, double?, double?)>[];
 
+      final procSw = Stopwatch()..start();
       var processed = 0;
       for (final p in points) {
         if (++processed % 400 == 0) await _breath();
@@ -395,6 +405,9 @@ class HealthService {
 
       // Запись порциями и одной транзакцией: потоки интерфейса обновляются один раз в конце,
       // а между порциями интерфейс успевает перерисоваться.
+      PerfLog.mark('синхронизация: разбор ${procSw.elapsedMilliseconds} мс, '
+          'записей ${recs.length}');
+      final dbSw = Stopwatch()..start();
       var deleted = 0;
       await db.transaction(() async {
         for (var i = 0; i < recs.length; i += 500) {
@@ -417,6 +430,7 @@ class HealthService {
           }
         }
       });
+      PerfLog.mark('синхронизация: запись в базу ${dbSw.elapsedMilliseconds} мс');
       // Отметки «прочитано до»: у типов без ошибок чтения.
       final newMarks = advanceWatermarks(
           old: plan.watermarks,

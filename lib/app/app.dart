@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/dates.dart';
+import '../core/perf_log.dart';
 import '../features/coach/goal_service.dart';
 import '../features/dashboard/day_data.dart';
 import '../features/settings/notif_prefs.dart';
@@ -95,13 +96,18 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
       });
       // Главный экран рисуется сразу, тяжёлая работа запускается по очереди с паузами,
       // чтобы интерфейс не подвисал на старте (разбор данных Здоровья идёт в том же потоке).
-      _later(const Duration(milliseconds: 800), () => scheduleWidgetUpdate(ref.read(dbProvider)));
-      _later(const Duration(milliseconds: 1500), _initNotifications);
-      _later(const Duration(milliseconds: 2500), _sync);
-      _later(const Duration(milliseconds: 3500), _autoPlan);
-      _later(const Duration(milliseconds: 4500), () => ref.read(scaleProvider).start());
-      _later(const Duration(milliseconds: 6000), _loadCatalog);
-      _later(const Duration(milliseconds: 7000), _healthCheck);
+      PerfLog.mark('главный экран: первый кадр');
+      _later(const Duration(milliseconds: 800), () => PerfLog.time('виджет: обновление',
+          () async => scheduleWidgetUpdate(ref.read(dbProvider))));
+      _later(const Duration(milliseconds: 1500),
+          () => PerfLog.time('уведомления', _initNotifications));
+      _later(const Duration(milliseconds: 2500), () => PerfLog.time('синхронизация (всего)', _sync));
+      _later(const Duration(milliseconds: 3500), () => PerfLog.time('автоплан', _autoPlan));
+      _later(const Duration(milliseconds: 4500),
+          () => PerfLog.time('весы: запуск', () async => ref.read(scaleProvider).start()));
+      _later(const Duration(milliseconds: 6000), () => PerfLog.time('каталог', _loadCatalog));
+      _later(const Duration(milliseconds: 7000),
+          () => PerfLog.time('проверка тренировок', _healthCheck));
     });
   }
 
