@@ -151,6 +151,12 @@ jobs:
           cp "$IPA" pitanie-signed.ipa
           ls -la pitanie-signed.ipa
 
+      - name: Проверка нативной рекламы Яндекса в сборке
+        run: |
+          APP="build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app"
+          strings "$APP/Runner" | grep -q "pitanie/native_ad" || { echo "в сборке нет представления pitanie/native_ad"; exit 1; }
+          strings "$APP/Runner" | grep -q "YandexMobileAds" || { echo "в сборке нет Yandex Mobile Ads SDK"; exit 1; }
+
       - name: Проверка расширения виджета в сборке
         if: env.WIDGET_PROFILE_NAME != ''
         run: |

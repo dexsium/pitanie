@@ -104,6 +104,8 @@ class DashboardPage extends ConsumerWidget {
           ),
           SizedBox(height: s(14)),
           const HealthStatusChip(),
+          // Рекламный блок между карточкой Apple Health / Health Connect и карточкой калорий.
+          const AdSlot(AdPlacement.homeBanner),
           SizedBox(height: s(16)),
           data.when(
             loading: () => const Padding(
@@ -111,7 +113,6 @@ class DashboardPage extends ConsumerWidget {
             error: (e, _) => EmptyHint('Ошибка: $e'),
             data: (d) => _Body(d),
           ),
-          const AdSlot(AdPlacement.homeBanner),
         ],
       ),
     );

@@ -4,6 +4,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../app/providers.dart';
 import 'ads_models.dart';
 import 'ads_service.dart';
+import 'yandex_ad_provider.dart';
+
+/// Сообщения рекламного блока о результате загрузки. Сеть, которая загружает объявление уже
+/// после показа виджета, вызывает их сама; слот тогда учитывает показ или ошибку по факту.
+class AdEvents {
+  final VoidCallback onLoaded;
+  final VoidCallback onFailed;
+  const AdEvents({required this.onLoaded, required this.onFailed});
+}
 
 /// Подключение рекламной сети. Чтобы подключить сеть, достаточно реализовать этот интерфейс и
 /// подменить [adProviderProvider]. Реализация получает только размещение: никаких данных
@@ -17,13 +26,20 @@ abstract class AdProvider {
   /// Подключена ли сеть и готова ли показывать рекламу.
   bool get available;
 
+  /// Сеть сама сообщает о загрузке через [AdEvents] (объявление грузится после показа виджета).
+  /// Тогда подпись «Реклама» и учёт показа появляются только после успешной загрузки.
+  bool get reportsOwnEvents => false;
+
+  /// Карточка рекламы сама содержит пометку «Реклама» (нативная реклама): слот свою не рисует.
+  bool providesLabel(AdPlacement placement) => false;
+
   /// Заглушка вместо настоящей рекламы: показывается всегда, не подчиняется лимитам частоты
   /// и не попадает в счётчики показов.
   bool get isPlaceholder => false;
 
   /// Готовый виджет объявления для размещения или null, если объявления нет.
   /// Ошибки SDK нужно превращать в null: приложение обязано работать без рекламы.
-  Future<Widget?> buildAd(AdPlacement placement);
+  Future<Widget?> buildAd(AdPlacement placement, {AdEvents? events});
 }
 
 /// Рекламная сеть не подключена: реклама не показывается и ничего не запрашивается.
@@ -34,7 +50,7 @@ class NoAdProvider extends AdProvider {
   @override
   bool get available => false;
   @override
-  Future<Widget?> buildAd(AdPlacement placement) async => null;
+  Future<Widget?> buildAd(AdPlacement placement, {AdEvents? events}) async => null;
 }
 
 /// Заглушка рекламы: серый блок «Здесь будет реклама» нужного размера, чтобы видеть, как
@@ -50,7 +66,7 @@ class PlaceholderAdProvider extends AdProvider {
   bool get isPlaceholder => true;
 
   @override
-  Future<Widget?> buildAd(AdPlacement placement) async {
+  Future<Widget?> buildAd(AdPlacement placement, {AdEvents? events}) async {
     final height = switch (placement.format) {
       AdFormat.banner => 56.0,
       AdFormat.native => 120.0,
@@ -82,6 +98,6 @@ class _PlaceholderAd extends StatelessWidget {
   }
 }
 
-final adProviderProvider = Provider<AdProvider>((ref) => const PlaceholderAdProvider());
+final adProviderProvider = Provider<AdProvider>((ref) => const YandexAdProvider());
 
 final adsServiceProvider = Provider<AdsService>((ref) => AdsService(ref.watch(dbProvider)));

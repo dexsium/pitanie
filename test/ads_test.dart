@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,8 @@ import 'package:pitanie/features/ads/ad_provider.dart';
 import 'package:pitanie/features/ads/ad_slot.dart';
 import 'package:pitanie/features/ads/ads_models.dart';
 import 'package:pitanie/features/ads/ads_service.dart';
+import 'package:pitanie/features/ads/native_ad_config.dart';
+import 'package:pitanie/features/ads/yandex_ad_provider.dart';
 
 class FakeProvider extends AdProvider {
   FakeProvider({this.ad, this.throws = false, this.isAvailable = true});
@@ -24,7 +27,7 @@ class FakeProvider extends AdProvider {
   @override
   bool get available => isAvailable;
   @override
-  Future<Widget?> buildAd(AdPlacement placement) async {
+  Future<Widget?> buildAd(AdPlacement placement, {AdEvents? events}) async {
     requested.add(placement);
     if (throws) throw StateError('sdk failure');
     return ad;
@@ -32,6 +35,7 @@ class FakeProvider extends AdProvider {
 }
 
 void main() {
+  yandexTests();
   late AppDatabase db;
   var now = DateTime(2026, 11, 10, 12);
   setUp(() {
@@ -207,5 +211,30 @@ void main() {
         await t.runAsync(() => d.close().timeout(const Duration(seconds: 5), onTimeout: () {}));
       }
     });
+  });
+}
+
+void yandexTests() {
+  test('блоки РСЯ: главная и статистика — баннеры, для планировщика блока во Flutter нет', () {
+    expect(YandexAdProvider.unitFor(AdPlacement.homeBanner), 'R-M-20382283-2');
+    expect(YandexAdProvider.unitFor(AdPlacement.statsBanner), 'R-M-20382283-3');
+    expect(YandexAdProvider.unitFor(AdPlacement.nutritionBanner), isNotNull);
+    expect(YandexAdProvider.unitFor(AdPlacement.plannerNative), kNativeAdUnitId);
+    expect(YandexAdProvider.unitFor(AdPlacement.bonusRewarded), isNull);
+    const p = YandexAdProvider();
+    expect(p.available, Platform.isIOS); // реклама подключена только на iOS
+    expect(p.reportsOwnEvents, isTrue);
+    expect(p.providesLabel(AdPlacement.plannerNative), isTrue);
+    expect(p.providesLabel(AdPlacement.homeBanner), isFalse);
+  });
+
+  test('без платформенной части SDK провайдер не падает и ничего не показывает', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    const p = YandexAdProvider();
+    final w = await p.buildAd(AdPlacement.homeBanner,
+        events: AdEvents(onLoaded: () {}, onFailed: () {}));
+    expect(w, isNull);
+    expect(await p.buildAd(AdPlacement.plannerNative,
+        events: AdEvents(onLoaded: () {}, onFailed: () {})), isNull);
   });
 }

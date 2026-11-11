@@ -9,6 +9,7 @@ enum AdFormat { banner, native, rewarded }
 enum AdPlacement {
   homeBanner('home_banner', AdFormat.banner),
   statsBanner('stats_banner', AdFormat.banner),
+  nutritionBanner('nutrition_banner', AdFormat.banner),
   plannerNative('planner_native', AdFormat.native),
   // Необязательная видеореклама за дополнительные материалы; основные функции не блокирует.
   bonusRewarded('bonus_rewarded', AdFormat.rewarded);

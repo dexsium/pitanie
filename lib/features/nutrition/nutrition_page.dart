@@ -16,6 +16,8 @@ import 'add_food_page.dart';
 import 'diary_actions.dart';
 import 'edit_entry_sheet.dart';
 import 'meal_templates.dart';
+import '../ads/ad_slot.dart';
+import '../ads/ads_models.dart';
 import '../planner/planner_page.dart';
 
 class NutritionPage extends ConsumerWidget {
@@ -148,6 +150,8 @@ class NutritionPage extends ConsumerWidget {
           error: (e, _) => EmptyHint('Ошибка: $e'),
           data: (d) => Column(children: [
             _Summary(d),
+            // Рекламный блок под карточкой калорий и БЖУ.
+            const AdSlot(AdPlacement.nutritionBanner),
             const SizedBox(height: 14),
             AppCard(
               padding: const EdgeInsets.all(8),

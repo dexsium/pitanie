@@ -7,6 +7,7 @@ android/
 ios/
 !packages/pitanie_widgets/android/
 !packages/pitanie_widgets/ios/
+!packages/pitanie_native_ads/ios/
 .idea/
 *.iml
 __pycache__/
