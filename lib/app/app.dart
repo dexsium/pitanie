@@ -89,20 +89,34 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _widgetActions = PitanieWidgets.actions.listen(_onWidgetAction);
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       PitanieWidgets.takeInitialAction().then((a) {
         if (a != null) _onWidgetAction(a);
       });
-      scheduleWidgetUpdate(ref.read(dbProvider));
-      _sync();
-      ref.read(scaleProvider).start();
-      _loadCatalog();
-      _autoPlan();
-      _healthCheck();
+      // Главный экран рисуется сразу, тяжёлая работа запускается по очереди с паузами,
+      // чтобы интерфейс не подвисал на старте (разбор данных Здоровья идёт в том же потоке).
+      _later(const Duration(milliseconds: 800), () => scheduleWidgetUpdate(ref.read(dbProvider)));
+      _later(const Duration(milliseconds: 1500), _initNotifications);
+      _later(const Duration(milliseconds: 2500), _sync);
+      _later(const Duration(milliseconds: 3500), _autoPlan);
+      _later(const Duration(milliseconds: 4500), () => ref.read(scaleProvider).start());
+      _later(const Duration(milliseconds: 6000), _loadCatalog);
+      _later(const Duration(milliseconds: 7000), _healthCheck);
+    });
+  }
+
+  void _later(Duration d, void Function() f) {
+    Future<void>.delayed(d, () {
+      if (mounted) f();
+    });
+  }
+
+  Future<void> _initNotifications() async {
+    try {
       final n = ref.read(notificationsProvider);
       await n.init();
       await n.reschedule(await ref.read(dbProvider).allSettings());
-    });
+    } catch (_) {}
   }
 
   @override
@@ -198,7 +212,7 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
     if (ref.read(syncBusyProvider)) return;
     ref.read(syncBusyProvider.notifier).state = true;
     try {
-      await ref.read(healthServiceProvider).sync();
+      await ref.read(healthServiceProvider).sync(minAge: const Duration(minutes: 5));
     } finally {
       if (mounted) ref.read(syncBusyProvider.notifier).state = false;
     }

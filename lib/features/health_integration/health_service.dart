@@ -201,10 +201,16 @@ class HealthService {
   /// Окно чтения: с прошлой синхронизации (минус 2 дня запаса). Записи, удалённые в источнике,
   /// убираются сверкой окна, но только для типов, по которым источник вернул данные:
   /// отзыв доступа не стирает историю.
-  Future<SyncResult> sync({bool full = false}) async {
+  Future<SyncResult> sync({bool full = false, Duration? minAge}) async {
     if (!supported) return const SyncResult('unsupported');
     final src = await db.getSource(sourceType);
     if (src == null) return const SyncResult('not_connected');
+    // Автосинхронизация при запуске и возврате в приложение: если недавно уже синхронизировали,
+    // повторное чтение и разбор данных Здоровья не нужны (ручная синхронизация minAge не задаёт).
+    if (!full && minAge != null && src.lastSync != null && src.syncStatus == 'ok' &&
+        DateTime.now().difference(src.lastSync!) < minAge) {
+      return const SyncResult('recent');
+    }
     try {
       if (!await available()) {
         await _saveStatus('unavailable', null, null);
@@ -235,7 +241,17 @@ class HealthService {
       final seen = <String, Set<String>>{}; // тип записи -> id, пришедшие из источника
       final weightIds = <String>{};
       var weights = 0, duplicates = 0;
-      final hr = points.where((p) => p.type == HealthDataType.HEART_RATE).toList();
+      // Пульс по источникам, отсортированный по времени: среднее и максимум для тренировки
+      // берутся бинарным поиском, без перебора всех точек на каждую тренировку.
+      final hr = HeartRateIndex();
+      for (final h in points) {
+        if (h.type == HealthDataType.HEART_RATE && h.value is NumericHealthValue) {
+          hr.add(h.sourceId.isNotEmpty ? h.sourceId : h.sourceName,
+              h.dateFrom.millisecondsSinceEpoch,
+              (h.value as NumericHealthValue).numericValue.toDouble());
+        }
+      }
+      hr.freeze();
       final comp = <(DateTime, double?, double?)>[];
 
       for (final p in points) {
@@ -249,13 +265,8 @@ class HealthService {
 
         if (p.type == HealthDataType.WORKOUT && p.value is WorkoutHealthValue) {
           final w = p.value as WorkoutHealthValue;
-          final inside = hr
-              .where((h) =>
-                  (h.sourceId.isNotEmpty ? h.sourceId : h.sourceName) == sid &&
-                  !h.dateFrom.isBefore(p.dateFrom) &&
-                  !h.dateFrom.isAfter(p.dateTo))
-              .map((h) => (h.value as NumericHealthValue).numericValue.toDouble())
-              .toList();
+          final inside = hr.between(
+              sid, p.dateFrom.millisecondsSinceEpoch, p.dateTo.millisecondsSinceEpoch);
           works.add(WorkoutsCompanion.insert(
             source: sid,
             sourceName: Value(sname),
@@ -265,12 +276,8 @@ class HealthService {
             endTime: p.dateTo,
             energyKcal: Value(w.totalEnergyBurned?.toDouble()),
             distanceM: Value(w.totalDistance?.toDouble()),
-            avgHr: Value(inside.isEmpty
-                ? null
-                : inside.reduce((a, b) => a + b) / inside.length),
-            maxHr: Value(inside.isEmpty
-                ? null
-                : inside.reduce((a, b) => a > b ? a : b)),
+            avgHr: Value(inside?.avg),
+            maxHr: Value(inside?.max),
           ));
           perType['WORKOUT'] = (perType['WORKOUT'] ?? 0) + 1;
           continue;
@@ -379,5 +386,42 @@ class HealthService {
           lastSync: at == null ? const Value.absent() : Value(at),
           lastReport: r == null ? const Value.absent() : Value(jsonEncode(r.toJson())),
         ));
+  }
+}
+
+/// Точки пульса по источникам. После [freeze] выборка за интервал находится бинарным поиском.
+class HeartRateIndex {
+  final Map<String, List<(int, double)>> _bySource = {};
+
+  void add(String source, int ms, double bpm) =>
+      _bySource.putIfAbsent(source, () => []).add((ms, bpm));
+
+  void freeze() {
+    for (final l in _bySource.values) {
+      l.sort((a, b) => a.$1.compareTo(b.$1));
+    }
+  }
+
+  /// Среднее и максимум пульса источника за [fromMs, toMs] (границы включены); null, если точек нет.
+  ({double avg, double max})? between(String source, int fromMs, int toMs) {
+    final l = _bySource[source];
+    if (l == null || l.isEmpty) return null;
+    var lo = 0, hi = l.length;
+    while (lo < hi) {
+      final mid = (lo + hi) >> 1;
+      if (l[mid].$1 < fromMs) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    var sum = 0.0, mx = double.negativeInfinity, n = 0;
+    for (var i = lo; i < l.length && l[i].$1 <= toMs; i++) {
+      final v = l[i].$2;
+      sum += v;
+      if (v > mx) mx = v;
+      n++;
+    }
+    return n == 0 ? null : (avg: sum / n, max: mx);
   }
 }
