@@ -58,7 +58,7 @@ Future<int> scanWorkouts(AppDatabase db,
   final now = DateTime.now();
   final from = now.subtract(const Duration(hours: 30));
   final main = mainSourceOf(settings);
-  final recs = await db.activityBetween(from, now);
+  final recs = await db.activityOfTypesBetween(['heartRate', 'restingHeartRate'], from, now);
 
   var hrRecs = recs.where((r) => r.type == 'heartRate').toList();
   if (main != null) {

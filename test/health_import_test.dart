@@ -27,6 +27,21 @@ void main() {
 
   final t0 = DateTime(2026, 11, 10, 8);
 
+  test('сверка удалённого: большие объёмы удаляются порциями, нужное остаётся', () async {
+    final from = DateTime(2026, 11, 1);
+    await db.upsertActivity([
+      for (var i = 0; i < 1300; i++) rec('heartRate', from.add(Duration(minutes: i + 1)), 'h$i'),
+    ]);
+    final keep = {for (var i = 0; i < 1300; i += 2) 'h$i'};
+    final deleted = await db.deleteActivityMissing('apple_health', 'heartRate', from, keep);
+    expect(deleted, 650);
+    final left = await db.activityBetween(from, DateTime(2026, 12, 1));
+    expect(left.length, 650);
+    expect(left.every((r) => keep.contains(r.externalRecordId)), isTrue);
+    expect((await db.activityOfTypesBetween(['steps'], from, DateTime(2026, 12, 1))), isEmpty);
+    expect((await db.activityOfTypesBetween(['heartRate'], from, DateTime(2026, 12, 1))).length, 650);
+  });
+
   test('вес из Здоровья: добавление, обновление по id, пропуск дубля', () async {
     expect(await db.importWeight(platform: 'apple_health', externalId: 'a', at: t0, kg: 70.0),
         'added');

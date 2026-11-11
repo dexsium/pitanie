@@ -1410,15 +1410,25 @@ class AppDatabase extends _$AppDatabase {
   /// Удаляет записи активности платформы, которых больше нет в источнике (сверка окна).
   Future<int> deleteActivityMissing(
       String platform, String type, DateTime from, Set<String> keepIds) async {
-    final rows = await (select(activityRecords)
-          ..where((t) =>
-              t.platform.equals(platform) &
-              t.type.equals(type) &
-              t.startTime.isBiggerOrEqualValue(from)))
+    // Только id и внешний id (без загрузки целых записей): для плотных данных это тысячи строк.
+    final rows = await (selectOnly(activityRecords)
+          ..addColumns([activityRecords.id, activityRecords.externalRecordId])
+          ..where(activityRecords.platform.equals(platform) &
+              activityRecords.type.equals(type) &
+              activityRecords.startTime.isBiggerOrEqualValue(from)))
         .get();
-    final gone = [for (final r in rows) if (!keepIds.contains(r.externalRecordId)) r.id];
+    final gone = [
+      for (final r in rows)
+        if (!keepIds.contains(r.read(activityRecords.externalRecordId)))
+          r.read(activityRecords.id)!
+    ];
     if (gone.isEmpty) return 0;
-    return (delete(activityRecords)..where((t) => t.id.isIn(gone))).go();
+    var n = 0;
+    for (var i = 0; i < gone.length; i += 500) {
+      final part = gone.sublist(i, i + 500 > gone.length ? gone.length : i + 500);
+      n += await (delete(activityRecords)..where((t) => t.id.isIn(part))).go();
+    }
+    return n;
   }
 
   /// Взвешивание с весов приложения. Если то же измерение уже пришло из Здоровья
@@ -1500,6 +1510,16 @@ class AppDatabase extends _$AppDatabase {
       }
     });
   }
+
+  /// Записи нужных типов за период (без загрузки остальных).
+  Future<List<ActivityRecord>> activityOfTypesBetween(
+          List<String> types, DateTime from, DateTime to) =>
+      (select(activityRecords)
+            ..where((t) =>
+                t.type.isIn(types) &
+                t.endTime.isBiggerOrEqualValue(from) &
+                t.startTime.isSmallerOrEqualValue(to)))
+          .get();
 
   Future<List<ActivityRecord>> activityBetween(DateTime from, DateTime to) =>
       (select(activityRecords)

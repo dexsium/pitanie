@@ -155,6 +155,39 @@ class HealthService {
 
   bool _askedAuth = false;
 
+  /// Короткая передышка: интерфейс успевает нарисовать кадры между порциями тяжёлой работы.
+  static Future<void> _breath() => Future<void>.delayed(const Duration(milliseconds: 4));
+
+  static const _dense = {
+    HealthDataType.HEART_RATE,
+    HealthDataType.STEPS,
+    HealthDataType.ACTIVE_ENERGY_BURNED,
+    HealthDataType.BASAL_ENERGY_BURNED,
+    HealthDataType.DISTANCE_DELTA,
+    HealthDataType.DISTANCE_WALKING_RUNNING,
+    HealthDataType.TOTAL_CALORIES_BURNED,
+  };
+
+  /// Плотные типы (пульс, шаги, энергия) читаются сутками: ответ платформы разбирается в потоке
+  /// интерфейса, и один огромный ответ вызывал подвисание. Остальные читаются целиком.
+  Future<List<HealthDataPoint>> _readSliced(
+      HealthDataType t, DateTime from, DateTime to, Map<String, String> errors) async {
+    if (!_dense.contains(t) || to.difference(from) <= const Duration(hours: 30)) {
+      return _readType(t, from, to, errors);
+    }
+    final out = <HealthDataPoint>[];
+    var a = from;
+    while (a.isBefore(to)) {
+      var b = a.add(const Duration(days: 1));
+      if (b.isAfter(to)) b = to;
+      out.addAll(await _readType(t, a, b, errors));
+      if (errors.containsKey(t.name)) break; // доступа нет: остальные срезы не запрашиваем
+      a = b;
+      await _breath();
+    }
+    return out;
+  }
+
   /// Читает один тип данных; сбой одного типа (например, нет доступа) не мешает остальным.
   Future<List<HealthDataPoint>> _readType(
       HealthDataType t, DateTime from, DateTime to, Map<String, String> errors) async {
@@ -226,7 +259,8 @@ class HealthService {
       final errors = <String, String>{};
       final points = <HealthDataPoint>[];
       for (final t in types) {
-        points.addAll(await _readType(t, from, now, errors));
+        points.addAll(await _readSliced(t, from, now, errors));
+        await _breath();
       }
       if (errors.length == types.length) {
         final r = SyncResult('no_access', errors: errors);
@@ -254,7 +288,9 @@ class HealthService {
       hr.freeze();
       final comp = <(DateTime, double?, double?)>[];
 
+      var processed = 0;
       for (final p in points) {
+        if (++processed % 400 == 0) await _breath();
         final sid = p.sourceId.isNotEmpty ? p.sourceId : p.sourceName;
         final sname = p.sourceName.isNotEmpty ? p.sourceName : sid;
         sources[sid] = sname;
@@ -344,20 +380,27 @@ class HealthService {
         ));
       }
 
-      await db.upsertActivity(recs);
-      await db.upsertWorkouts(works);
-      for (final c in comp) {
-        await db.attachBodyComposition(c.$1, fatPct: c.$2, leanKg: c.$3);
-      }
-
-      // Удалённое в источнике: сверка окна по типам, которые источник вернул.
+      // Запись порциями и одной транзакцией: потоки интерфейса обновляются один раз в конце,
+      // а между порциями интерфейс успевает перерисоваться.
       var deleted = 0;
-      for (final e in seen.entries) {
-        deleted += await db.deleteActivityMissing(sourceType, e.key, from, e.value);
-      }
-      if (weightIds.isNotEmpty) {
-        deleted += await db.deleteImportedWeightsMissing(sourceType, from, weightIds);
-      }
+      await db.transaction(() async {
+        for (var i = 0; i < recs.length; i += 500) {
+          await db.upsertActivity(recs.sublist(i, i + 500 > recs.length ? recs.length : i + 500));
+          await _breath();
+        }
+        await db.upsertWorkouts(works);
+        for (final c in comp) {
+          await db.attachBodyComposition(c.$1, fatPct: c.$2, leanKg: c.$3);
+        }
+        // Удалённое в источнике: сверка окна по типам, которые источник вернул.
+        for (final e in seen.entries) {
+          deleted += await db.deleteActivityMissing(sourceType, e.key, from, e.value);
+          await _breath();
+        }
+        if (weightIds.isNotEmpty) {
+          deleted += await db.deleteImportedWeightsMissing(sourceType, from, weightIds);
+        }
+      });
 
       final empty = recs.isEmpty && works.isEmpty && weights == 0 && duplicates == 0;
       final result = SyncResult(empty ? 'no_data' : 'ok',
