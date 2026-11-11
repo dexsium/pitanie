@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
+import 'package:pitanie_widgets/pitanie_widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
@@ -198,26 +199,46 @@ class SettingsPage extends ConsumerWidget {
         ),
         const SizedBox(height: 14),
         AppCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Виджеты главного экрана',
-                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: widgetsEnabled(ref.watch(settingsProvider).valueOrNull ?? const {}),
-              title: const Text('Показывать данные в виджетах'),
-              subtitle: const Text(
-                  'Калории, белки, жиры, углеводы и вода за сегодня видны на главном экране телефона '
-                  'всем, кто его видит. По умолчанию выключено.'),
-              onChanged: (v) async {
-                await db.setSetting(kWidgetsEnabledKey, v ? '1' : '0');
-                await pushWidgetsNow(db);
-              },
-            ),
-            Text(
-                'Добавьте виджет «Питание» долгим нажатием на главный экран. Нажатие на кнопки '
-                'виджета открывает приложение: вода и вес добавляются уже внутри него.',
-                style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
-          ]),
+          child: FutureBuilder<bool>(
+            future: PitanieWidgets.isSupported(),
+            builder: (context, snap) {
+              final supported = snap.data ?? false;
+              return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Виджеты главного экрана',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                if (!supported)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                        Platform.isIOS
+                            ? 'Виджет для iPhone в этой сборке ещё не включён: ему нужна дополнительная '
+                                'настройка подписи Apple (группа приложений). Пока на iPhone виджета нет. '
+                                'Виджеты уже работают на Android.'
+                            : 'Виджеты недоступны на этом устройстве.',
+                        style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+                  )
+                else ...[
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: widgetsEnabled(ref.watch(settingsProvider).valueOrNull ?? const {}),
+                    title: const Text('Показывать данные в виджетах'),
+                    subtitle: const Text(
+                        'Калории, белки, жиры, углеводы и вода за сегодня видны на главном экране телефона '
+                        'всем, кто его видит. По умолчанию выключено.'),
+                    onChanged: (v) async {
+                      await db.setSetting(kWidgetsEnabledKey, v ? '1' : '0');
+                      await pushWidgetsNow(db);
+                    },
+                  ),
+                  Text(
+                      'Добавление виджета: долгое нажатие на пустое место главного экрана → «Виджеты» → '
+                      '«Питание: калории» (малый) или «Питание: день» (средний). Нажатие на кнопки '
+                      'виджета открывает приложение: вода и вес добавляются уже внутри него.',
+                      style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+                ],
+              ]);
+            },
+          ),
         ),
         const SizedBox(height: 14),
         AppCard(
