@@ -10,6 +10,8 @@ import '../../core/dates.dart';
 import '../../core/labels.dart';
 import '../../shared/widgets.dart';
 import '../activity/activity_page.dart' show defaultStepsGoal;
+import '../ads/ad_slot.dart';
+import '../ads/ads_models.dart';
 import '../calendar/calendar_page.dart';
 import '../coach/coach_card.dart';
 import '../settings/settings_page.dart';
@@ -109,6 +111,7 @@ class DashboardPage extends ConsumerWidget {
             error: (e, _) => EmptyHint('Ошибка: $e'),
             data: (d) => _Body(d),
           ),
+          const AdSlot(AdPlacement.homeBanner),
         ],
       ),
     );

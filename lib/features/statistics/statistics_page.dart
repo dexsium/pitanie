@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../../app/providers.dart';
 import '../../core/dates.dart';
 import '../../core/labels.dart';
+import '../ads/ad_slot.dart';
+import '../ads/ads_models.dart';
 import '../dashboard/day_data.dart';
 
 /// Размеры заданы в пикселях макета (ширина 851) и масштабируются по ширине устройства.
@@ -205,6 +207,7 @@ class _StatisticsPageState extends ConsumerState<StatisticsPage> {
             _Period.week => _Week(m, sel),
             _Period.month => _Month(m, sel, _step),
           },
+          const AdSlot(AdPlacement.statsBanner),
         ],
       ),
     );

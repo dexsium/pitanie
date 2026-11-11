@@ -9,6 +9,8 @@ import '../../core/labels.dart';
 import '../../core/nutrition.dart';
 import '../../database/database.dart';
 import '../../shared/widgets.dart';
+import '../ads/ad_slot.dart';
+import '../ads/ads_models.dart';
 import '../nutrition/add_food_page.dart';
 import '../nutrition/diary_actions.dart';
 
@@ -162,6 +164,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
             for (var i = 0; i < 7; i++)
               _dayCard(_week.add(Duration(days: i)),
                   [for (final x in items) if (x.date == dayKey(_week.add(Duration(days: i)))) x], cs),
+            const AdSlot(AdPlacement.plannerNative),
           ]);
         },
       ),
