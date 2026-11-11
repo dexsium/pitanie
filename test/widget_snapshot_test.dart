@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pitanie/core/labels.dart';
-import 'package:pitanie/core/nutrition.dart';
 import 'package:pitanie/database/database.dart';
 import 'package:pitanie/features/nutrition/diary_actions.dart';
 import 'package:pitanie/features/widgets/widget_sync.dart';

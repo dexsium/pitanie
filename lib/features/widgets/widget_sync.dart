@@ -47,7 +47,7 @@ Future<bool> pushWidgetsNow(AppDatabase db) async {
   try {
     final enabled = widgetsEnabled(await db.allSettings());
     final d = await loadDayData(db, dayKey(DateTime.now()));
-    return PitanieWidgets.update(jsonEncode(buildWidgetSnapshot(d, enabled: enabled)));
+    return await PitanieWidgets.update(jsonEncode(buildWidgetSnapshot(d, enabled: enabled)));
   } catch (_) {
     return false;
   }
