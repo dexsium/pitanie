@@ -114,6 +114,10 @@ class ScaleController extends ChangeNotifier {
       }
       notifyListeners();
     });
+    // Состояние Bluetooth на старте часто «unknown»: запускаем скан сразу, как адаптер включился.
+    _adapterSub ??= FlutterBluePlus.adapterState.listen((s) {
+      if (s == BluetoothAdapterState.on && enabled) _ensureScan();
+    });
     _timer ??= Timer.periodic(const Duration(seconds: 8), (_) => _ensureScan());
     await _ensureScan();
   }
@@ -130,6 +134,8 @@ class ScaleController extends ChangeNotifier {
       _sub = null;
       await _scanSub?.cancel();
       _scanSub = null;
+      await _adapterSub?.cancel();
+      _adapterSub = null;
       scanning = false;
     }
     notifyListeners();
@@ -249,6 +255,7 @@ class ScaleController extends ChangeNotifier {
   }
 
   BluetoothAdapterState? _lastAdapterMark;
+  StreamSubscription<BluetoothAdapterState>? _adapterSub;
   MiScaleReading? _pending;
   Timer? _pendingTimer;
 
@@ -405,6 +412,7 @@ class ScaleController extends ChangeNotifier {
     _timer?.cancel();
     _sub?.cancel();
     _scanSub?.cancel();
+    _adapterSub?.cancel();
     super.dispose();
   }
 }
