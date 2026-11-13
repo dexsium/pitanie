@@ -259,6 +259,8 @@ class ScaleController extends ChangeNotifier {
   StreamSubscription<BluetoothAdapterState>? _adapterSub;
   MiScaleReading? _pending;
   Timer? _pendingTimer;
+  DateTime? _measureStartAt;
+  String? _measureStamp;
 
   Future<void> _onResults(List<ScanResult> list) async {
     resultsSeen = list.length;
@@ -344,7 +346,14 @@ class ScaleController extends ChangeNotifier {
     _watchdog ??= Timer.periodic(const Duration(seconds: 2), (_) => checkStale());
     if (phase == ScalePhase.idle) {
       phase = ScalePhase.measuring;
+      _measureStartAt = t;
+      _measureStamp = reading.stamp;
       _addLog('весы: начато измерение');
+    } else if (phase == ScalePhase.measuring && reading.stamp != _measureStamp) {
+      // Весы начали новое взвешивание (другая метка): прежнее незавершённое не должно «висеть».
+      _measureStamp = reading.stamp;
+      _measureStartAt = t;
+      PerfLog.mark('весы: новая метка во время измерения, отсчёт начат заново');
     }
     liveKg = reading.weightKg;
     notifyListeners();
@@ -377,13 +386,17 @@ class ScaleController extends ChangeNotifier {
     // Пакетов нет вообще или приходит один и тот же пакет без изменений: измерение не идёт.
     final silent = last != null && t.difference(last).inSeconds > 25;
     final frozen = changed != null && _pending == null && t.difference(changed).inSeconds > 20;
-    if (silent || frozen) {
+    final started = _measureStartAt;
+    final tooLong = _pending == null && started != null && t.difference(started).inSeconds > 60;
+    if (silent || frozen || tooLong) {
       _pending = null;
       _pendingTimer?.cancel();
-      _abortedSig = frozen ? _lastSig : null;
+      _abortedSig = (frozen || tooLong) ? _lastSig : null;
       _addLog(silent
           ? 'измерение прервано: весы перестали передавать данные'
-          : 'измерение прервано: вес не меняется, человек сошёл');
+          : tooLong
+              ? 'измерение прервано: слишком долго без результата'
+              : 'измерение прервано: вес не меняется, человек сошёл');
       _setPhase(ScalePhase.idle);
     }
   }
