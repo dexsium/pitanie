@@ -261,6 +261,19 @@ class ScaleController extends ChangeNotifier {
   Timer? _pendingTimer;
   DateTime? _measureStartAt;
   String? _measureStamp;
+  int _rxNew = 0, _rxDup = 0, _rxBad = 0;
+  int _traceAt = 0;
+
+  /// Сводка по эфиру весов не чаще раза в секунду: сколько пакетов пришло, сколько отброшено.
+  void _traceRx(List<int> d) {
+    final ms = DateTime.now().millisecondsSinceEpoch;
+    if (ms - _traceAt < 1000) return;
+    _traceAt = ms;
+    final raw = d.length == 13 ? (d[11] | (d[12] << 8)) : -1;
+    PerfLog.mark('весы: эфир: новых $_rxNew, повторов $_rxDup, не распознано $_rxBad; '
+        'длина ${d.length}, ед. ${d.isNotEmpty ? d[0] : -1}, флаги ${d.length > 1 ? d[1] : -1}, '
+        'сырой вес $raw');
+  }
 
   Future<void> _onResults(List<ScanResult> list) async {
     resultsSeen = list.length;
@@ -275,16 +288,24 @@ class ScaleController extends ChangeNotifier {
       // Поток отдаёт весь список при каждом пакете любого устройства, и данные весов в нём
       // повторяются, хотя новых пакетов нет. Обрабатываем только свежие.
       final prev = _lastResultAt;
-      if (prev != null && !r.timeStamp.isAfter(prev)) continue;
+      if (prev != null && !r.timeStamp.isAfter(prev)) {
+        _rxDup++;
+        _traceRx(data);
+        continue;
+      }
       _lastResultAt = r.timeStamp;
       if (scalePackets == 0) PerfLog.mark('весы: получен первый пакет 0x181B');
       scalePackets++;
+      _rxNew++;
       lastPacketSeen = DateTime.now();
       final reading = parseMiScale2(data);
       if (reading == null) {
+        _rxBad++;
+        _traceRx(data);
         _addLog('пакет 0x181B не распознан (${data.length} байт)');
         continue;
       }
+      _traceRx(data);
       await onReading(reading);
     }
   }
