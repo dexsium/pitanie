@@ -240,7 +240,8 @@ class ScaleController extends ChangeNotifier {
     try {
       await FlutterBluePlus.startScan(
           timeout: const Duration(seconds: 24), continuousUpdates: true);
-      if (scanStarts == 0) PerfLog.mark('весы: сканирование запущено');
+      PerfLog.mark('весы: сканирование запущено (№${scanStarts + 1})');
+      _lastResultAt = null;
       scanStarts++;
       lastScanError = null;
       if (!scanning) {
@@ -287,6 +288,7 @@ class ScaleController extends ChangeNotifier {
   }
 
   void _setPhase(ScalePhase p) {
+    PerfLog.mark('весы: фаза ${phase.name} → ${p.name}');
     phase = p;
     if (p == ScalePhase.idle) {
       dismissed = false;
@@ -313,6 +315,9 @@ class ScaleController extends ChangeNotifier {
               : reading.loadRemoved
                   ? 'нагрузка снята'
                   : 'принят';
+      PerfLog.mark('весы: пакет, фаза ${phase.name} → $why'
+          '${reading.stabilized ? ', стабилен' : ''}'
+          '${reading.impedance != null ? ', с импедансом' : ''}');
       _addLog('пакет: ${reading.weightKg} кг'
           '${reading.stabilized ? ', стабилен' : ''}'
           '${reading.impedance != null ? ', имп. ${reading.impedance}' : ''}'

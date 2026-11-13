@@ -83,6 +83,7 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserver {
   bool _measureOpen = false;
+  bool _blockedMarked = false;
   StreamSubscription<String>? _widgetActions;
 
   @override
@@ -247,11 +248,19 @@ class _HomeShellState extends ConsumerState<HomeShell> with WidgetsBindingObserv
       if (prev == true && !next) _healthCheck();
     });
     ref.listen<ScaleController>(scaleProvider, (prev, next) {
+      final blocked = next.phase == ScalePhase.measuring && (next.dismissed || _measureOpen);
+      if (next.phase != ScalePhase.measuring) _blockedMarked = false;
+      if (blocked && !_blockedMarked) {
+        _blockedMarked = true;
+        PerfLog.mark('весы: окно не открыто (закрыто пользователем: ${next.dismissed}, '
+            'уже открыто: $_measureOpen)');
+      }
       if (next.phase == ScalePhase.measuring &&
           !next.dismissed &&
           !_measureOpen &&
           WidgetsBinding.instance.lifecycleState != AppLifecycleState.paused) {
         _measureOpen = true;
+        PerfLog.mark('весы: открыто окно взвешивания');
         Navigator.of(context)
             .push(MaterialPageRoute(
                 fullscreenDialog: true, builder: (_) => const ScaleMeasurePage()))
