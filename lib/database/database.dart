@@ -386,46 +386,46 @@ class AppDatabase extends _$AppDatabase {
         onUpgrade: (m, from, to) async {
           if (from < 2) {
             // Только добавление столбцов: данные пользователя не затрагиваются.
-            await m.addColumn(products, products.nameEn);
-            await m.addColumn(products, products.sourceId);
-            await m.addColumn(products, products.state);
-            await m.addColumn(products, products.kind);
-            await m.addColumn(products, products.verified);
-            await m.addColumn(products, products.portionLabel);
+            await _addColumnIfMissing(m, products, products.nameEn);
+            await _addColumnIfMissing(m, products, products.sourceId);
+            await _addColumnIfMissing(m, products, products.state);
+            await _addColumnIfMissing(m, products, products.kind);
+            await _addColumnIfMissing(m, products, products.verified);
+            await _addColumnIfMissing(m, products, products.portionLabel);
             await customStatement(
                 'CREATE INDEX IF NOT EXISTS idx_product_source ON products(source, source_id)');
           }
           if (from < 3) {
-            await m.addColumn(weightEntries, weightEntries.impedance);
+            await _addColumnIfMissing(m, weightEntries, weightEntries.impedance);
           }
           if (from < 4) {
             // Только новые таблицы: существующие данные не затрагиваются.
-            await m.createTable(liftExercises);
-            await m.createTable(liftSessions);
-            await m.createTable(liftSets);
-            await m.createTable(liftTemplates);
+            await _createTableIfMissing(m, liftExercises);
+            await _createTableIfMissing(m, liftSessions);
+            await _createTableIfMissing(m, liftSets);
+            await _createTableIfMissing(m, liftTemplates);
           }
           if (from < 5) {
             // Только добавление столбцов со значениями по умолчанию: данные не затрагиваются.
-            await m.addColumn(weightEntries, weightEntries.source);
-            await m.addColumn(weightEntries, weightEntries.externalId);
-            await m.addColumn(weightEntries, weightEntries.bodyFatPct);
-            await m.addColumn(weightEntries, weightEntries.leanMassKg);
-            await m.addColumn(weightEntries, weightEntries.muscleMassKg);
-            await m.addColumn(weightEntries, weightEntries.bodyWaterKg);
-            await m.addColumn(weightEntries, weightEntries.bmrKcal);
-            await m.addColumn(weightEntries, weightEntries.scaleDriver);
-            await m.addColumn(activityRecords, activityRecords.platform);
-            await m.addColumn(activityRecords, activityRecords.modifiedAt);
-            await m.addColumn(activityRecords, activityRecords.origin);
-            await m.addColumn(products, products.updatedAt);
-            await m.createTable(mealTemplates);
-            await m.createTable(mealTemplateItems);
-            await m.createTable(bodyMeasurements);
-            await m.createTable(progressPhotos);
-            await m.createTable(trainingGoals);
-            await m.createTable(mealPlanItems);
-            await m.createTable(shoppingItems);
+            await _addColumnIfMissing(m, weightEntries, weightEntries.source);
+            await _addColumnIfMissing(m, weightEntries, weightEntries.externalId);
+            await _addColumnIfMissing(m, weightEntries, weightEntries.bodyFatPct);
+            await _addColumnIfMissing(m, weightEntries, weightEntries.leanMassKg);
+            await _addColumnIfMissing(m, weightEntries, weightEntries.muscleMassKg);
+            await _addColumnIfMissing(m, weightEntries, weightEntries.bodyWaterKg);
+            await _addColumnIfMissing(m, weightEntries, weightEntries.bmrKcal);
+            await _addColumnIfMissing(m, weightEntries, weightEntries.scaleDriver);
+            await _addColumnIfMissing(m, activityRecords, activityRecords.platform);
+            await _addColumnIfMissing(m, activityRecords, activityRecords.modifiedAt);
+            await _addColumnIfMissing(m, activityRecords, activityRecords.origin);
+            await _addColumnIfMissing(m, products, products.updatedAt);
+            await _createTableIfMissing(m, mealTemplates);
+            await _createTableIfMissing(m, mealTemplateItems);
+            await _createTableIfMissing(m, bodyMeasurements);
+            await _createTableIfMissing(m, progressPhotos);
+            await _createTableIfMissing(m, trainingGoals);
+            await _createTableIfMissing(m, mealPlanItems);
+            await _createTableIfMissing(m, shoppingItems);
           }
         },
         beforeOpen: (details) async {
@@ -435,6 +435,22 @@ class AppDatabase extends _$AppDatabase {
           await seedLiftExercises();
         },
       );
+
+  /// Миграции идемпотентны: база могла побывать в более старой сборке, которая сбросила номер
+  /// схемы, не удаляя новые столбцы и таблицы. Повторное добавление не должно падать.
+  Future<void> _addColumnIfMissing(
+      Migrator m, TableInfo<Table, dynamic> table, GeneratedColumn column) async {
+    final rows = await customSelect('PRAGMA table_info("${table.actualTableName}")').get();
+    final have = rows.map((r) => r.read<String>('name')).toSet();
+    if (!have.contains(column.name)) await m.addColumn(table, column);
+  }
+
+  Future<void> _createTableIfMissing(Migrator m, TableInfo<Table, dynamic> table) async {
+    final rows = await customSelect(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+        variables: [Variable<String>(table.actualTableName)]).get();
+    if (rows.isEmpty) await m.createTable(table);
+  }
 
   /// Индексы для больших объёмов истории (запросы по продукту, типу данных и времени).
   Future<void> _ensureIndexes() async {
