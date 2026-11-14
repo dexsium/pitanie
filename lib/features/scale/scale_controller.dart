@@ -261,6 +261,10 @@ class ScaleController extends ChangeNotifier {
   Timer? _pendingTimer;
   DateTime? _measureStartAt;
   String? _measureStamp;
+  MiScaleReading? _lastReading;
+  int _sameCount = 0;
+  String? _scaleDeviceId;
+  int _noDataTraceAt = 0;
   int _rxNew = 0, _rxDup = 0, _rxBad = 0;
   int _traceAt = 0;
 
@@ -284,7 +288,19 @@ class ScaleController extends ChangeNotifier {
         continue;
       }
       final data = r.advertisementData.serviceData[_uScale2];
-      if (data == null) continue;
+      if (data == null) {
+        // Весы видны, но без данных 0x181B: пишем, что они передают вместо них.
+        final nowMs = DateTime.now().millisecondsSinceEpoch;
+        if (r.device.remoteId.str == _scaleDeviceId && nowMs - _noDataTraceAt > 1000) {
+          _noDataTraceAt = nowMs;
+          PerfLog.mark('весы: устройство в эфире без данных 0x181B; сервисных данных '
+              '${r.advertisementData.serviceData.length}, производителя '
+              '${r.advertisementData.manufacturerData.length}, подключаемое '
+              '${r.advertisementData.connectable}');
+        }
+        continue;
+      }
+      _scaleDeviceId = r.device.remoteId.str;
       // Поток отдаёт весь список при каждом пакете любого устройства, и данные весов в нём
       // повторяются, хотя новых пакетов нет. Обрабатываем только свежие.
       final prev = _lastResultAt;
@@ -369,6 +385,8 @@ class ScaleController extends ChangeNotifier {
       phase = ScalePhase.measuring;
       _measureStartAt = t;
       _measureStamp = reading.stamp;
+      _lastReading = null;
+      _sameCount = 0;
       _addLog('весы: начато измерение');
     } else if (phase == ScalePhase.measuring && reading.stamp != _measureStamp) {
       // Весы начали новое взвешивание (другая метка): прежнее незавершённое не должно «висеть».
@@ -377,6 +395,8 @@ class ScaleController extends ChangeNotifier {
       PerfLog.mark('весы: новая метка во время измерения, отсчёт начат заново');
     }
     liveKg = reading.weightKg;
+    _sameCount = _lastReading?.weightKg == reading.weightKg ? _sameCount + 1 : 1;
+    _lastReading = reading;
     notifyListeners();
     if (!reading.isFinal) return;
 
@@ -404,6 +424,22 @@ class ScaleController extends ChangeNotifier {
     final last = _lastPacketAt;
     final changed = _lastChangeAt;
     if (phase != ScalePhase.measuring) return;
+    // Весы показали один и тот же вес несколько раз и замолчали, не прислав пакет «стабилен»
+    // (так ведёт себя часть весов): считаем взвешивание завершённым и сохраняем вес без импеданса.
+    final lr = _lastReading;
+    final quiet = last == null ? 0 : t.difference(last).inSeconds;
+    if (lr != null &&
+        _pending == null &&
+        _sameCount >= 2 &&
+        lr.weightKg >= 20 &&
+        !lr.loadRemoved &&
+        quiet >= 6 &&
+        quiet <= 25) {
+      PerfLog.mark('весы: итоговый пакет не пришёл, вес сохраняется по последнему стабильному');
+      _pending = lr;
+      unawaited(_flush());
+      return;
+    }
     // Пакетов нет вообще или приходит один и тот же пакет без изменений: измерение не идёт.
     final silent = last != null && t.difference(last).inSeconds > 25;
     final frozen = changed != null && _pending == null && t.difference(changed).inSeconds > 20;
